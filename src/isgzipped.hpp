@@ -7,6 +7,10 @@
 
 #include <fstream>
 
+/**
+ * @brief Checks the first two bytes of the given file path to see if they match the gzip magic bytes
+ * @tparam StringT Some string type, e.g., string or string_view
+ */
 template<class StringT>
 class IsGzipped {
 public:

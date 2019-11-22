@@ -57,6 +57,11 @@ public:
 	data_queue.pop();
 	return res;
   }
+  bool empty() const
+  {
+    std::lock_guard<std::mutex> lk(mut);
+    return data_queue.empty();
+  }
 };
 
 #endif //CARVAIBD_THREADSAFEQUEUE_HPP

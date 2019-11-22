@@ -157,7 +157,7 @@ double InvErfC (double y) {
 long double ErfResidue (long double x, int l) {
   // Calculates sqrt(pi)/2 * erf(x) as a series expansion for l=0.
   // Calculates the l'th residue of the expansion for l>0
-  const MAXTERMS = 2048;     // maximum number of terms 
+  const double MAXTERMS = 2048;     // maximum number of terms
   long double term;          // term in summation
   long double k21;           // 2k+1
   long double sum = 0.;      // summation

@@ -312,3 +312,4 @@ dkms.conf
 /.idea/
 /test/
 /cmake-build*/
+/BioVU/

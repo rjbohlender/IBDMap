@@ -9,7 +9,11 @@
  * @brief Runtime parameters
  */
 struct Parameters {
-  int nperms;
+  unsigned long nperms;
+  unsigned long nsuccesses;
+  unsigned long nthreads;
+  unsigned int seed;
+  double total_breakpoints;
 };
 
 #endif //CARVAIBD_PARAMETERS_HPP

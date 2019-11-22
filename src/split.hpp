@@ -116,7 +116,7 @@ public:
 
 private:
   /**
-   * @brief A split member function to simplify multiple constructors should be need them.
+   * @brief A split member function to simplify multiple constructors should we need them.
    */
   void split() {
 #if 0
