@@ -82,10 +82,10 @@ double Statistic::calculate(std::vector<int> &phenotypes_) {
 	  case 1:
 		switch (phenotypes_[p2]) {
 		case 1: case_case_rate += 1. / indexer.case_case;
-		  avgs.back() += parser.row_pair_avg[it.row()] / params.total_breakpoints;
+		  avgs.back() -= parser.row_pair_avg[it.row()] / params.total_breakpoints;
 		  break;
 		case 0: case_cont_rate += 1. / indexer.case_cont;
-		  avgs.back() -= parser.row_pair_avg[it.row()] / params.total_breakpoints;
+		  avgs.back() += parser.row_pair_avg[it.row()] / params.total_breakpoints;
 		  break;
 		default: throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
 		}
@@ -93,7 +93,7 @@ double Statistic::calculate(std::vector<int> &phenotypes_) {
 	  case 0:
 		switch (phenotypes_[p2]) {
 		case 1: case_cont_rate += 1. / indexer.case_cont;
-		  avgs.back() -= parser.row_pair_avg[it.row()] / params.total_breakpoints;
+		  avgs.back() += parser.row_pair_avg[it.row()] / params.total_breakpoints;
 		  break;
 		case 0: cont_cont_rate += 1. / indexer.cont_cont;
 		  break;
@@ -113,10 +113,10 @@ double Statistic::calculate(std::vector<int> &phenotypes_) {
 	  case 1:
 		switch (phenotypes_[p.second]) {
 		case 1: case_case_rate += 1. / indexer.case_case;
-		  avgs.back() += parser.row_pair_avg[r] / params.total_breakpoints;
+		  avgs.back() -= parser.row_pair_avg[r] / params.total_breakpoints;
 		  break;
 		case 0: case_cont_rate += 1. / indexer.case_cont;
-		  avgs.back() -= parser.row_pair_avg[r] / params.total_breakpoints;
+		  avgs.back() += parser.row_pair_avg[r] / params.total_breakpoints;
 		  break;
 		default: throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
 		}
@@ -124,7 +124,7 @@ double Statistic::calculate(std::vector<int> &phenotypes_) {
 	  case 0:
 		switch (phenotypes_[p.second]) {
 		case 1: case_cont_rate += 1. / indexer.case_cont;
-		  avgs.back() -= parser.row_pair_avg[r] / params.total_breakpoints;
+		  avgs.back() += parser.row_pair_avg[r] / params.total_breakpoints;
 		  break;
 		case 0: cont_cont_rate += 1. / indexer.cont_cont;
 		  break;
@@ -228,10 +228,10 @@ void Statistic::calc_avg(const std::vector<int> &phenotypes_) {
 	case 1:
 	  switch (phenotypes_[p2]) {
 	  case 1:
-		avgs.back() += parser.row_pair_avg[it.row()] / params.total_breakpoints;
+		avgs.back() -= parser.row_pair_avg[it.row()] / params.total_breakpoints;
 		break;
 	  case 0:
-		avgs.back() -= parser.row_pair_avg[it.row()] / params.total_breakpoints;
+		avgs.back() += parser.row_pair_avg[it.row()] / params.total_breakpoints;
 		break;
 	  default: throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
 	  }
@@ -239,7 +239,7 @@ void Statistic::calc_avg(const std::vector<int> &phenotypes_) {
 	case 0:
 	  switch (phenotypes_[p2]) {
 	  case 1:
-		avgs.back() -= parser.row_pair_avg[it.row()] / params.total_breakpoints;
+		avgs.back() += parser.row_pair_avg[it.row()] / params.total_breakpoints;
 		break;
 	  case 0:
 		break;
