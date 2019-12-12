@@ -30,9 +30,6 @@ int main(int argc, char *argv[]) {
             ("permutations,n",
              po::value<unsigned long>()->default_value(1000000),
              "Number of permutations.")
-            ("successes,s",
-             po::value<unsigned long>()->default_value(30),
-             "Number of successful permutations for early termination.")
             ("seed",
              po::value<unsigned int>(),
              "Specify the seed to be shared by all breakpoints for equal permutations.")
@@ -73,7 +70,6 @@ int main(int argc, char *argv[]) {
 
     Parameters parameters{
             vm["permutations"].as<unsigned long>(),
-            vm["successes"].as<unsigned long>(),
             vm["threads"].as<unsigned long>(),
             vm.count("output") > 0 ? vm["output"].as<std::string>() : "",
             seed
@@ -104,27 +100,7 @@ int main(int argc, char *argv[]) {
         submitted++;
         std::cerr << "nsubmitted: " << submitted << std::endl;
     }
-#if 1
     while (!std::all_of(stats.begin(), stats.end(), [](Statistic &s) { return s.done; })) {
         std::this_thread::sleep_for(std::chrono::nanoseconds(100000000));
     }
-#endif
-#if 0
-    std::ofstream statout("stat.out.txt");
-    std::ofstream cscsout("cscs.out.txt");
-    std::ofstream cscnout("cscn.out.txt");
-    for(const auto &stat : stats) {
-      statout << stat.bp.breakpoint.first << "\t" << stat.bp.breakpoint.second;
-      cscsout << stat.bp.breakpoint.first << "\t" << stat.bp.breakpoint.second;
-      cscnout << stat.bp.breakpoint.first << "\t" << stat.bp.breakpoint.second;
-      for(int i = 0; i < stat.permuted.size(); i++) {
-        statout << "\t" << stat.permuted[i];
-        cscsout << "\t" << stat.permuted_cscs[i];
-        cscnout << "\t" << stat.permuted_cscn[i];
-      }
-      statout << std::endl;
-      cscsout << std::endl;
-      cscnout << std::endl;
-    }
-#endif
 }
