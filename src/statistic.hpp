@@ -33,8 +33,9 @@ public:
     std::vector<double> permutations;
 
     std::vector<std::vector<double>> permuted;
-    std::vector<double> permuted_cscs;
-    std::vector<double> permuted_cscn;
+    std::vector<std::vector<double>> permuted_cscs;
+    std::vector<std::vector<double>> permuted_cscn;
+    std::vector<std::vector<double>> permuted_cncn;
 
     std::vector<arma::sword> rows;
 
@@ -45,7 +46,7 @@ public:
               std::shared_ptr<Reporter> reporter_,
               Parameters &params_);
 
-    double calculate(std::vector<int> &phenotypes_, double case_case, double case_cont, double cont_cont);
+    double calculate(std::vector<int> &phenotypes_, double cscs_count, double cscn_count, double cncn_count, int k);
 
     void run();
 };

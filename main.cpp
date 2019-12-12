@@ -36,6 +36,9 @@ int main(int argc, char *argv[]) {
             ("seed",
              po::value<unsigned int>(),
              "Specify the seed to be shared by all breakpoints for equal permutations.")
+            ("output,o",
+             po::value<std::string>(),
+             "Output to a specified file. Default output is stdout.")
             ("help,h", "Display this message.");
     po::variables_map vm;
     try {
@@ -72,6 +75,7 @@ int main(int argc, char *argv[]) {
             vm["permutations"].as<unsigned long>(),
             vm["successes"].as<unsigned long>(),
             vm["threads"].as<unsigned long>(),
+            vm.count("output") > 0 ? vm["output"].as<std::string>() : "",
             seed
     };
 
@@ -80,7 +84,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Initialize reporter
-    auto reporter = std::make_shared<Reporter>();
+    auto reporter = std::make_shared<Reporter>(parameters.output_path);
     // Initialize ThreadPool
     unsigned long submitted = 0;
     ThreadPool<void> threadpool(parameters);

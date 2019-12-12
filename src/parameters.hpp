@@ -12,6 +12,7 @@ struct Parameters {
   unsigned long nperms;
   unsigned long nsuccesses;
   unsigned long nthreads;
+  std::string output_path;
   unsigned int seed;
 };
 

@@ -13,6 +13,7 @@
 
 #include "split.hpp"
 #include "isgzipped.hpp"
+#include "IndexSort.hpp"
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/iostreams/filtering_streambuf.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
@@ -20,7 +21,7 @@
 /**
  * @brief Class to handle converting individual indices into row index
  *
- * Imposes an order on the sample indices, and maps individual id pairs to row indices.
+ * Invertible mapping function between sample pairs and rows.
  */
 struct Indexer {
     // Class counts and categories
@@ -28,7 +29,7 @@ struct Indexer {
     arma::uword cont_count;
     std::vector<int> phenotypes;
     std::vector<std::string> samples;
-    absl::flat_hash_map<arma::uword, std::pair<arma::sword, arma::sword>> row_map;
+    std::vector<arma::sword> transitions; // Transition points between pairing sets
     absl::flat_hash_map<std::string, int> ordered_positions;
     absl::flat_hash_map<std::string, int> ordered_cc_positions;
     // std::unordered_map<std::string, int> ordered_positions;
@@ -49,10 +50,16 @@ struct Indexer {
             : case_count(case_count_), cont_count(cont_count_), phenotypes(std::move(phenotypes_)),
               samples(std::move(samples_)) {
         setup(case_count_, cont_count_);
+#ifndef NDEBUG
+     test_run();
+#endif
     }
 
     void setup(arma::uword case_count_,
                arma::uword cont_count_) {
+        IndexSort indexSort(samples);
+        indexSort.sort_vector(samples);
+        indexSort.sort_vector(phenotypes); // Both must be sorted
         case_case = case_count * (case_count - 1.) / 2.;
         case_cont = case_count * cont_count;
         cont_cont = cont_count * (cont_count - 1.) / 2.;
@@ -60,6 +67,14 @@ struct Indexer {
         int case_idx = 0;
         int cont_idx = 0;
         int current = 0;
+
+        arma::sword start = 0;
+        arma::sword k = samples.size() - 1;
+        for (; k > 0; k--) {
+            start += k;
+            transitions.push_back(start);
+        }
+
         for (const auto &s : samples) {
             switch (phenotypes[current]) {
                 case 1:
@@ -77,252 +92,131 @@ struct Indexer {
             }
             current++;
         }
-#ifndef LOWMEM
-        row_map.reserve(case_case + case_cont + cont_cont);
-
-        std::cerr << "Starting to build row_map.\n";
-        arma::wall_clock timer;
-        timer.tic();
-        arma::uword row = 0;
-        for(arma::uword i = 0; i < samples.size(); i++) {
-          for(arma::uword j = i + 1; j < samples.size(); j++) {
-            row_map[row] = std::make_pair<arma::sword, arma::sword>(ordered_positions[samples[i]], ordered_positions[samples[j]]);
-            row++;
-          }
-        }
-        std::cerr << timer.toc() << " seconds to build row_map.\n";
-#endif
-#ifndef NDEBUG
-        // Test indexer translate code
-        std::vector<std::string> test_pack;
-        std::map<std::string, int> test_pos;
-        std::map<std::string, int> test_cc_pos;
-        std::vector<int> test_pheno = {1, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0};
-        std::vector<std::string> case_indices = {"0", "1", "4", "6", "8", "10"};
-        std::vector<std::string> cont_indices = {"2", "3", "5", "7", "9", "11"};
-        int test_case_case = case_indices.size() * (case_indices.size() - 1) / 2.;
-        int test_case_cont = case_indices.size() * cont_indices.size();
-        int test_cont_cont = cont_indices.size() * (cont_indices.size() - 1) / 2.;
-        int test_case_count = 6;
-        int test_cont_count = 6;
-
-        // Fill test_pos
-        case_idx = 0;
-        cont_idx = 0;
-        current = 0;
-        for (const auto &phen : test_pheno) {
-          switch(phen) {
-          case 1: test_pos[case_indices[case_idx]] = current;
-          test_cc_pos[case_indices[case_idx]] = case_idx;
-          case_idx++;
-          break;
-          case 0: test_pos[cont_indices[cont_idx]] = current;
-          test_cc_pos[cont_indices[cont_idx]] = cont_idx;
-          cont_idx++;
-          break;
-          default: break;
-          }
-          current++;
-        }
-
-        // Test function
-        auto test_translate = [&](const char* a, const char* b) {
-          int i = test_pos[a];
-          int j = test_pos[b];
-          arma::uword row = 0;
-          if (test_pheno[i] == 0) {
-            if (test_pheno[j] == 0) {
-              row += test_case_case + test_case_cont;
-              int cont1 = test_cc_pos[a];
-              int cont2 = test_cc_pos[b] - 1;
-              for (int k = 1; k <= cont1; k++) {
-                row += test_cont_count - k; // Move to the current case
-              }
-              row += std::abs(cont1 - cont2);
-            } else { // control-case
-              row += test_case_case; // Shift to case-control pairs
-              row += test_cc_pos[b] * test_cont_count
-                  + test_cc_pos[a]; // Every case pairs with every control, so we move for all of the former pairs, to the current case, and the current control;
-            }
-          } else {
-            if (test_pheno[j] == 0) { // Case-Control pair
-              row += test_case_case; // Shift to case-control pairs
-              row += test_cc_pos[a] * test_cont_count
-                  + test_cc_pos[b]; // Every case pairs with every control, so we move for all of the former pairs, to the current case, and the current control;
-            } else { // Case-Case pair
-              // No offset for case-case pairs, start from 0
-              // Every subsequent case has fewer subsequent pairs
-              int case1 = test_cc_pos[a];
-              int case2 = test_cc_pos[b] - 1;
-              for (int k = 1; k <= case1; k++) {
-                row += test_case_count - k; // Move to the current case
-              }
-              row += std::abs(case1 - case2);
-            }
-          }
-          return row;
-        };
-
-        for (int i = 0; i < case_indices.size(); i++) {
-          for (int j = 0; j < case_indices.size(); j++) {
-            if (j <= i) {
-              continue;
-            }
-            std::stringstream ss;
-            ss << test_pos[case_indices[i]] << "," << test_pos[case_indices[j]];
-            test_pack.push_back(ss.str());
-          }
-        }
-        for (int i = 0; i < case_indices.size(); i++) {
-          for (int j = 0; j < cont_indices.size(); j++) {
-            std::stringstream ss;
-            ss << test_pos[case_indices[i]] << "," << test_pos[cont_indices[j]];
-            test_pack.push_back(ss.str());
-          }
-        }
-        for (int i = 0; i < cont_indices.size(); i++) {
-          for (int j = 0; j < cont_indices.size(); j++) {
-            if (j <= i) {
-              continue;
-            }
-            std::stringstream ss;
-            ss << test_pos[cont_indices[i]] << "," << test_pos[cont_indices[j]];
-            test_pack.push_back(ss.str());
-          }
-        }
-        for (const auto &v : test_pack) {
-          std::cerr << v << " ";
-        }
-        std::cerr << std::endl;
-        std::cerr << "Test pack size: " << test_pack.size() << std::endl;
-        std::cerr << "Translate_test: 0,1: " << test_translate("0", "1") << " ; " << test_pack[test_translate("0", "1")] << std::endl;
-        std::cerr << "Translate_test: 2,4: " << test_translate("2", "4") << " ; " << test_pack[test_translate("2", "4")] << std::endl;
-        std::cerr << "Translate_test: 3,6: " << test_translate("3", "6") << " ; " << test_pack[test_translate("3", "6")] << std::endl;
-        std::cerr << "Translate_test: 4,11: " << test_translate("4", "11") << " ; " << test_pack[test_translate("4", "11")] << std::endl;
-        std::cerr << "Translate_test: 9,11: " << test_translate("9", "11") << " ; " << test_pack[test_translate("9", "11")]
-                  << std::endl;
-#endif
     }
 
     arma::sword translate(std::string a, std::string b) {
-        if (ordered_positions.count(a) < 1 || ordered_positions.count(b) < 1) {
+        auto finda = std::lower_bound(samples.begin(), samples.end(), a);
+        auto findb = std::lower_bound(samples.begin(), samples.end(), b);
+        if (*finda != a || *findb != b) {
             return -1;
         }
-
-        int i = ordered_positions[a];
-        int j = ordered_positions[b];
-        arma::uword row = 0;
-        if (phenotypes[i] == 0) {
-            if (phenotypes[j] == 0) {
-                row += case_case + case_cont;
-                int cont1 = ordered_cc_positions[a];
-                int cont2 = ordered_cc_positions[b] - 1;
-                if (cont1 < cont2) {
-                    for (int k = 1; k <= cont1; k++) {
-                        row += cont_count - k; // Move to the current case
-                    }
-                } else {
-                    for (int k = 1; k <= cont2; k++) {
-                        row += cont_count - k; // Move to the current case
-                    }
-                }
-                row += std::abs(cont1 - cont2);
-            } else { // case-control or control-case either way
-                row += case_case; // Shift to case-control pairs
-                row += ordered_cc_positions[b] * cont_count
-                       +
-                       ordered_cc_positions[a]; // Every case pairs with every control, so we move for all of the former pairs, to the current case, and the current control;
-            }
-        } else {
-            if (phenotypes[j] == 0) { // Case-Control pair
-                row += case_case; // Shift to case-control pairs
-                row += ordered_cc_positions[a] * cont_count
-                       +
-                       ordered_cc_positions[b]; // Every case pairs with every control, so we move for all of the former pairs, to the current case, and the current control;
-            } else { // Case-Case pair
-                // No offset for case-case pairs, start from 0
-                // Every subsequent case has fewer subsequent pairs
-                int case1 = ordered_cc_positions[a];
-                int case2 = ordered_cc_positions[b] - 1;
-                if (case1 < case2) {
-                    for (int k = 1; k <= case1; k++) {
-                        row += case_count - k; // Move to the current case
-                    }
-                } else {
-                    for (int k = 1; k <= case2; k++) {
-                        row += case_count - k; // Move to the current case
-                    }
-                }
-                row += std::abs(case1 - case2);
-            }
+        int i = std::distance(samples.begin(), finda);
+        int j = std::distance(samples.begin(), findb);
+        if (i == j) {
+            throw (std::runtime_error("Searching for two of the same pair."));
         }
-        return row;
+        if (i > j) {
+            auto tmp = i;
+            i = j;
+            j = tmp;
+        }
+
+        arma::sword start = 0;
+        arma::sword k = samples.size() - 1;
+        for (; k > samples.size() - i - 1; k--)
+            start += k;
+        return start + j - i - 1;
     }
 
     std::pair<arma::sword, arma::sword> back_translate(arma::uword row) {
-        return row_map[row];
+        arma::sword i = -1;
+        arma::sword j = -1;
+
+        auto bound = std::lower_bound(transitions.begin(), transitions.end(), row);
+
+        i = std::distance(transitions.begin(), bound);
+        if(row == *bound) {
+            i += 1;
+            j = i + 1;
+        } else {
+            j = i > 0 ? row - *(bound - 1) + i + 1 : row + 1;
+        }
+
+        return std::make_pair(i, j);
     }
 
-    std::pair<arma::sword, arma::sword> back_translate_alt(arma::uword row) {
-        if (row < case_case) {
-            arma::sword case1 = 0, case2 = 0;
-            arma::uword cur = 0;
-            arma::sword k = 1;
-            while (cur < row) {
-                if (row - cur > case_count - k) {
-                    cur += case_count - k;
-                    k++;
-                    continue;
-                }
-                case1 = k;
-                case2 = row - cur + k;
-                if (case2 < 0) {
-                    std::cerr << "uhoh1\n";
-                }
-                if (ordered_positions[samples[case1]] != case1 || ordered_positions[samples[case2]] != case2) {
-                    std::cerr << "ERROR: Failed to back translate.\n";
-                }
-                return std::make_pair(case1, case2);
-            }
-        } else if (row < case_case + case_cont) {
-            arma::sword case1 = 0, cont1 = 0;
-            arma::sword cur = case_case;
-            arma::sword k = 0;
+    void test_run() {
+        std::vector<std::string> test_samples {
+            "A", "B", "C", "D", "E", "F", "G", "H", "I", "J"
+        };
 
-            while (cur < row) {
-                if (row - cur > cont_count) {
-                    cur += cont_count;
-                    k++;
-                    continue;
-                }
-                case1 = k;
-                cont1 = row - cur;
-                if (cont1 < 0) {
-                    std::cerr << "uhoh2\n";
-                }
-                return std::make_pair(case1, cont1);
-            }
-        } else if (row < case_case + case_cont + cont_cont) {
-            arma::sword cont1 = 0, cont2 = 0;
-            arma::uword cur = case_case + case_cont;
-            arma::sword k = 1;
-            while (cur < row) {
-                if (row - cur > cont_count - k) {
-                    cur += cont_count - k;
-                    k++;
-                    continue;
-                }
-                cont1 = k;
-                cont2 = row - cur + k;
-                if (cont2 < 0) {
-                    std::cerr << "uhoh3\n";
-                }
-                return std::make_pair(cont1, cont2);
-            }
-        } else {
-            throw (std::runtime_error("ERROR: row value too large in back_translate_alt."));
+        std::vector<int> test_phenotypes {
+            1, 1, 1, 1, 1, 0, 0, 0, 0, 0
+        };
+
+        arma::sword N = 10;
+        std::vector<int> test_transitions;
+        int start = 0;
+        for(int k = N - 1; k > 0; k--) {
+            start += k;
+            test_transitions.push_back(start);
         }
-        throw (std::runtime_error("ERROR: back_translate_alt failed to find the pair."));
+
+        auto test_translate = [&](std::string &a, std::string &b) {
+            auto finda = std::lower_bound(test_samples.begin(), test_samples.end(), a);
+            auto findb = std::lower_bound(test_samples.begin(), test_samples.end(), b);
+            if (*finda != a || *findb != b) {
+                return -1ll;
+            }
+            int i = std::distance(test_samples.begin(), finda);
+            int j = std::distance(test_samples.begin(), findb);
+            std::cerr << "i: " << i << " j: " << j << std::endl;
+            if (i == j) {
+                throw (std::runtime_error("Searching for two of the same pair."));
+            }
+            if (i > j) {
+                auto tmp = i;
+                i = j;
+                j = tmp;
+            }
+
+            arma::sword start = 0;
+            arma::sword k = test_samples.size() - 1;
+            for (; k > test_samples.size() - i - 1; k--)
+                start += k;
+            return start + j - i - 1;
+        };
+
+        auto test_back_translate = [&](arma::sword row) {
+            arma::sword i = -1;
+            arma::sword j = -1;
+
+            auto bound = std::lower_bound(test_transitions.begin(), test_transitions.end(), row);
+
+            i = std::distance(test_transitions.begin(), bound);
+            if(row == *bound) {
+                i += 1;
+                j = i + 1;
+            } else {
+                j = i > 0 ? row - *(bound - 1) + i + 1 : row + 1;
+            }
+            std::cerr << "bound: " << *bound << std::endl;
+
+            return std::make_pair(i, j);
+        };
+
+        // Testing A:B; Correct answer: 0
+        auto row = test_translate(test_samples[0], test_samples[1]);
+        std::cerr << "Row returned: " << row << " Correct row: " << 0 << std::endl;
+        row = test_translate(test_samples[0], test_samples[2]);
+        std::cerr << "Row returned: " << row << " Correct row: " << 1 << std::endl;
+        row = test_translate(test_samples[0], test_samples[3]);
+        std::cerr << "Row returned: " << row << " Correct row: " << 2 << std::endl;
+        row = test_translate(test_samples[1], test_samples[2]);
+        std::cerr << "Row returned: " << row << " Correct row: " << 9 << std::endl;
+        row = test_translate(test_samples[8], test_samples[9]);
+        std::cerr << "Row returned: " << row << " Correct row: " << 44 << std::endl;
+
+        auto p = test_back_translate(0);
+        std::cerr << "Pair returned: " << p.first << "," << p.second << " Correct pair: " << "0,1" << std::endl;
+        p = test_back_translate(44);
+        std::cerr << "Pair returned: " << p.first << "," << p.second << " Correct pair: " << "8,9" << std::endl;
+        p = test_back_translate(9);
+        std::cerr << "Pair returned: " << p.first << "," << p.second << " Correct pair: " << "1,2" << std::endl;
+        p = test_back_translate(10);
+        std::cerr << "Pair returned: " << p.first << "," << p.second << " Correct pair: " << "1,3" << std::endl;
+        p = test_back_translate(5);
+        std::cerr << "Pair returned: " << p.first << "," << p.second << " Correct pair: " << "0,6" << std::endl;
     }
 };
 
@@ -436,6 +330,8 @@ class Parser {
         data.set_size(indexer[0].case_case + indexer[0].case_cont + indexer[0].cont_cont, nbreakpoints);
 
         while (std::getline(is, line)) {
+            int cscs_cnt = 0;
+            int cscn_cnt = 0;
             RJBUtil::Splitter<std::string_view> splitter(line, " \t");
             if (boost::starts_with(line, "#")) {
                 // Header
@@ -444,6 +340,7 @@ class Parser {
                 sample_idx_map[index] = sample;
                 continue;
             }
+            std::cerr << "splitter size: " << splitter.size() << std::endl;
             if (splitter.size() > 2) { // Possibility of empty entries (ending breakpoints)
                 for (unsigned long i = 2; i < splitter.size(); i++) {
                     RJBUtil::Splitter<std::string_view> entry(splitter[i], ":");
@@ -453,7 +350,26 @@ class Parser {
                     std::string pair2(pairs[1]);
 
                     arma::sword row_idx = indexer[0].translate(pair1, pair2);
-
+                    if (row_idx >= 0) {
+                        auto bt = indexer[0].back_translate(row_idx);
+                        if (indexer[0].samples[bt.first] != pair1 && indexer[0].samples[bt.first] != pair2) {
+                            std::cerr << "mismatch: " << indexer[0].samples[bt.first] << " " << pair1 << " " << pair2 << std::endl;
+                        }
+                        if (indexer[0].samples[bt.second] != pair1 && indexer[0].samples[bt.second] != pair2) {
+                            std::cerr << "mismatch: " << indexer[0].samples[bt.second] << " " << pair1  << " " << pair2 << std::endl;
+                        }
+                        if (phenotypes[0][bt.first] == 1) {
+                            if (phenotypes[0][bt.second] == 1) {
+                                cscs_cnt++;
+                            } else if (phenotypes[0][bt.second] == 0) {
+                                cscn_cnt++;
+                            }
+                        } else if (phenotypes[0][bt.first] == 0) {
+                            if (phenotypes[0][bt.second] == 1) {
+                                cscn_cnt++;
+                            }
+                        }
+                    }
                     if (i == 2) {
                         Breakpoint bp{};
                         if (row_idx < 0) {
@@ -474,6 +390,9 @@ class Parser {
                             breakpoints.back().ibd_pairs.push_back(std::make_pair(pair1, pair2));
                         }
                     }
+                    if (data(row_idx, varno) > 0) {
+                        std::cerr << "already written\n";
+                    }
                     data(row_idx, varno) = 1;
                 }
             } else {
@@ -484,35 +403,10 @@ class Parser {
                 };
                 breakpoints.push_back(bp);
             }
+            std::cerr << splitter[0] << " " << splitter[1] << " cscs_cnt: " << cscs_cnt << " cscn_cnt: " << cscn_cnt
+                      << std::endl;
             varno++;
         }
-    }
-
-    void parse_ped(std::istream &is) {
-        // Format columns
-        const int fid = 0;
-        const int iid = 1;
-        const int pid = 2;
-        const int mid = 3;
-        const int sex = 4;
-        const int aff = 5;
-
-        std::string line;
-        while (std::getline(is, line)) {
-            if (boost::starts_with(line, "#")) { // Skip possible header
-                continue;
-            }
-            RJBUtil::Splitter<std::string_view> splitter(line, " \t");
-            if (splitter.size() < 6) { // Ensure that we have enough elements to parse
-                throw (std::runtime_error("ERROR: Incorrectly formatted .ped file."));
-            }
-            samples.push_back(splitter[iid]);
-            phenotypes.push_back(std::stoi(splitter[aff]) - 1); // 2 is case, 1 is control, 0 is unknown
-        }
-        int case_count = std::accumulate(phenotypes.begin(), phenotypes.end(), 0);
-        int control_count = phenotypes.size() - case_count;
-
-        indexer = Indexer(case_count, control_count, phenotypes);
     }
 
     void parse_pheno(std::istream &is) {
@@ -529,19 +423,30 @@ class Parser {
             samples.push_back(splitter[iid]);
             for (int i = 1; i < splitter.size(); i++) {
                 if (phenotypes.size() < i) {
-                    phenotypes.push_back({});
+                    phenotypes.emplace_back();
                 }
                 if (splitter[i] == "NA") {
                     phenotypes[i - 1].push_back(-1);
                 } else {
-                    samples.push_back(splitter[iid]);
                     phenotypes[i - 1].push_back(std::stoi(splitter[i]));
                 }
             }
         }
-        for(unsigned long k = 0; k < phenotypes.size(); k++) {
-            int case_count = std::accumulate(phenotypes[k].begin(), phenotypes[k].end(), 0);
-            int control_count = phenotypes[k].size() - case_count;
+        for (unsigned long k = 0; k < phenotypes.size(); k++) {
+            int case_count = 0;
+            int control_count = 0;
+            for (const auto &v : phenotypes[k]) {
+                switch (v) {
+                    case 1:
+                        case_count++;
+                        break;
+                    case 0:
+                        control_count++;
+                        break;
+                    default:
+                        break;
+                }
+            }
 
             indexer.emplace_back(Indexer(case_count, control_count, samples, phenotypes[k]));
         }
@@ -565,17 +470,21 @@ public:
         std::istream cis(&(*csource.streambuf));
         std::ifstream pifs(ppath);
 
+        std::cerr << "Counting breakpoints\n";
         count_breakpoints(cis);
 
         Source isource(ipath);
         std::istream is(&(*isource.streambuf));
 
+        std::cerr << "Parsing phenotypes\n";
         parse_pheno(pifs);
+        std::cerr << "Parsing data\n";
         parse_input(is);
 
-        for(unsigned long k = 0; k < indexer.size(); k++) {
+        for (unsigned long k = 0; k < indexer.size(); k++) {
             std::cerr << "ncases: " << indexer[k].case_count << " ncontrols: " << indexer[k].cont_count << std::endl;
-            std::cerr << "Pairs -- Case-Case: " << indexer[k].case_case << " Case-Control: " << indexer[k].case_cont << std::endl;
+            std::cerr << "Pairs -- Case-Case: " << indexer[k].case_case << " Case-Control: " << indexer[k].case_cont
+                      << std::endl;
         }
     }
 };
