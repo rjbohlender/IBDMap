@@ -158,6 +158,7 @@ void Statistic::run() {
 
     // Output
     std::stringstream iss;
+#if 0
     for (int k = 0; k < permuted_cscs.size(); k++) {
         iss << bp.breakpoint.first << "\t" << bp.breakpoint.second;
         for (int i = 0; i < params.nperms + 1; i++) { // nperms + 1 because the original values are also in the permuted set
@@ -165,6 +166,16 @@ void Statistic::run() {
         }
         iss << std::endl;
     }
+#else
+    for (int k = 0; k < permuted_cscs.size(); k++) {
+        iss << bp.breakpoint.first << "\t" << bp.breakpoint.second << "\t" << original[k];
+        for (int i = 0; i < params.nperms; i++) {
+            iss << "\t" << permuted[k][i];
+        }
+        iss << std::endl;
+    }
+
+#endif
     reporter->submit(iss.str());
     done = true;
 }
