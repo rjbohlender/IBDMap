@@ -68,6 +68,10 @@ public:
     work_queue.push(std::move(f));
     ntasks++;
   }
+
+  int pending() {
+    return ntasks;
+  }
 };
 
 #endif //CARVAIBD_THREADPOOL_HPP

@@ -11,96 +11,77 @@
 namespace po = boost::program_options;
 
 int main(int argc, char *argv[]) {
-    // C++ IO only
-    std::ios_base::sync_with_stdio(false);
+  // C++ IO only
+  std::ios_base::sync_with_stdio(false);
 
-    po::options_description desc;
-    bool global = false;
+  po::options_description desc;
+  bool global = false;
 
-    desc.add_options()
-            ("input,i",
-             po::value<std::string>()->required(),
-             "Unified IBD input file.")
-            ("pheno,p",
-             po::value<std::string>()->required(),
-             ".ped format file describing case-control status of all samples.")
-            ("threads,t",
-             po::value<unsigned long>()->default_value(std::thread::hardware_concurrency() / 2),
-             "Number of threads used in execution.")
-            ("permutations,n",
-             po::value<unsigned long>()->default_value(1000000),
-             "Number of permutations.")
-            ("seed",
-             po::value<unsigned int>(),
-             "Specify the seed to be shared by all breakpoints for equal permutations.")
-            ("output,o",
-             po::value<std::string>(),
-             "Output to a specified file. Default output is stdout.")
-            ("help,h", "Display this message.");
-    po::variables_map vm;
-    try {
-        po::store(po::parse_command_line(argc, argv, desc), vm);
-        po::notify(vm);
+  desc.add_options()
+      ("input,i",
+       po::value<std::string>()->required(),
+       "Unified IBD input file.")
+      ("pheno,p",
+       po::value<std::string>()->required(),
+       ".ped format file describing case-control status of all samples.")
+      ("threads,t",
+       po::value<unsigned long>()->default_value(std::thread::hardware_concurrency() / 2),
+       "Number of threads used in execution.")
+      ("permutations,n",
+       po::value<unsigned long>()->default_value(1000000),
+       "Number of permutations.")
+      ("seed",
+       po::value<unsigned int>(),
+       "Specify the seed to be shared by all breakpoints for equal permutations.")
+      ("output,o",
+       po::value<std::string>(),
+       "Output to a specified file. Default output is stdout.")
+      ("help,h", "Display this message.");
+  po::variables_map vm;
+  try {
+    po::store(po::parse_command_line(argc, argv, desc), vm);
+    po::notify(vm);
 
-        if (vm.count("help")) {
-            std::cerr << desc << std::endl;
-            return 1;
-        }
-        if (vm.count("global") > 0 && vm.count("gmap") == 0) {
-            std::cerr << desc << std::endl;
-            std::cerr << "ERROR: -g requires --gmap." << std::endl;
-            return 1;
-        }
-    } catch (po::error &pe) {
-        std::cerr << pe.what() << std::endl;
-        std::cerr << desc << std::endl;
-        return 1;
+    if (vm.count("help")) {
+      std::cerr << desc << std::endl;
+      return 1;
     }
-    std::cerr << "Running parser.\n";
-    Parser<std::string> parser(vm["input"].as<std::string>(), vm["pheno"].as<std::string>());
-
-    std::cerr << "Running parameters.\n";
-
-    unsigned int seed;
-    if (vm.count("seed") > 0) {
-        seed = vm["seed"].as<unsigned int>();
-    } else {
-        seed = std::random_device{}();
+    if (vm.count("global") > 0 && vm.count("gmap") == 0) {
+      std::cerr << desc << std::endl;
+      std::cerr << "ERROR: -g requires --gmap." << std::endl;
+      return 1;
     }
+  } catch (po::error &pe) {
+    std::cerr << pe.what() << std::endl;
+    std::cerr << desc << std::endl;
+    return 1;
+  }
+  arma::wall_clock timer;
+  timer.tic();
 
-    Parameters parameters{
-            vm["permutations"].as<unsigned long>(),
-            vm["threads"].as<unsigned long>(),
-            vm.count("output") > 0 ? vm["output"].as<std::string>() : "",
-            seed
-    };
+  unsigned int seed;
+  if (vm.count("seed") > 0) {
+    seed = vm["seed"].as<unsigned int>();
+  } else {
+    seed = std::random_device{}();
+  }
 
-    if (parameters.nthreads < 3) {
-        throw (std::runtime_error("ERROR: Need at least 3 threads."));
-    }
+  std::cerr << "Running parameters.\n";
+  Parameters parameters{
+      vm["permutations"].as<unsigned long>(),
+      vm["threads"].as<unsigned long>(),
+      vm.count("output") > 0 ? vm["output"].as<std::string>() : "",
+      seed
+  };
 
-    // Initialize reporter
-    auto reporter = std::make_shared<Reporter>(parameters.output_path);
-    // Initialize ThreadPool
-    unsigned long submitted = 0;
-    ThreadPool<void> threadpool(parameters);
-    std::vector<Statistic> stats;
-    stats.reserve(parser.nbreakpoints);
-    for (unsigned long i = 0; i < parser.nbreakpoints; i++) {
-        Statistic stat(arma::sp_colvec(parser.data.col(i)),
-                       parser.breakpoints[i],
-                       parser.indexer,
-                       parser,
-                       reporter,
-                       parameters);
-        // stat.run();
-        stats.emplace_back(std::move(stat));
-        std::packaged_task<void()> f(std::bind(&Statistic::run, &stats.back()));
-        threadpool.submit(std::move(f));
-        submitted++;
-        std::cerr << "nsubmitted: " << submitted << std::endl;
-    }
-    while (!std::all_of(stats.begin(), stats.end(), [](Statistic &s) { return s.done; })) {
-        std::this_thread::sleep_for(std::chrono::nanoseconds(100000000));
-    }
+  if (parameters.nthreads < 3) {
+    throw (std::runtime_error("ERROR: Need at least 3 threads."));
+  }
+  // Initialize reporter
+  auto reporter = std::make_shared<Reporter>(parameters.output_path);
+
+  std::cerr << "Running parser.\n";
+  Parser<std::string> parser(vm["input"].as<std::string>(), vm["pheno"].as<std::string>(), parameters, reporter);
+
+  std::cerr << "Total runtime: " << timer.toc() << std::endl;
 }

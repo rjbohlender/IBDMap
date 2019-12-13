@@ -20,7 +20,7 @@ set(PROJECT_SUPPORT_FILES
     third_party/stocc/sfmt.cpp third_party/stocc/sfmt.h third_party/stocc/stoc3.cpp
     third_party/stocc/fnchyppr.cpp src/statistic.cpp src/statistic.hpp src/threadpool.hpp src/parameters.hpp src/threadsafequeue.hpp
     third_party/stocc/wnchyppr.cpp third_party/stocc/stoc1.cpp third_party/stocc/stoc2.cpp third_party/stocc/randomc.h third_party/stocc/mersenne.cpp
-    third_party/stocc/erfres.cpp third_party/stocc/userintf.cpp src/reporter.hpp src/geneticmap.hpp src/IndexSort.hpp)
+    third_party/stocc/erfres.cpp third_party/stocc/userintf.cpp src/reporter.hpp src/geneticmap.hpp src/IndexSort.hpp src/breakpoint.hpp src/indexer.hpp)
 
 include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party")
 include_directories(${ARMADILLO_INCLUDE_DIRS})

@@ -7,48 +7,51 @@
 
 #include <armadillo>
 #include <future>
-#include "parser.hpp"
 #include "reporter.hpp"
 #include "parameters.hpp"
+#include "indexer.hpp"
+#include "breakpoint.hpp"
 
 /**
  * @brief IBD Statistic Calculation Class
  */
 class Statistic {
-    arma::sp_colvec data;
-    std::vector<Indexer> &indexer;
-    Parser<std::string> &parser;
-    Parameters &params;
+  arma::sp_colvec data;
+  std::vector<Indexer> &indexer;
+  std::vector<std::string> &samples;
+  std::vector<std::vector<int>> phenotypes;
+  Parameters &params;
 
-    std::shared_ptr<Reporter> reporter;
+  std::shared_ptr<Reporter> reporter;
 
-    std::vector<std::pair<arma::sword, arma::sword>> pairs;
+  std::vector<std::pair<arma::sword, arma::sword>> pairs;
 public:
-    bool done = false;
+  bool done = false;
 
-    Breakpoint &bp;
+  Breakpoint bp;
 
-    std::vector<double> original;
-    std::vector<double> successes;
-    std::vector<double> permutations;
+  std::vector<double> original;
+  std::vector<double> successes;
+  std::vector<double> permutations;
 
-    std::vector<std::vector<double>> permuted;
-    std::vector<std::vector<double>> permuted_cscs;
-    std::vector<std::vector<double>> permuted_cscn;
-    std::vector<std::vector<double>> permuted_cncn;
+  std::vector<std::vector<double>> permuted;
+  std::vector<std::vector<double>> permuted_cscs;
+  std::vector<std::vector<double>> permuted_cscn;
+  std::vector<std::vector<double>> permuted_cncn;
 
-    std::vector<arma::sword> rows;
+  std::vector<arma::sword> rows;
 
-    Statistic(arma::sp_colvec &&data_,
-              Breakpoint &bp_,
-              std::vector<Indexer> &indexer_,
-              Parser<std::string> &parser_,
-              std::shared_ptr<Reporter> reporter_,
-              Parameters &params_);
+  Statistic(arma::sp_colvec &&data_,
+            Breakpoint bp_,
+            std::vector<Indexer> &indexer_,
+            std::vector<std::string> &samples_,
+            std::vector<std::vector<int>> &phenotypes_,
+            std::shared_ptr<Reporter> reporter_,
+            Parameters &params_);
 
-    double calculate(std::vector<int> &phenotypes_, double cscs_count, double cscn_count, double cncn_count, int k);
+  double calculate(std::vector<int> &phenotypes_, double cscs_count, double cscn_count, double cncn_count, int k);
 
-    void run();
+  void run();
 };
 
 #endif //CARVAIBD_STATISTIC_HPP
