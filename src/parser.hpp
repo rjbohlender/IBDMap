@@ -131,7 +131,7 @@ class Parser {
     stats.reserve(nbreakpoints);
 
     while (std::getline(is, line)) {
-      arma::sp_vec data(indexer[0].case_case + indexer[0].case_cont + indexer[0].cont_cont);
+      arma::sp_vec data(samples.size() * (samples.size() - 1) / 2.);
 
       int cscs_cnt = 0;
       int cscn_cnt = 0;
@@ -274,7 +274,7 @@ class Parser {
       indexer.emplace_back(Indexer(case_count, control_count, samples, phenotypes[k]));
     }
     if (fill_patterns.size() > 1) {
-      groups = {};
+      groups = std::vector<std::vector<arma::uword>>();
       for (const auto &v : fill_patterns) {
         groups->push_back(v.second);
       }
