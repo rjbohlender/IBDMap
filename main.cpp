@@ -83,5 +83,44 @@ int main(int argc, char *argv[]) {
   std::cerr << "Running parser.\n";
   Parser<std::string> parser(vm["input"].as<std::string>(), vm["pheno"].as<std::string>(), parameters, reporter);
 
+  // Sort output
+  reporter.reset();  // Ensure output is complete
+  struct OutContainer {
+    std::string chrom;
+    int pos;
+    std::vector<std::string> data;
+  };
+  if (!parameters.output_path.empty()) {
+    std::ifstream reinput(parameters.output_path);
+
+    std::string line;
+    std::vector<OutContainer> sortable_output;
+    while(std::getline(reinput, line)) {
+      RJBUtil::Splitter<std::string> splitter(line, " \t");
+      std::vector<std::string> stats;
+      if (splitter.size() > 0) {
+        for (int i = 2; i < splitter.size(); i++) {
+          stats.push_back(splitter[2]);
+        }
+        OutContainer oc {
+            splitter[0],
+            std::stoi(splitter[1]),
+            std::move(stats)
+        };
+        sortable_output.emplace_back(std::move(oc));
+      }
+    }
+    std::sort(sortable_output.begin(), sortable_output.end(), [](OutContainer &a, OutContainer &b){ return a.pos < b.pos; });
+    reinput.close();
+    std::ofstream reoutput(parameters.output_path);
+    for (const auto &v: sortable_output) {
+      reoutput << v.chrom << "\t" << v.pos;
+      for (const auto &s : v.data) {
+        reoutput << "\t" << s;
+      }
+      reoutput << std::endl;
+    }
+    reoutput.close();
+  }
   std::cerr << "Total runtime: " << timer.toc() << std::endl;
 }

@@ -252,7 +252,7 @@ class Parser {
         }
       }
       if (fill_patterns.count(pattern) == 0) {
-        fill_patterns.emplace(std::make_pair(pattern, std::vector<int>({lineno})));
+        fill_patterns.emplace(std::make_pair(pattern, std::vector<arma::uword>({lineno})));
       } else {
         fill_patterns[pattern].push_back(lineno);
       }
@@ -275,7 +275,7 @@ class Parser {
     }
     if (fill_patterns.size() > 1) {
       for (const auto &v : fill_patterns) {
-        groups.push_back(v.second);
+        groups->push_back(v.second);
       }
     }
   }
