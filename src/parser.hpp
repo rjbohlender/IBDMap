@@ -23,6 +23,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/iostreams/filtering_streambuf.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
+#include <boost/optional.hpp>
 
 template<class StringT>
 struct Source {
@@ -228,7 +229,8 @@ class Parser {
     int iid = 0;
     int phe = 1;
     std::string line;
-    int lineno = 0;
+    arma::uword lineno = 0;
+    std::map<std::vector<bool>, std::vector<arma::uword>> fill_patterns;
     while (std::getline(is, line)) {
       if (boost::starts_with(line, "#") || lineno == 0) { // Skip the header
         lineno++;
@@ -236,16 +238,25 @@ class Parser {
       }
       RJBUtil::Splitter<std::string_view> splitter(line, " \t");
       samples.push_back(splitter[iid]);
+      std::vector<bool> pattern;
       for (int i = 1; i < splitter.size(); i++) {
         if (phenotypes.size() < i) {
           phenotypes.emplace_back();
         }
         if (splitter[i] == "NA") {
+          pattern.push_back(false);
           phenotypes[i - 1].push_back(-1);
         } else {
+          pattern.push_back(true);
           phenotypes[i - 1].push_back(std::stoi(splitter[i]));
         }
       }
+      if (fill_patterns.count(pattern) == 0) {
+        fill_patterns.emplace(std::make_pair(pattern, std::vector<int>({lineno})));
+      } else {
+        fill_patterns[pattern].push_back(lineno);
+      }
+      lineno++;
     }
     for (unsigned long k = 0; k < phenotypes.size(); k++) {
       int case_count = 0;
@@ -262,6 +273,11 @@ class Parser {
 
       indexer.emplace_back(Indexer(case_count, control_count, samples, phenotypes[k]));
     }
+    if (fill_patterns.size() > 1) {
+      for (const auto &v : fill_patterns) {
+        groups.push_back(v.second);
+      }
+    }
   }
 
 public:
@@ -272,6 +288,7 @@ public:
   unsigned long nbreakpoints;
   Parameters params;
   std::shared_ptr<Reporter> reporter;
+  boost::optional<std::vector<std::vector<arma::uword>>> groups;
 
   /**
    * @brief Constructor for the Parser -- Handles all input parsing.

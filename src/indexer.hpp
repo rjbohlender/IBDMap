@@ -77,6 +77,7 @@ struct Indexer {
         ordered_cc_positions[s] = cont_idx;
         cont_idx++;
         break;
+      case -1: break;
       default:throw (std::runtime_error("Invalid phenotype value."));
       }
       current++;
