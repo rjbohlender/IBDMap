@@ -274,6 +274,7 @@ class Parser {
       indexer.emplace_back(Indexer(case_count, control_count, samples, phenotypes[k]));
     }
     if (fill_patterns.size() > 1) {
+      groups = {};
       for (const auto &v : fill_patterns) {
         groups->push_back(v.second);
       }
