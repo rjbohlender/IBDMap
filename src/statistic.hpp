@@ -11,6 +11,7 @@
 #include "parameters.hpp"
 #include "indexer.hpp"
 #include "breakpoint.hpp"
+#include <boost/optional.hpp>
 
 /**
  * @brief IBD Statistic Calculation Class
@@ -30,6 +31,8 @@ public:
 
   Breakpoint bp;
 
+  boost::optional<std::vector<std::vector<arma::uword>>> groups;
+
   std::vector<double> original;
   std::vector<double> successes;
   std::vector<double> permutations;
@@ -47,7 +50,8 @@ public:
             std::vector<std::string> &samples_,
             std::vector<std::vector<int>> &phenotypes_,
             std::shared_ptr<Reporter> reporter_,
-            Parameters &params_);
+            Parameters &params_,
+            boost::optional<std::vector<std::vector<arma::uword>>> groups_);
 
   double calculate(std::vector<int> &phenotypes_, double cscs_count, double cscn_count, double cncn_count, int k);
 

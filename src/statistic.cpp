@@ -10,9 +10,10 @@ Statistic::Statistic(arma::sp_colvec &&data_,
                      std::vector<std::string> &samples_,
                      std::vector<std::vector<int>> &phenotypes_,
                      std::shared_ptr<Reporter> reporter_,
-                     Parameters &params_) :
+                     Parameters &params_,
+                     boost::optional<std::vector<std::vector<arma::uword>>> groups_) :
     data(std::move(data_)), indexer(indexer_), samples(samples_), phenotypes(phenotypes_), params(params_), bp(bp_),
-    reporter(std::move(reporter_)) {
+    reporter(std::move(reporter_)), groups(groups_) {
 }
 
 double
@@ -113,16 +114,37 @@ void Statistic::run() {
   std::mt19937 gen(params.seed);
 
   while (permutations[k - 1] < params.nperms) {
-    for (unsigned long i = phenotypes[0].size() - 1; i > 0; i--) {
-      std::uniform_int_distribution<> dis(0, i);
-      int j = dis(gen);
-      for (k = 0; k < phenotypes.size(); k++) { // Permute all phenotypes the same way.
-        int tmp = phenotypes[k][j];
-        phenotypes[k][j] = phenotypes[k][i];
-        phenotypes[k][i] = tmp;
+    if (groups) {
+      for (const auto &v : *groups) {
+        std::vector<arma::uword> p = v;
+        for(int i = v.size() - 1; i > 0; i--) {
+          std::uniform_int_distribution<> dis(0, i);
+          int j = dis(gen);
+          arma::uword tmp = p[j];
+          p[j] = p[i];
+          p[i] = tmp;
+        }
+        for(k = 0; k < phenotypes.size(); k++) {
+          for (int i = 0; i < v.size(); i++) {
+            int m = v[i];
+            int n = p[i];
+            int tmp = phenotypes[k][m];
+            phenotypes[k][m] = phenotypes[k][n];
+            phenotypes[k][n] = tmp;
+          }
+        }
+      }
+    } else {
+      for (unsigned long i = phenotypes[0].size() - 1; i > 0; i--) {
+        std::uniform_int_distribution<> dis(0, i);
+        int j = dis(gen);
+        for (k = 0; k < phenotypes.size(); k++) { // Permute all phenotypes the same way.
+          int tmp = phenotypes[k][j];
+          phenotypes[k][j] = phenotypes[k][i];
+          phenotypes[k][i] = tmp;
+        }
       }
     }
-
     k = 0;
     for (auto &v : phenotypes) {
       double val = calculate(v, indexer[k].case_case, indexer[k].case_cont, indexer[k].cont_cont, k);

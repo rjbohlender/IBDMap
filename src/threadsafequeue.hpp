@@ -62,6 +62,10 @@ public:
     std::lock_guard<std::mutex> lk(mut);
     return data_queue.empty();
   }
+  size_t size() const
+  {
+    return data_queue.size();
+  }
 };
 
 #endif //CARVAIBD_THREADSAFEQUEUE_HPP

@@ -110,7 +110,6 @@ template<class StringT>
 class Parser {
   std::map<int, std::string> sample_idx_map;
 
-
   void count_breakpoints(std::istream &is) {
     nbreakpoints = 0;
     std::string line;
@@ -210,16 +209,16 @@ class Parser {
                      samples,
                      phenotypes,
                      reporter,
-                     params);
-        stats.emplace_back(std::move(stat));
-        std::packaged_task<void()> f(std::bind(&Statistic::run, &stats.back()));
-        while(threadpool.pending() >= 2 * params.nthreads) {
-          std::this_thread::sleep_for(std::chrono::nanoseconds(1000000));
-        }
-        threadpool.submit(std::move(f));
-        submitted++;
-        std::cerr << "nsubmitted: " << submitted << std::endl;
+                     params,
+                     groups);
+      stats.emplace_back(std::move(stat));
+      std::packaged_task<void()> f(std::bind(&Statistic::run, &stats.back()));
+      while (threadpool.pending() >= 2 * params.nthreads) {
+        std::this_thread::sleep_for(std::chrono::nanoseconds(1000000));
       }
+      threadpool.submit(std::move(f));
+      submitted++;
+    }
     while (!std::all_of(stats.begin(), stats.end(), [](Statistic &s) { return s.done; })) {
       std::this_thread::sleep_for(std::chrono::nanoseconds(100000000));
     }
@@ -297,7 +296,7 @@ public:
    * @param ppath Phenotype path
    */
   Parser(StringT ipath, StringT ppath, Parameters params_, std::shared_ptr<Reporter> reporter_)
-      : nbreakpoints(0), params(params_), reporter(reporter_) {
+      : nbreakpoints(0), params(std::move(params_)), reporter(std::move(reporter_)) {
     Source csource(ipath);
     std::istream cis(&(*csource.streambuf));
     std::ifstream pifs(ppath);
