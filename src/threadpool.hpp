@@ -17,9 +17,10 @@ template<typename Res, typename... Args>
 class ThreadPool {
   std::atomic<bool> done;
   std::atomic<int> ntasks;
+  std::atomic<int> nsubmitted;
   mutable std::mutex mut;
   std::condition_variable cv;
-  ThreadSafeQueue<std::packaged_task<Res(Args...)>> work_queue;
+  std::queue<std::packaged_task<Res(Args...)>> work_queue;
   std::vector<std::thread> threads;
   JoinThreads joiner;
   void worker_thread()
@@ -28,23 +29,26 @@ class ThreadPool {
     while(!done || ntasks > 0)
 	{
       std::packaged_task<Res(Args...)> task;
-      cv.wait(lk, [this] { return !work_queue.empty() || done; });
-      if (work_queue.try_pop(task))
-      {
+      cv.wait_for(lk, std::chrono::seconds(1), [this] { return !work_queue.empty() || done; });
+      if(!work_queue.empty()) {
+        task = std::move(work_queue.front());
+        work_queue.pop();
+
+        auto f = task.get_future();
+        // Done with queue; unlock
         lk.unlock();
         task();
         ntasks--;
+
         lk.lock();
+
+        f.get(); // Throw any errors -- holy fuck finally this is it
       }
-      else
-	  {
-        std::this_thread::yield();
-	  }
 	}
   }
 public:
   explicit ThreadPool(const Parameters &params) :
-  	done(false), ntasks(0), joiner(threads)
+  	done(false), ntasks(0), nsubmitted(0), joiner(threads)
   {
     unsigned const thread_count=params.nthreads - 2;
 	try
@@ -72,13 +76,16 @@ public:
 
   void submit(std::packaged_task<Res(Args...)> &&f)
   {
+    while (ntasks >= 2 * threads.size()) {
+      std::cerr << "Waiting.\n";
+      std::this_thread::sleep_for(std::chrono::nanoseconds(1000000));
+    }
+    std::unique_lock lk(mut);
     work_queue.push(std::move(f));
     ntasks++;
+    nsubmitted++;
+    lk.unlock();
     cv.notify_all();
-  }
-
-  int pending() {
-    return ntasks;
   }
 };
 

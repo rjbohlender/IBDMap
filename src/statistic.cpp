@@ -2,6 +2,7 @@
 // Created by Bohlender,Ryan James on 9/23/19.
 //
 
+#include <utility>
 #include "statistic.hpp"
 
 Statistic::Statistic(arma::sp_colvec &&data_,
@@ -12,8 +13,8 @@ Statistic::Statistic(arma::sp_colvec &&data_,
                      std::shared_ptr<Reporter> reporter_,
                      Parameters &params_,
                      boost::optional<std::vector<std::vector<arma::uword>>> groups_) :
-    data(std::move(data_)), indexer(indexer_), samples(samples_), phenotypes(phenotypes_), params(params_), bp(bp_),
-    reporter(std::move(reporter_)), groups(groups_) {
+    data(std::move(data_)), indexer(indexer_), samples(samples_), phenotypes(phenotypes_), params(params_), bp(std::move(bp_)),
+    reporter(std::move(reporter_)), groups(std::move(groups_)) {
 }
 
 double
@@ -42,7 +43,9 @@ Statistic::calculate(std::vector<int> &phenotypes_, double cscs_count, double cs
         case 0:cscn += 1.;
           break;
         case -1:break;
-        default:throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
+        default:
+          std::cerr << "Phenotype: " << phenotypes_[p2] << " p2: " << p2 << std::endl;
+          throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
         }
         break;
       case 0:
@@ -52,11 +55,15 @@ Statistic::calculate(std::vector<int> &phenotypes_, double cscs_count, double cs
         case 0:cncn += 1.;
           break;
         case -1:break;
-        default:throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
+        default:
+          std::cerr << "Phenotype: " << phenotypes_[p2] << " p2: " << p2 << std::endl;
+          throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
         }
         break;
       case -1:break;
-      default:throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
+      default:
+        std::cerr << "Phenotype: " << phenotypes_[p1] << " p1: " << p1 << std::endl;
+        throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
       }
     }
   } else {
@@ -71,7 +78,9 @@ Statistic::calculate(std::vector<int> &phenotypes_, double cscs_count, double cs
         case 0:cscn += 1.;
           break;
         case -1:break;
-        default:throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
+        default:
+          std::cerr << "Phenotype: " << phenotypes_[p.second] << " p.second: " << p.second << std::endl;
+          throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
         }
         break;
       case 0:
@@ -81,11 +90,15 @@ Statistic::calculate(std::vector<int> &phenotypes_, double cscs_count, double cs
         case 0:cncn += 1.;
           break;
         case -1:break;
-        default:throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
+        default:
+          std::cerr << "Phenotype: " << phenotypes_[p.second] << " p.second: " << p.second << std::endl;
+          throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
         }
         break;
       case -1:break;
-      default:throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
+      default:
+        std::cerr << "Phenotype: " << phenotypes_[p.first] << " p.first: " << p.first << std::endl;
+        throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
       }
     }
   }
@@ -114,23 +127,19 @@ void Statistic::run() {
   std::mt19937 gen(params.seed);
 
   while (permutations[k - 1] < params.nperms) {
-    if (groups) {
-      for (const auto &v : *groups) {
-        std::vector<arma::uword> p = v;
-        for(int i = v.size() - 1; i > 0; i--) {
+    if (groups) { // If we need to do grouped permutation
+      for (const auto &v : *groups) { // For each of the set of group indices
+        std::vector<arma::uword> p = v; // Group indices
+        for(int i = p.size() - 1; i > 0; i--) { // Shuffle the indices
           std::uniform_int_distribution<> dis(0, i);
           int j = dis(gen);
-          arma::uword tmp = p[j];
-          p[j] = p[i];
-          p[i] = tmp;
+          std::swap(p[i], p[j]);
         }
-        for(k = 0; k < phenotypes.size(); k++) {
-          for (int i = 0; i < v.size(); i++) {
+        for(k = 0; k < phenotypes.size(); k++) { // For each of the phenotypes
+          for (int i = 0; i < v.size(); i++) { // For each group index
             int m = v[i];
             int n = p[i];
-            int tmp = phenotypes[k][m];
-            phenotypes[k][m] = phenotypes[k][n];
-            phenotypes[k][n] = tmp;
+            std::swap(phenotypes[k][n], phenotypes[k][m]); // Swap the values of the phenotypes at the indices
           }
         }
       }
@@ -139,9 +148,7 @@ void Statistic::run() {
         std::uniform_int_distribution<> dis(0, i);
         int j = dis(gen);
         for (k = 0; k < phenotypes.size(); k++) { // Permute all phenotypes the same way.
-          int tmp = phenotypes[k][j];
-          phenotypes[k][j] = phenotypes[k][i];
-          phenotypes[k][i] = tmp;
+          std::swap(phenotypes[k][i], phenotypes[k][j]);
         }
       }
     }
@@ -158,16 +165,7 @@ void Statistic::run() {
 
   // Output
   std::stringstream iss;
-#if 0
-  for (int k = 0; k < permuted_cscs.size(); k++) {
-      iss << bp.breakpoint.first << "\t" << bp.breakpoint.second;
-      for (int i = 0; i < params.nperms + 1; i++) { // nperms + 1 because the original values are also in the permuted set
-          iss << "\t" << permuted_cscs[k][i] << "\t" << permuted_cscn[k][i] << "\t" << permuted_cncn[k][i];
-      }
-      iss << std::endl;
-  }
-#else
-  for (int k = 0; k < permuted_cscs.size(); k++) {
+  for (k = 0; k < permuted_cscs.size(); k++) {
     iss << bp.breakpoint.first << "\t" << bp.breakpoint.second << "\t" << original[k];
     for (int i = 0; i < params.nperms; i++) {
       iss << "\t" << permuted[k][i];
@@ -175,7 +173,6 @@ void Statistic::run() {
     iss << std::endl;
   }
 
-#endif
   reporter->submit(iss.str());
   data.reset();
   done = true;

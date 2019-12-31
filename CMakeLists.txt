@@ -3,6 +3,8 @@ project(carvaIBD)
 
 set(CMAKE_CXX_STANDARD 17)
 
+set(Boost_USE_MULTITHREADED TRUE)
+
 find_package(Armadillo REQUIRED)
 find_package(Threads REQUIRED)
 find_package(Boost 1.66.0 COMPONENTS program_options iostreams REQUIRED)

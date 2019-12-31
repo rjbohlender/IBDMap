@@ -108,8 +108,6 @@ struct Source {
  */
 template<class StringT>
 class Parser {
-  std::map<int, std::string> sample_idx_map;
-
   void count_breakpoints(std::istream &is) {
     nbreakpoints = 0;
     std::string line;
@@ -129,6 +127,7 @@ class Parser {
     std::vector<Statistic> stats;
     stats.reserve(nbreakpoints);
 
+    arma::wall_clock timer;
     while (std::getline(is, line)) {
       arma::sp_vec data(samples.size() * (samples.size() - 1) / 2.);
 
@@ -136,29 +135,20 @@ class Parser {
       int cscn_cnt = 0;
 
       RJBUtil::Splitter<std::string_view> splitter(line, " \t");
-      if (boost::starts_with(line, "#")) {
-        // Header
-        int index = std::stoi(splitter[1]);
-        std::string sample = splitter[2];
-        sample_idx_map[index] = sample;
-        continue;
-      }
       if (splitter.size() > 2) { // Possibility of empty entries (ending breakpoints)
         for (unsigned long i = 2; i < splitter.size(); i++) {
           RJBUtil::Splitter<std::string_view> entry(splitter[i], ":");
-          RJBUtil::Splitter<std::string_view> pairs(entry[1], "-");
+          RJBUtil::Splitter<std::string> pairs(entry[1], "-");
 
-          std::string pair1(pairs[0]);
-          std::string pair2(pairs[1]);
-
-          arma::sword row_idx = indexer[0].translate(pair1, pair2);
+          arma::sword row_idx = indexer[0].translate(pairs[0], pairs[1]);
+#if 0
           if (row_idx >= 0) {
             auto bt = indexer[0].back_translate(row_idx);
-            if (indexer[0].samples[bt.first] != pair1 && indexer[0].samples[bt.first] != pair2) {
-              std::cerr << "mismatch: " << indexer[0].samples[bt.first] << " " << pair1 << " " << pair2 << std::endl;
+            if (indexer[0].samples[bt.first] != pairs[0] && indexer[0].samples[bt.first] != pairs[1]) {
+              std::cerr << "mismatch: " << indexer[0].samples[bt.first] << " " << pairs[0] << " " << pairs[1] << std::endl;
             }
-            if (indexer[0].samples[bt.second] != pair1 && indexer[0].samples[bt.second] != pair2) {
-              std::cerr << "mismatch: " << indexer[0].samples[bt.second] << " " << pair1 << " " << pair2 << std::endl;
+            if (indexer[0].samples[bt.second] != pairs[0] && indexer[0].samples[bt.second] != pairs[1]) {
+              std::cerr << "mismatch: " << indexer[0].samples[bt.second] << " " << pairs[0] << " " << pairs[1] << std::endl;
             }
             if (phenotypes[0][bt.first] == 1) {
               if (phenotypes[0][bt.second] == 1) {
@@ -172,6 +162,7 @@ class Parser {
               }
             }
           }
+#endif
           if (i == 2) {
             Breakpoint bp{};
             if (row_idx < 0) {
@@ -181,7 +172,7 @@ class Parser {
             } else {
               bp.breakpoint = std::make_pair(splitter[0], splitter[1]);
               bp.segment_lengths.push_back(std::stod(entry[0]));
-              bp.ibd_pairs.emplace_back(std::make_pair(pair1, pair2));
+              bp.ibd_pairs.emplace_back(std::make_pair(pairs[0], pairs[1]));
               breakpoints.push_back(bp);
             }
           } else {
@@ -189,7 +180,7 @@ class Parser {
               continue;
             } else {
               breakpoints.back().segment_lengths.push_back(std::stod(entry[0]));
-              breakpoints.back().ibd_pairs.push_back(std::make_pair(pair1, pair2));
+              breakpoints.back().ibd_pairs.push_back(std::make_pair(pairs[0], pairs[1]));
             }
           }
           data(row_idx) = 1;
@@ -213,9 +204,6 @@ class Parser {
                      groups);
       stats.emplace_back(std::move(stat));
       std::packaged_task<void()> f(std::bind(&Statistic::run, &stats.back()));
-      while (threadpool.pending() >= 2 * params.nthreads) {
-        std::this_thread::sleep_for(std::chrono::nanoseconds(1000000));
-      }
       threadpool.submit(std::move(f));
       submitted++;
     }
@@ -248,12 +236,15 @@ class Parser {
         } else {
           pattern.push_back(true);
           phenotypes[i - 1].push_back(std::stoi(splitter[i]));
+          if (phenotypes[i-1].back() != 0 && phenotypes[i-1].back() != 1) {
+            std::cerr << splitter[0] << " " << splitter[1] << std::endl;
+          }
         }
       }
       if (fill_patterns.count(pattern) == 0) {
-        fill_patterns.emplace(std::make_pair(pattern, std::vector<arma::uword>({lineno})));
+        fill_patterns.emplace(std::make_pair(pattern, std::vector<arma::uword>({lineno - 1})));
       } else {
-        fill_patterns[pattern].push_back(lineno);
+        fill_patterns[pattern].push_back(lineno - 1);
       }
       lineno++;
     }

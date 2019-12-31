@@ -33,9 +33,9 @@ class Reporter {
             ofs = std::ofstream(out_path);
         }
         while (!done || nstrings > 0) {
-            data_cond.wait(lk, [this] { return !string_queue.empty() || done; });
+            data_cond.wait_for(lk, std::chrono::seconds(1), [this] { return !string_queue.empty() || done; });
             if (!string_queue.empty()) {
-                s = string_queue.front();
+                s = std::move(string_queue.front());
                 string_queue.pop();
                 lk.unlock();
                 if (!out_path.empty()) {
@@ -51,7 +51,7 @@ class Reporter {
     }
 
 public:
-    Reporter(std::string &output) :
+    explicit Reporter(std::string &output) :
             done(false), nstrings(0), nsubmitted(0), nwritten(0), out_path(output) {
         print_thread = std::thread(&Reporter::print, std::ref(*this));
     }
@@ -76,6 +76,7 @@ public:
         string_queue.push(s);
         nstrings++;
         nsubmitted++;
+        lk.unlock();
         data_cond.notify_all();
     }
 };

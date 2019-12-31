@@ -7,6 +7,7 @@
 
 #include <vector>
 #include <armadillo>
+#include <utility>
 #include "absl/container/flat_hash_map.h"
 #include "IndexSort.hpp"
 
@@ -19,8 +20,9 @@ struct Indexer {
   // Class counts and categories
   arma::uword case_count;
   arma::uword cont_count;
-  std::vector<int> phenotypes;
+  arma::uword sz;
   std::vector<std::string> samples;
+  std::vector<int> phenotypes;
   std::vector<arma::sword> transitions; // Transition points between pairing sets
   absl::flat_hash_map<std::string, int> ordered_positions;
   absl::flat_hash_map<std::string, int> ordered_cc_positions;
@@ -33,14 +35,14 @@ struct Indexer {
   arma::uword case_cont;
   arma::uword cont_cont;
 
-  Indexer() = default;
+  Indexer() = delete;
 
   Indexer(arma::uword case_count_,
           arma::uword cont_count_,
           std::vector<std::string> samples_,
           std::vector<int> phenotypes_)
-      : case_count(case_count_), cont_count(cont_count_), phenotypes(std::move(phenotypes_)),
-        samples(std::move(samples_)) {
+      : case_count(case_count_), cont_count(cont_count_), sz(samples_.size()), phenotypes(std::move(phenotypes_)),
+        samples(std::move(samples_)), case_case(0), case_cont(0), cont_cont(0) {
     setup(case_count_, cont_count_);
 #ifndef NDEBUG
     test_run();
@@ -84,7 +86,7 @@ struct Indexer {
     }
   }
 
-  arma::sword translate(std::string a, std::string b) {
+  arma::sword translate(const std::string &a, const std::string &b) {
     auto finda = std::lower_bound(samples.begin(), samples.end(), a);
     auto findb = std::lower_bound(samples.begin(), samples.end(), b);
     if (*finda != a || *findb != b) {
@@ -96,15 +98,14 @@ struct Indexer {
       throw (std::runtime_error("Searching for two of the same pair."));
     }
     if (i > j) {
-      auto tmp = i;
-      i = j;
-      j = tmp;
+      std::swap(i, j);
     }
 
     arma::sword start = 0;
-    arma::sword k = samples.size() - 1;
-    for (; k > samples.size() - i - 1; k--)
-      start += k;
+    // Replace loop with function for the value -- 1 - 2 orders of magnitude faster
+    long double sz_ = sz;
+    start = (2. * sz_ - 1. - i) * i / 2.;
+
     return start + j - i - 1;
   }
 
@@ -125,7 +126,7 @@ struct Indexer {
     return std::make_pair(i, j);
   }
 
-  void test_run() {
+  static void test_run() {
     std::vector<std::string> test_samples{
         "A", "B", "C", "D", "E", "F", "G", "H", "I", "J"
     };
@@ -209,6 +210,5 @@ struct Indexer {
     std::cerr << "Pair returned: " << p.first << "," << p.second << " Correct pair: " << "0,6" << std::endl;
   }
 };
-
 
 #endif //CARVAIBD_SRC_INDEXER_HPP
