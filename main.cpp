@@ -24,6 +24,9 @@ int main(int argc, char *argv[]) {
       ("pheno,p",
        po::value<std::string>()->required(),
        ".ped format file describing case-control status of all samples.")
+      ("cov,c",
+       po::value<boost::optional<std::string>>()->default_value(boost::none, ""),
+       ".ped format file describing case-control status of all samples.")
       ("threads,t",
        po::value<unsigned long>()->default_value(std::thread::hardware_concurrency() / 2),
        "Number of threads used in execution.")
@@ -81,44 +84,61 @@ int main(int argc, char *argv[]) {
   auto reporter = std::make_shared<Reporter>(parameters.output_path);
 
   std::cerr << "Running parser.\n";
-  Parser<std::string> parser(vm["input"].as<std::string>(), vm["pheno"].as<std::string>(), parameters, reporter);
+  Parser<std::string> parser(vm["input"].as<std::string>(),
+                             vm["pheno"].as<std::string>(),
+                             vm["cov"].as<boost::optional<std::string>>(),
+                             parameters,
+                             reporter);
 
   // Sort output
   reporter.reset();  // Ensure output is complete
   struct OutContainer {
     std::string chrom;
     int pos;
-    std::vector<std::string> data;
+    std::vector<std::vector<std::string>> data;
   };
   if (!parameters.output_path.empty()) {
     std::ifstream reinput(parameters.output_path);
 
     std::string line;
     std::vector<OutContainer> sortable_output;
-    while(std::getline(reinput, line)) {
+    while (std::getline(reinput, line)) {
       RJBUtil::Splitter<std::string> splitter(line, " \t");
       std::vector<std::string> stats;
       if (splitter.size() > 0) {
-        for (int i = 2; i < splitter.size(); i++) {
-          stats.push_back(splitter[2]);
+        if (sortable_output.empty() || sortable_output.back().pos != std::stoi(splitter[1])) {
+          for (int i = 2; i < splitter.size(); i++) {
+            stats.push_back(splitter[i]);
+          }
+          OutContainer oc{
+              splitter[0],
+              std::stoi(splitter[1]),
+              std::vector<std::vector<std::string>>()
+          };
+          oc.data.emplace_back(std::move(stats));
+          sortable_output.emplace_back(std::move(oc));
+        } else {
+          // Continuing the output
+          for (int i = 2; i < splitter.size(); i++) {
+            stats.push_back(splitter[i]);
+          }
+          sortable_output.back().data.emplace_back(std::move(stats));
         }
-        OutContainer oc {
-            splitter[0],
-            std::stoi(splitter[1]),
-            std::move(stats)
-        };
-        sortable_output.emplace_back(std::move(oc));
       }
     }
-    std::sort(sortable_output.begin(), sortable_output.end(), [](OutContainer &a, OutContainer &b){ return a.pos < b.pos; });
+    std::sort(sortable_output.begin(),
+              sortable_output.end(),
+              [](OutContainer &a, OutContainer &b) { return a.pos < b.pos; });
     reinput.close();
     std::ofstream reoutput(parameters.output_path);
     for (const auto &v: sortable_output) {
-      reoutput << v.chrom << "\t" << v.pos;
-      for (const auto &s : v.data) {
-        reoutput << "\t" << s;
+      for (const auto &w : v.data) {
+        reoutput << v.chrom << "\t" << v.pos;
+        for (const auto &s : w) {
+          reoutput << "\t" << s;
+        }
+        reoutput << std::endl;
       }
-      reoutput << std::endl;
     }
     reoutput.close();
   }

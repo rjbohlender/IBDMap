@@ -76,10 +76,6 @@ public:
 
   void submit(std::packaged_task<Res(Args...)> &&f)
   {
-    while (ntasks >= 2 * threads.size()) {
-      std::cerr << "Waiting.\n";
-      std::this_thread::sleep_for(std::chrono::nanoseconds(1000000));
-    }
     std::unique_lock lk(mut);
     work_queue.push(std::move(f));
     ntasks++;

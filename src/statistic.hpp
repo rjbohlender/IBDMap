@@ -26,6 +26,9 @@ class Statistic {
   std::shared_ptr<Reporter> reporter;
 
   std::vector<std::pair<arma::sword, arma::sword>> pairs;
+
+  void test_group_permutation();
+
 public:
   bool done = false;
 

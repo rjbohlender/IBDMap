@@ -268,7 +268,17 @@ class Parser {
       for (const auto &v : fill_patterns) {
         groups->push_back(v.second);
       }
+      std::cerr << "Groups: " << groups->size() << std::endl;
+      std::cerr << "Group sizes: ";
+      for (const auto &v : fill_patterns) {
+        std::cerr << v.second.size() << " ";
+      }
+      std::cerr << std::endl;
     }
+  }
+
+  void parse_cov(std::istream &is) {
+
   }
 
 public:
@@ -283,25 +293,33 @@ public:
 
   /**
    * @brief Constructor for the Parser -- Handles all input parsing.
-   * @param ipath Unified IBD format input file path
-   * @param ppath Phenotype path
+   * @param input_path Unified IBD format input file path
+   * @param pheno_path Phenotype path
    */
-  Parser(StringT ipath, StringT ppath, Parameters params_, std::shared_ptr<Reporter> reporter_)
+  Parser(StringT input_path, StringT pheno_path, boost::optional<StringT> cov_path, Parameters params_, std::shared_ptr<Reporter> reporter_)
       : nbreakpoints(0), params(std::move(params_)), reporter(std::move(reporter_)) {
-    Source csource(ipath);
-    std::istream cis(&(*csource.streambuf));
-    std::ifstream pifs(ppath);
+    Source bp_source(input_path);
+    std::istream bp_is(&(*bp_source.streambuf));
+    std::ifstream pheno_ifs(pheno_path);
 
     std::cerr << "Counting breakpoints\n";
-    count_breakpoints(cis);
+    count_breakpoints(bp_is);
 
-    Source isource(ipath);
-    std::istream is(&(*isource.streambuf));
+    Source input_source(input_path);
+    std::istream input_s(&(*input_source.streambuf));
 
     std::cerr << "Parsing phenotypes\n";
-    parse_pheno(pifs);
+    parse_pheno(pheno_ifs);
+    if(cov_path) {
+      std::cerr << "Parsing covariates\n";
+
+      Source cov_source(*cov_path);
+      std::istream cov_is(&(*cov_source.streambuf));
+
+      parse_cov(cov_is);
+    }
     std::cerr << "Parsing data\n";
-    parse_input(is);
+    parse_input(input_s);
 
     for (unsigned long k = 0; k < indexer.size(); k++) {
       std::cerr << "ncases: " << indexer[k].case_count << " ncontrols: " << indexer[k].cont_count << std::endl;

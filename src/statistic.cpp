@@ -3,7 +3,9 @@
 //
 
 #include <utility>
+#include <boost/algorithm/string/predicate.hpp>
 #include "statistic.hpp"
+#include "split.hpp"
 
 Statistic::Statistic(arma::sp_colvec &&data_,
                      Breakpoint bp_,
@@ -15,6 +17,9 @@ Statistic::Statistic(arma::sp_colvec &&data_,
                      boost::optional<std::vector<std::vector<arma::uword>>> groups_) :
     data(std::move(data_)), indexer(indexer_), samples(samples_), phenotypes(phenotypes_), params(params_), bp(std::move(bp_)),
     reporter(std::move(reporter_)), groups(std::move(groups_)) {
+#ifndef NDEBUG
+  test_group_permutation();
+#endif
 }
 
 double
@@ -111,6 +116,129 @@ Statistic::calculate(std::vector<int> &phenotypes_, double cscs_count, double cs
   return statistic;
 }
 
+void Statistic::test_group_permutation() {
+  std::map<std::vector<bool>, std::vector<arma::uword>> tfill_patterns;
+  boost::optional<std::vector<std::vector<arma::uword>>> tgroups;
+
+  std::stringstream test_data;
+
+  test_data << "#header\n";
+  test_data << "test1\tNA\t1\t1\tNA\n";
+  test_data << "test2\tNA\t0\t0\tNA\n";
+  test_data << "test3\tNA\t1\t0\tNA\n";
+  test_data << "test4\tNA\t0\t1\tNA\n";
+  test_data << "test5\t1\tNA\tNA\t1\n";
+  test_data << "test6\t0\tNA\tNA\t0\n";
+  test_data << "test7\t1\tNA\tNA\t0\n";
+  test_data << "test8\t0\tNA\tNA\t1\n";
+
+  std::string line;
+  arma::uword lineno = 0;
+
+  std::vector<std::vector<int>> tphenotypes;
+
+  while (std::getline(test_data, line)) {
+    if (boost::starts_with(line, "#") || lineno == 0) { // Skip the header
+      lineno++;
+      continue;
+    }
+    RJBUtil::Splitter<std::string_view> splitter(line, " \t");
+    std::vector<bool> pattern;
+    for (int i = 1; i < splitter.size(); i++) {
+      if (tphenotypes.size() < i) {
+        tphenotypes.emplace_back();
+      }
+      if (splitter[i] == "NA") {
+        pattern.push_back(false);
+        tphenotypes[i - 1].push_back(-1);
+      } else {
+        pattern.push_back(true);
+        tphenotypes[i - 1].push_back(std::stoi(splitter[i]));
+        if (tphenotypes[i-1].back() != 0 && tphenotypes[i-1].back() != 1) {
+          std::cerr << splitter[0] << " " << splitter[1] << std::endl;
+        }
+      }
+    }
+    if (tfill_patterns.count(pattern) == 0) {
+      tfill_patterns.emplace(std::make_pair(pattern, std::vector<arma::uword>({lineno - 1})));
+    } else {
+      tfill_patterns[pattern].push_back(lineno - 1);
+    }
+    lineno++;
+  }
+  for (unsigned long k = 0; k < tphenotypes.size(); k++) {
+    int case_count = 0;
+    int control_count = 0;
+    for (const auto &v : tphenotypes[k]) {
+      switch (v) {
+      case 1:case_count++;
+        break;
+      case 0:control_count++;
+        break;
+      default:break;
+      }
+    }
+  }
+  if (tfill_patterns.size() > 1) {
+    tgroups = std::vector<std::vector<arma::uword>>();
+    for (const auto &v : tfill_patterns) {
+      tgroups->push_back(v.second);
+    }
+    std::cerr << "Groups: " << tgroups->size() << std::endl;
+    std::cerr << "Group sizes: ";
+    for (const auto &v : tfill_patterns) {
+      std::cerr << v.second.size() << " ";
+      for (const auto &k : v.second) {
+        std::cerr << "idx: " << k << " ";
+      }
+    }
+    std::cerr << std::endl;
+  }
+
+  std::cerr << "Test phenotypes\n";
+  unsigned long k = 0;
+  for (k = 0; k < tphenotypes.size(); k++) {
+    for (const auto &v : tphenotypes[k]) {
+      std::cerr << v << " ";
+    }
+    std::cerr << std::endl;
+  }
+
+  std::mt19937 gen(params.seed);
+  for (const auto &v : *tgroups) { // For each of the set of group indices
+    std::vector<std::vector<int>> tphenotypes_tmp;
+    for (k = 0; k < tphenotypes.size(); k++) {
+      tphenotypes_tmp.emplace_back(std::vector<int>(v.size(), 0));
+      int x = 0;
+      for (const auto &i : v) {
+        tphenotypes_tmp[k][x] = tphenotypes[k][i];
+        x++;
+      }
+    }
+    for (int i = tphenotypes_tmp[0].size() - 1; i > 0; i--) { // Shuffle the indices
+      std::uniform_int_distribution<> dis(0, i);
+      int j = dis(gen);
+      for (k = 0; k < tphenotypes.size(); k++) {
+        std::swap(tphenotypes_tmp[k][i], tphenotypes_tmp[k][j]);
+      }
+    }
+    for (k = 0; k < tphenotypes.size(); k++) {
+      int x = 0;
+      for (const auto &i : v) {
+        tphenotypes[k][i] = tphenotypes_tmp[k][x];
+        x++;
+      }
+    }
+  }
+  std::cerr << "Test phenotypes after shuffle\n";
+  for (k = 0; k < tphenotypes.size(); k++) {
+    for (const auto &v : tphenotypes[k]) {
+      std::cerr << v << " ";
+    }
+    std::cerr << std::endl;
+  }
+}
+
 void Statistic::run() {
   unsigned long k = 0;
   for (; k < indexer.size(); k++) {
@@ -129,17 +257,27 @@ void Statistic::run() {
   while (permutations[k - 1] < params.nperms) {
     if (groups) { // If we need to do grouped permutation
       for (const auto &v : *groups) { // For each of the set of group indices
-        std::vector<arma::uword> p = v; // Group indices
-        for(int i = p.size() - 1; i > 0; i--) { // Shuffle the indices
+        std::vector<std::vector<int>> phenotypes_tmp;
+        for (k = 0; k < phenotypes.size(); k++) {
+          phenotypes_tmp.emplace_back(std::vector<int>(v.size(), 0));
+          int x = 0;
+          for (const auto &i : v) {
+            phenotypes_tmp[k][x] = phenotypes[k][i];
+            x++;
+          }
+        }
+        for (int i = phenotypes_tmp[0].size() - 1; i > 0; i--) { // Shuffle the indices
           std::uniform_int_distribution<> dis(0, i);
           int j = dis(gen);
-          std::swap(p[i], p[j]);
+          for (k = 0; k < phenotypes.size(); k++) {
+            std::swap(phenotypes_tmp[k][i], phenotypes_tmp[k][j]);
+          }
         }
-        for(k = 0; k < phenotypes.size(); k++) { // For each of the phenotypes
-          for (int i = 0; i < v.size(); i++) { // For each group index
-            int m = v[i];
-            int n = p[i];
-            std::swap(phenotypes[k][n], phenotypes[k][m]); // Swap the values of the phenotypes at the indices
+        for (k = 0; k < phenotypes.size(); k++) {
+          int x = 0;
+          for (const auto &i : v) {
+            phenotypes[k][i] = phenotypes_tmp[k][x];
+            x++;
           }
         }
       }
@@ -165,7 +303,7 @@ void Statistic::run() {
 
   // Output
   std::stringstream iss;
-  for (k = 0; k < permuted_cscs.size(); k++) {
+  for (k = 0; k < original.size(); k++) {
     iss << bp.breakpoint.first << "\t" << bp.breakpoint.second << "\t" << original[k];
     for (int i = 0; i < params.nperms; i++) {
       iss << "\t" << permuted[k][i];
