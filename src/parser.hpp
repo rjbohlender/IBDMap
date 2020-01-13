@@ -13,13 +13,16 @@
 
 #include "split.hpp"
 #include "isgzipped.hpp"
-#include "IndexSort.hpp"
+#include "indexsort.hpp"
 #include "parameters.hpp"
 #include "reporter.hpp"
 #include "threadpool.hpp"
 #include "statistic.hpp"
 #include "breakpoint.hpp"
 #include "indexer.hpp"
+#include "permutation.hpp"
+#include "../link/binomial.hpp"
+#include "glm.hpp"
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/iostreams/filtering_streambuf.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
@@ -127,6 +130,25 @@ class Parser {
     std::vector<Statistic> stats;
     stats.reserve(nbreakpoints);
 
+    // Generate permutations if we have covariates
+    Permute permute(params.seed);
+    boost::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> bo_perms;
+    if (covariates && phenotypes.size() == 1) {
+      auto permutation_ptr = std::make_shared<std::vector<std::vector<int32_t>>>();
+
+      arma::vec Y = arma::conv_to<arma::vec>::from(phenotypes[0]);
+      std::cerr << "Y.n_elem: " << Y.n_elem << std::endl;
+      std::cerr << "Cov.n_rows: " << (*covariates).n_rows << std::endl;
+      Binomial link;
+      GLM<Binomial> fit(*covariates, Y, link);
+      std::cerr << "Fitted mu: " << fit.mu_.t() << std::endl;
+      std::cerr << "Fitted beta: " << fit.beta_.t() << std::endl;
+      arma::vec odds = fit.mu_ / (1 - fit.mu_);
+
+      permute.get_permutations(permutation_ptr, odds, indexer[0].case_count, params.nperms, params.nthreads - 2);
+      bo_perms = permutation_ptr;
+    }
+
     arma::wall_clock timer;
     while (std::getline(is, line)) {
       arma::sp_vec data(samples.size() * (samples.size() - 1) / 2.);
@@ -201,7 +223,8 @@ class Parser {
                      phenotypes,
                      reporter,
                      params,
-                     groups);
+                     groups,
+                     bo_perms);
       stats.emplace_back(std::move(stat));
       std::packaged_task<void()> f(std::bind(&Statistic::run, &stats.back()));
       threadpool.submit(std::move(f));
@@ -218,12 +241,24 @@ class Parser {
     std::string line;
     arma::uword lineno = 0;
     std::map<std::vector<bool>, std::vector<arma::uword>> fill_patterns;
+
+    bool notified = false;
+
     while (std::getline(is, line)) {
       if (boost::starts_with(line, "#") || lineno == 0) { // Skip the header
         lineno++;
         continue;
       }
       RJBUtil::Splitter<std::string_view> splitter(line, " \t");
+      if (splitter.size() > 2 && !notified) {
+        std::cerr << "Multiple phenotypes provided. Covariates will be ignored." << std::endl;
+      }
+
+      if (!splitter.empty() && skip.find(splitter[0]) != skip.end()) {
+        // Skip samples with missing cov values; don't increment lineno because we're treating them as if they don't exist
+        continue;
+      }
+
       samples.push_back(splitter[iid]);
       std::vector<bool> pattern;
       for (int i = 1; i < splitter.size(); i++) {
@@ -278,11 +313,93 @@ class Parser {
   }
 
   void parse_cov(std::istream &is) {
+    std::string line;
+    unsigned long lineno = 0;
+    int nfields = 0;
 
+    std::map<std::string, std::vector<double>> data;
+    std::vector<std::vector<std::string>> unconvertible;
+    std::vector<std::string> sample_ids;
+
+    while(std::getline(is, line)) {
+      RJBUtil::Splitter<std::string> splitter(line, " \t");
+      if (lineno == 0) { // Skip the header
+        if(splitter.size() > 0) {
+          nfields = splitter.size() - 1; // Not counting the sample field so we don't have to subtract all the time.
+          unconvertible.resize(nfields);
+          lineno++;
+        } else {
+          throw(std::runtime_error("Header line of covariate file is empty. Please include a header line."));
+        }
+        continue;
+      }
+
+      if(splitter.empty()) {
+        continue;
+      }
+      if (splitter.size() < nfields + 1) { // Skip samples where we have a missing column or two
+        skip.emplace(splitter[0]);
+        continue;
+      }
+
+      std::string sampleid = splitter[0];
+      sample_ids.push_back(sampleid);
+      data[sampleid] = std::vector<double>(nfields, 0);
+
+      for (int i = 0; i < nfields; i++) {
+        try {
+          data[sampleid][i] = std::stod(splitter[i + 1]);
+        } catch(...) {
+          unconvertible[i].push_back(splitter[i + 1]);
+        }
+      }
+      lineno++;
+    }
+
+    // Handle unconvertible fields by treating them as factors with levels -- convert to integers
+    int fieldno = 0;
+    for (const auto &field : unconvertible) {
+      if (!field.empty()) {
+        std::set<std::string> unique(field.begin(), field.end());
+        std::map<std::string, double> levels;
+
+        std::cerr << "In reading covariates, could not convert column " << fieldno + 1 << " to double." << std::endl;
+        std::cerr << "Levels: ";
+
+        for (auto it = unique.begin(); it != unique.end(); it++) {
+          levels.emplace(std::make_pair(*it, std::distance(unique.begin(), it)));
+          std::cerr << *it << " : " << std::distance(unique.begin(), it) << " ";
+        }
+        std::cerr << std::endl;
+
+        int sampleno = 0;
+        for (const auto &v : field) {
+          data[sample_ids[sampleno]][fieldno] = levels[v];
+          sampleno++;
+        }
+      }
+      fieldno++;
+    }
+
+    // TODO: Assuming cov file is sorted the same as our data, which is nonsense. Fix this.
+    arma::mat design(sample_ids.size(), nfields + 1);
+    int i = 0;
+    for (const auto &s : sample_ids) {
+      design(i, 0) = 1;
+      int j = 1;
+      for (const auto &v : data[s]) {
+        design(i, j) = v;
+        j++;
+      }
+      i++;
+    }
+    std::cerr << "Design.n_rows: " << design.n_rows << std::endl;
+    covariates = design;
   }
 
 public:
   std::vector<std::string> samples;
+  std::set<std::string> skip;
   std::vector<std::vector<int>> phenotypes;
   std::vector<Indexer> indexer;
   std::vector<Breakpoint> breakpoints;
@@ -290,6 +407,7 @@ public:
   Parameters params;
   std::shared_ptr<Reporter> reporter;
   boost::optional<std::vector<std::vector<arma::uword>>> groups;
+  boost::optional<arma::mat> covariates;
 
   /**
    * @brief Constructor for the Parser -- Handles all input parsing.
@@ -308,8 +426,6 @@ public:
     Source input_source(input_path);
     std::istream input_s(&(*input_source.streambuf));
 
-    std::cerr << "Parsing phenotypes\n";
-    parse_pheno(pheno_ifs);
     if(cov_path) {
       std::cerr << "Parsing covariates\n";
 
@@ -318,6 +434,10 @@ public:
 
       parse_cov(cov_is);
     }
+
+    std::cerr << "Parsing phenotypes\n";
+    parse_pheno(pheno_ifs);
+
     std::cerr << "Parsing data\n";
     parse_input(input_s);
 

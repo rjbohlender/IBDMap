@@ -15,6 +15,7 @@
 
 struct Permute {
   Permute();
+  Permute(int seed);
   Permute(const Permute &other);
   Permute &operator=(const Permute &rhs);
 

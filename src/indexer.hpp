@@ -9,7 +9,7 @@
 #include <armadillo>
 #include <utility>
 #include "absl/container/flat_hash_map.h"
-#include "IndexSort.hpp"
+#include "indexsort.hpp"
 
 /**
  * @brief Class to handle converting individual indices into row index

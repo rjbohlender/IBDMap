@@ -35,6 +35,7 @@ public:
   Breakpoint bp;
 
   boost::optional<std::vector<std::vector<arma::uword>>> groups;
+  boost::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms;
 
   std::vector<double> original;
   std::vector<double> successes;
@@ -54,7 +55,8 @@ public:
             std::vector<std::vector<int>> &phenotypes_,
             std::shared_ptr<Reporter> reporter_,
             Parameters &params_,
-            boost::optional<std::vector<std::vector<arma::uword>>> groups_);
+            boost::optional<std::vector<std::vector<arma::uword>>> groups_,
+            boost::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms_);
 
   double calculate(std::vector<int> &phenotypes_, double cscs_count, double cscn_count, double cncn_count, int k);
 

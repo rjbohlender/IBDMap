@@ -11,6 +11,9 @@
 Permute::Permute()
 	: sto(std::random_device{}()) {}
 
+Permute::Permute(int seed)
+    : sto(seed) {}
+
 void Permute::get_permutations(std::shared_ptr<std::vector<std::vector<int32_t>>> permutations,
 							   arma::colvec &odds,
 							   arma::uword ncases,
@@ -451,5 +454,5 @@ auto Permute::reset() -> void {
 	ret.clear();
 	sort_mac_idx.clear();
 	sort_maj_idx.clear();
-};
+}
 
