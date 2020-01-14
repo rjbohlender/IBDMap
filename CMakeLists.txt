@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.0)
 project(carvaIBD)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -8,13 +8,15 @@ set(Boost_USE_MULTITHREADED TRUE)
 find_package(Armadillo REQUIRED)
 find_package(Threads REQUIRED)
 find_package(Boost 1.66.0 COMPONENTS program_options iostreams REQUIRED)
-find_package(absl REQUIRED)
-
-add_subdirectory(third_party/abseil-cpp)
 
 # if(APPLE)
 add_definitions(-DLOWMEM)
 # endif(APPLE)
+
+if (UNIX)
+    find_package(LAPACK REQUIRED)
+    find_package(BLAS REQUIRED)
+endif()
 
 set(PROJECT_SUPPORT_FILES
         src/jointhreads.hpp
@@ -53,11 +55,14 @@ set(PROJECT_SUPPORT_FILES
 include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party")
 include_directories(${ARMADILLO_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS})
+include_directories(${LAPACK_INCLUDE_DIRS})
+include_directories(${BLAS_INCLUDE_DIRS})
 
 add_executable(carvaIBD main.cpp ${PROJECT_SUPPORT_FILES})
 
+target_link_libraries(carvaIBD ${LAPACK_LIBRARIES})
+target_link_libraries(carvaIBD ${BLAS_LIBRARIES})
 target_link_libraries(carvaIBD ${ARMADILLO_LIBRARIES})
 target_link_libraries(carvaIBD ${Boost_LIBRARIES})
-target_link_libraries(carvaIBD absl::hash absl::synchronization absl::flat_hash_map)
 
 target_compile_definitions(carvaIBD PRIVATE MAXCOLORS=10000000)

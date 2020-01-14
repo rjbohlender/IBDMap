@@ -12,7 +12,7 @@
 #include "split.hpp"
 #include "isgzipped.hpp"
 
-#include "absl/container/btree_map.h" // Having ordered containers will make finding nearest values much easier
+#include <map>
 // If removing abseil, use std::map, as it is still ordered
 
 #include <boost/algorithm/string/predicate.hpp>
@@ -21,7 +21,7 @@
 
 class GeneticMap {
   // Can be changed for a std::map if abseil dependency is removed.
-  absl::btree_map<std::string, absl::btree_map<int, double>> gmap_;
+  std::map<std::string, std::map<int, double>> gmap_;
 
   /**
    * @brief Parser for the genetic map format.
@@ -48,7 +48,7 @@ class GeneticMap {
 	  pos = std::stoi(splitter[0]);
 	  gpos = std::stod(splitter[2]);
 
-	  if(!gmap_.contains(chrom)) {
+	  if(gmap_.find(chrom) == gmap_.end()) {
 	    gmap_[chrom] = {};
 	    gmap_[chrom][pos] = gpos;
 	  } else {

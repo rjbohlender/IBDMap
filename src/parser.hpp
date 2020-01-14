@@ -5,11 +5,12 @@
 #ifndef CARVAIBD_PARSER_HPP
 #define CARVAIBD_PARSER_HPP
 
+#define ARMA_DONT_USE_WRAPPER
+
 #include <string>
 #include <armadillo>
 #include <utility>
 #include <unordered_map>
-#include "absl/container/flat_hash_map.h"
 
 #include "split.hpp"
 #include "isgzipped.hpp"
@@ -137,12 +138,8 @@ class Parser {
       auto permutation_ptr = std::make_shared<std::vector<std::vector<int32_t>>>();
 
       arma::vec Y = arma::conv_to<arma::vec>::from(phenotypes[0]);
-      std::cerr << "Y.n_elem: " << Y.n_elem << std::endl;
-      std::cerr << "Cov.n_rows: " << (*covariates).n_rows << std::endl;
       Binomial link;
       GLM<Binomial> fit(*covariates, Y, link);
-      std::cerr << "Fitted mu: " << fit.mu_.t() << std::endl;
-      std::cerr << "Fitted beta: " << fit.beta_.t() << std::endl;
       arma::vec odds = fit.mu_ / (1 - fit.mu_);
 
       permute.get_permutations(permutation_ptr, odds, indexer[0].case_count, params.nperms, params.nthreads - 2);
@@ -310,6 +307,24 @@ class Parser {
       }
       std::cerr << std::endl;
     }
+    if(covariates) {
+      int i = 0;
+      arma::uvec idx(samples.size());
+      for(const auto &v : samples) {
+        if (cov_samples[i] != v) {
+          auto swap_val = std::find(cov_samples.begin(), cov_samples.end(), v);
+          if(swap_val == cov_samples.end())
+            throw(std::runtime_error("ERROR: Sample not present in covariate file."));
+          int j = std::distance(cov_samples.begin(), swap_val);
+          idx(i) = j;
+          std::swap(cov_samples[i], cov_samples[j]);
+        } else {
+          idx(i) = i;
+        }
+        i++;
+      }
+      covariates = (*covariates).rows(idx);
+    }
   }
 
   void parse_cov(std::istream &is) {
@@ -319,7 +334,6 @@ class Parser {
 
     std::map<std::string, std::vector<double>> data;
     std::vector<std::vector<std::string>> unconvertible;
-    std::vector<std::string> sample_ids;
 
     while(std::getline(is, line)) {
       RJBUtil::Splitter<std::string> splitter(line, " \t");
@@ -343,7 +357,7 @@ class Parser {
       }
 
       std::string sampleid = splitter[0];
-      sample_ids.push_back(sampleid);
+      cov_samples.push_back(sampleid);
       data[sampleid] = std::vector<double>(nfields, 0);
 
       for (int i = 0; i < nfields; i++) {
@@ -374,17 +388,16 @@ class Parser {
 
         int sampleno = 0;
         for (const auto &v : field) {
-          data[sample_ids[sampleno]][fieldno] = levels[v];
+          data[cov_samples[sampleno]][fieldno] = levels[v];
           sampleno++;
         }
       }
       fieldno++;
     }
 
-    // TODO: Assuming cov file is sorted the same as our data, which is nonsense. Fix this.
-    arma::mat design(sample_ids.size(), nfields + 1);
+    arma::mat design(cov_samples.size(), nfields + 1);
     int i = 0;
-    for (const auto &s : sample_ids) {
+    for (const auto &s : cov_samples) {
       design(i, 0) = 1;
       int j = 1;
       for (const auto &v : data[s]) {
@@ -399,6 +412,7 @@ class Parser {
 
 public:
   std::vector<std::string> samples;
+  std::vector<std::string> cov_samples;
   std::set<std::string> skip;
   std::vector<std::vector<int>> phenotypes;
   std::vector<Indexer> indexer;

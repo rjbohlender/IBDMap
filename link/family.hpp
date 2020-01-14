@@ -5,6 +5,8 @@
 #ifndef PERMUTE_ASSOCIATE_LINK_HPP
 #define PERMUTE_ASSOCIATE_LINK_HPP
 
+#define ARMA_DONT_USE_WRAPPER
+
 #include <armadillo>
 
 struct Family {

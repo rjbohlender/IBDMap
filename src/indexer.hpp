@@ -5,10 +5,12 @@
 #ifndef CARVAIBD_SRC_INDEXER_HPP
 #define CARVAIBD_SRC_INDEXER_HPP
 
+#define ARMA_DONT_USE_WRAPPER
+
 #include <vector>
 #include <armadillo>
 #include <utility>
-#include "absl/container/flat_hash_map.h"
+#include <unordered_map>
 #include "indexsort.hpp"
 
 /**
@@ -24,10 +26,8 @@ struct Indexer {
   std::vector<std::string> samples;
   std::vector<int> phenotypes;
   std::vector<arma::sword> transitions; // Transition points between pairing sets
-  absl::flat_hash_map<std::string, int> ordered_positions;
-  absl::flat_hash_map<std::string, int> ordered_cc_positions;
-  // std::unordered_map<std::string, int> ordered_positions;
-  // std::unordered_map<std::string, int> ordered_cc_positions;
+  std::unordered_map<std::string, int> ordered_positions;
+  std::unordered_map<std::string, int> ordered_cc_positions;
 
 
   // Pairs
