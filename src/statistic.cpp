@@ -112,7 +112,11 @@ Statistic::calculate(std::vector<int> &phenotypes_, double cscs_count, double cs
   permuted_cscn[k].push_back(cscn);
   permuted_cncn[k].push_back(cncn);
 
-  statistic = cscs / cscs_count - cscn / cscn_count;
+  if (params.contcont) {
+    statistic = cscs / cscs_count - cscn / cscn_count - cncn / cncn_count;
+  } else {
+    statistic = cscs / cscs_count - cscn / cscn_count;
+  }
 
   return statistic;
 }
@@ -314,6 +318,13 @@ void Statistic::run() {
 
   // Output
   std::stringstream iss;
+  if(bp.breakpoint.second == "8560476") {
+    std::cerr << bp.breakpoint.first << "\t" << bp.breakpoint.second << "\t" << original[0];
+    for(const auto &v : permuted[0]) {
+      std::cerr << "\t" << v;
+    }
+    std::cerr << std::endl;
+  }
   for (k = 0; k < original.size(); k++) {
     iss << bp.breakpoint.first << "\t" << bp.breakpoint.second << "\t" << original[k];
     for (int i = 0; i < params.nperms; i++) {

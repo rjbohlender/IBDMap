@@ -154,34 +154,12 @@ class Parser {
       int cscn_cnt = 0;
 
       RJBUtil::Splitter<std::string_view> splitter(line, " \t");
-      if (splitter.size() > 2) { // Possibility of empty entries (ending breakpoints)
+      if (splitter.size() > (params.lower_bound ? *params.lower_bound : 2)) { // Possibility of empty entries (ending breakpoints)
         for (unsigned long i = 2; i < splitter.size(); i++) {
           RJBUtil::Splitter<std::string_view> entry(splitter[i], ":");
           RJBUtil::Splitter<std::string> pairs(entry[1], "-");
 
           arma::sword row_idx = indexer[0].translate(pairs[0], pairs[1]);
-#if 0
-          if (row_idx >= 0) {
-            auto bt = indexer[0].back_translate(row_idx);
-            if (indexer[0].samples[bt.first] != pairs[0] && indexer[0].samples[bt.first] != pairs[1]) {
-              std::cerr << "mismatch: " << indexer[0].samples[bt.first] << " " << pairs[0] << " " << pairs[1] << std::endl;
-            }
-            if (indexer[0].samples[bt.second] != pairs[0] && indexer[0].samples[bt.second] != pairs[1]) {
-              std::cerr << "mismatch: " << indexer[0].samples[bt.second] << " " << pairs[0] << " " << pairs[1] << std::endl;
-            }
-            if (phenotypes[0][bt.first] == 1) {
-              if (phenotypes[0][bt.second] == 1) {
-                cscs_cnt++;
-              } else if (phenotypes[0][bt.second] == 0) {
-                cscn_cnt++;
-              }
-            } else if (phenotypes[0][bt.first] == 0) {
-              if (phenotypes[0][bt.second] == 1) {
-                cscn_cnt++;
-              }
-            }
-          }
-#endif
           if (i == 2) {
             Breakpoint bp{};
             if (row_idx < 0) {
@@ -205,12 +183,14 @@ class Parser {
           data(row_idx) = 1;
         }
       } else {
-        Breakpoint bp{
-            std::make_pair(splitter[0], splitter[1]),
-            {},
-            {}
-        };
-        breakpoints.push_back(bp);
+        // Breakpoint bp{
+        //     std::make_pair(splitter[0], splitter[1]),
+        //     {},
+        //     {}
+        // };
+        // breakpoints.push_back(bp);
+        nbreakpoints--;
+        continue;
       }
 
       Statistic stat(std::move(data),
@@ -249,6 +229,7 @@ class Parser {
       RJBUtil::Splitter<std::string_view> splitter(line, " \t");
       if (splitter.size() > 2 && !notified) {
         std::cerr << "Multiple phenotypes provided. Covariates will be ignored." << std::endl;
+        notified = true;
       }
 
       if (!splitter.empty() && skip.find(splitter[0]) != skip.end()) {
@@ -270,6 +251,18 @@ class Parser {
           phenotypes[i - 1].push_back(std::stoi(splitter[i]));
           if (phenotypes[i-1].back() != 0 && phenotypes[i-1].back() != 1) {
             std::cerr << splitter[0] << " " << splitter[1] << std::endl;
+          }
+          if (params.swap) { // Swap case-control status
+            switch(phenotypes[i - 1].back()) {
+            case 1:
+              phenotypes[i - 1].back() = 0;
+              break;
+            case 0:
+              phenotypes[i - 1].back() = 1;
+              break;
+            default:
+              break;
+            }
           }
         }
       }

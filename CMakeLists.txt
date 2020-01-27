@@ -60,6 +60,7 @@ include_directories(${BLAS_INCLUDE_DIRS})
 
 add_executable(carvaIBD main.cpp ${PROJECT_SUPPORT_FILES})
 
+target_link_libraries(carvaIBD pthread)
 target_link_libraries(carvaIBD ${LAPACK_LIBRARIES})
 target_link_libraries(carvaIBD ${BLAS_LIBRARIES})
 target_link_libraries(carvaIBD ${ARMADILLO_LIBRARIES})

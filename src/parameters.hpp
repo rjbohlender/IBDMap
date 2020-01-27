@@ -5,6 +5,9 @@
 #ifndef CARVAIBD_PARAMETERS_HPP
 #define CARVAIBD_PARAMETERS_HPP
 
+#include <boost/optional.hpp>
+#include <armadillo>
+
 /**
  * @brief Runtime parameters
  */
@@ -13,6 +16,9 @@ struct Parameters {
   unsigned long nthreads;
   std::string output_path;
   unsigned int seed;
+  boost::optional<arma::uword> lower_bound;
+  bool swap;
+  bool contcont;
 };
 
 #endif //CARVAIBD_PARAMETERS_HPP

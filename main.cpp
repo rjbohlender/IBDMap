@@ -16,6 +16,10 @@ int main(int argc, char *argv[]) {
 
   po::options_description desc;
   bool global = false;
+  bool swap = false;
+  bool contcont = false;
+
+  boost::optional<arma::uword> lower_bound;
 
   desc.add_options()
       ("input,i",
@@ -33,12 +37,21 @@ int main(int argc, char *argv[]) {
       ("permutations,n",
        po::value<unsigned long>()->default_value(1000000),
        "Number of permutations.")
+      ("lower_bound",
+       po::value(&lower_bound),
+       "If set, establishes a lower bound on the number of pairs that must be present at breakpoint for it to be included.")
       ("seed",
        po::value<unsigned int>(),
        "Specify the seed to be shared by all breakpoints for equal permutations.")
       ("output,o",
        po::value<std::string>(),
        "Output to a specified file. Default output is stdout.")
+      ("swap_pheno",
+       po::bool_switch(&swap),
+       "Swap case-control status of individuals. Useful for examining problematic datasets.")
+      ("contcont",
+       po::bool_switch(&contcont),
+       "Use control/control pairs as part of statistic calculation.")
       ("help,h", "Display this message.");
   po::variables_map vm;
   try {
@@ -62,6 +75,10 @@ int main(int argc, char *argv[]) {
   arma::wall_clock timer;
   timer.tic();
 
+  if(swap) {
+    std::cerr << "Swap phenotype activated.\n";
+  }
+
   unsigned int seed;
   if (vm.count("seed") > 0) {
     seed = vm["seed"].as<unsigned int>();
@@ -74,7 +91,10 @@ int main(int argc, char *argv[]) {
       vm["permutations"].as<unsigned long>(),
       vm["threads"].as<unsigned long>(),
       vm.count("output") > 0 ? vm["output"].as<std::string>() : "",
-      seed
+      seed,
+      lower_bound,
+      swap,
+      contcont
   };
 
   if (parameters.nthreads < 3) {
