@@ -19,6 +19,7 @@ struct Parameters {
   boost::optional<arma::uword> lower_bound;
   bool swap;
   bool contcont;
+  double min_dist;
 };
 
 #endif //CARVAIBD_PARAMETERS_HPP

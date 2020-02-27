@@ -316,6 +316,8 @@ void Statistic::run() {
     }
   }
 
+  std::cerr << bp.breakpoint.first << " " << bp.breakpoint.second << " cscs: " << permuted_cscs[0][0] << " cscn: " << permuted_cscn[0][0] << std::endl;
+
   // Output
   std::stringstream iss;
   if(bp.breakpoint.second == "8560476") {

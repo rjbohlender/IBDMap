@@ -27,7 +27,10 @@ int main(int argc, char *argv[]) {
        "Unified IBD input file.")
       ("pheno,p",
        po::value<std::string>()->required(),
-       ".ped format file describing case-control status of all samples.")
+       "Path to file containing sample phenotype pairs. 1 for affected, 0 for unaffected, NA for sample to be skipped. Header line is required.")
+      ("gmap,g",
+       po::value<std::vector<std::string>>()->required()->composing(),
+       "Recombination map files. Assumed to be three columns, position, chromosome, cM. Header line is required.")
       ("cov,c",
        po::value<boost::optional<std::string>>()->default_value(boost::none, ""),
        ".ped format file describing case-control status of all samples.")
@@ -40,6 +43,9 @@ int main(int argc, char *argv[]) {
       ("lower_bound",
        po::value(&lower_bound),
        "If set, establishes a lower bound on the number of pairs that must be present at breakpoint for it to be included.")
+      ("min_dist,m",
+       po::value<double>()->default_value(0.0),
+       "Sets the minimum genetic distance between sites. The parser will automatically skip breakpoints that are closer than the given distance. Default value of 0.0 cM.")
       ("seed",
        po::value<unsigned int>(),
        "Specify the seed to be shared by all breakpoints for equal permutations.")
@@ -86,7 +92,10 @@ int main(int argc, char *argv[]) {
     seed = std::random_device{}();
   }
 
-  std::cerr << "Running parameters.\n";
+  std::cerr << "Reading genetic map.\n";
+  GeneticMap gmap(vm["gmap"].as<std::vector<std::string>>());
+
+  std::cerr << "Constructing parameters.\n";
   Parameters parameters{
       vm["permutations"].as<unsigned long>(),
       vm["threads"].as<unsigned long>(),
@@ -94,7 +103,8 @@ int main(int argc, char *argv[]) {
       seed,
       lower_bound,
       swap,
-      contcont
+      contcont,
+      vm["min_dist"].as<double>()
   };
 
   if (parameters.nthreads < 3) {
@@ -108,7 +118,8 @@ int main(int argc, char *argv[]) {
                              vm["pheno"].as<std::string>(),
                              vm["cov"].as<boost::optional<std::string>>(),
                              parameters,
-                             reporter);
+                             reporter,
+                             gmap);
 
   // Sort output
   reporter.reset();  // Ensure output is complete

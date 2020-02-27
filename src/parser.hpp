@@ -24,6 +24,7 @@
 #include "permutation.hpp"
 #include "../link/binomial.hpp"
 #include "glm.hpp"
+#include "geneticmap.hpp"
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/iostreams/filtering_streambuf.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
@@ -125,6 +126,7 @@ class Parser {
   void parse_input(std::istream &is) {
     std::string line;
     unsigned long submitted = 0;
+    double last_dist = 0;
 
     // Initialize ThreadPool
     ThreadPool<void> threadpool(params);
@@ -154,6 +156,26 @@ class Parser {
       int cscn_cnt = 0;
 
       RJBUtil::Splitter<std::string_view> splitter(line, " \t");
+
+      std::string chrom;
+
+      if(!boost::starts_with(splitter[0], "chr")) {
+        std::stringstream chrss;
+        chrss << "chr" << splitter[0];
+        chrom = chrss.str();
+      }
+
+      int pos = std::stoi(splitter[1]);
+
+      std::pair<std::pair<int, double>, std::pair<int, double>> nearest = gmap.find_nearest(chrom, pos);
+      double cur_dist = 0;
+      cur_dist = (pos - nearest.first.first) * (nearest.second.second - nearest.first.second) / (nearest.second.first - nearest.first.first) + nearest.first.second;
+
+      if (cur_dist - last_dist < params.min_dist) {
+        continue;
+      }
+      last_dist = cur_dist;
+
       if (splitter.size() > (params.lower_bound ? *params.lower_bound : 2)) { // Possibility of empty entries (ending breakpoints)
         for (unsigned long i = 2; i < splitter.size(); i++) {
           RJBUtil::Splitter<std::string_view> entry(splitter[i], ":");
@@ -183,12 +205,6 @@ class Parser {
           data(row_idx) = 1;
         }
       } else {
-        // Breakpoint bp{
-        //     std::make_pair(splitter[0], splitter[1]),
-        //     {},
-        //     {}
-        // };
-        // breakpoints.push_back(bp);
         nbreakpoints--;
         continue;
       }
@@ -363,12 +379,13 @@ class Parser {
       lineno++;
     }
 
-    // Handle unconvertible fields by treating them as factors with levels -- convert to integers
+    // Handle unconvertible fields by treating them as factors with levels -- convert to dummy variables
     int fieldno = 0;
+    int offset = 0;
     for (const auto &field : unconvertible) {
       if (!field.empty()) {
         std::set<std::string> unique(field.begin(), field.end());
-        std::map<std::string, double> levels;
+        std::map<std::string, int> levels;
 
         std::cerr << "In reading covariates, could not convert column " << fieldno + 1 << " to double." << std::endl;
         std::cerr << "Levels: ";
@@ -380,15 +397,34 @@ class Parser {
         std::cerr << std::endl;
 
         int sampleno = 0;
-        for (const auto &v : field) {
-          data[cov_samples[sampleno]][fieldno] = levels[v];
+        int nlevels = levels.size();
+        for (const auto &v : field) { // Convert to dummy variable
+          for (int j = 0; j < nlevels; j++) {
+            if (j == 0) {
+              if (j == levels[v]) {
+                data[cov_samples[sampleno]][fieldno + offset] = 1.0;
+              } else {
+                data[cov_samples[sampleno]][fieldno + offset] = 0.0;
+              }
+            } else {
+              if (j == levels[v]) {
+                data[cov_samples[sampleno]].insert(data[cov_samples[sampleno]].begin() + fieldno + offset + j, 1.0);
+              } else {
+                data[cov_samples[sampleno]].insert(data[cov_samples[sampleno]].begin() + fieldno + offset + j, 0.0);
+              }
+            }
+          }
           sampleno++;
         }
+        offset += nlevels - 1;
+        nfields += nlevels - 1;
       }
       fieldno++;
     }
 
     arma::mat design(cov_samples.size(), nfields + 1);
+    std::cerr << "Design.n_rows: " << design.n_rows << std::endl;
+    std::cerr << "Design.n_cols: " << design.n_cols << std::endl;
     int i = 0;
     for (const auto &s : cov_samples) {
       design(i, 0) = 1;
@@ -399,7 +435,7 @@ class Parser {
       }
       i++;
     }
-    std::cerr << "Design.n_rows: " << design.n_rows << std::endl;
+
     covariates = design;
   }
 
@@ -415,14 +451,15 @@ public:
   std::shared_ptr<Reporter> reporter;
   boost::optional<std::vector<std::vector<arma::uword>>> groups;
   boost::optional<arma::mat> covariates;
+  GeneticMap gmap;
 
   /**
    * @brief Constructor for the Parser -- Handles all input parsing.
    * @param input_path Unified IBD format input file path
    * @param pheno_path Phenotype path
    */
-  Parser(StringT input_path, StringT pheno_path, boost::optional<StringT> cov_path, Parameters params_, std::shared_ptr<Reporter> reporter_)
-      : nbreakpoints(0), params(std::move(params_)), reporter(std::move(reporter_)) {
+  Parser(StringT input_path, StringT pheno_path, boost::optional<StringT> cov_path, Parameters params_, std::shared_ptr<Reporter> reporter_, GeneticMap &gmap_)
+      : nbreakpoints(0), params(std::move(params_)), reporter(std::move(reporter_)), gmap(std::move(gmap_)) {
     Source bp_source(input_path);
     std::istream bp_is(&(*bp_source.streambuf));
     std::ifstream pheno_ifs(pheno_path);
@@ -445,14 +482,12 @@ public:
     std::cerr << "Parsing phenotypes\n";
     parse_pheno(pheno_ifs);
 
-    std::cerr << "Parsing data\n";
-    parse_input(input_s);
-
     for (unsigned long k = 0; k < indexer.size(); k++) {
       std::cerr << "ncases: " << indexer[k].case_count << " ncontrols: " << indexer[k].cont_count << std::endl;
-      std::cerr << "Pairs -- Case-Case: " << indexer[k].case_case << " Case-Control: " << indexer[k].case_cont
-                << std::endl;
     }
+
+    std::cerr << "Parsing data\n";
+    parse_input(input_s);
   }
 };
 
