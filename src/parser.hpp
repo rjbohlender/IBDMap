@@ -397,7 +397,7 @@ class Parser {
         std::cerr << std::endl;
 
         int sampleno = 0;
-        int nlevels = levels.size();
+        int nlevels = levels.size() - 1;
         for (const auto &v : field) { // Convert to dummy variable
           for (int j = 0; j < nlevels; j++) {
             if (j == 0) {

@@ -51,7 +51,7 @@ class Reporter {
     }
 
 public:
-    explicit Reporter(std::string &output) :
+    explicit Reporter(const std::string &output) :
             done(false), nstrings(0), nsubmitted(0), nwritten(0), out_path(output) {
         print_thread = std::thread(&Reporter::print, std::ref(*this));
     }
