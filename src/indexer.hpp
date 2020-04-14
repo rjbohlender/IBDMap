@@ -89,7 +89,7 @@ struct Indexer {
   arma::sword translate(const std::string &a, const std::string &b) {
     auto finda = std::lower_bound(samples.begin(), samples.end(), a);
     auto findb = std::lower_bound(samples.begin(), samples.end(), b);
-    if (*finda != a || *findb != b) {
+    if (*finda != a || *findb != b || a == b) {
       return -1;
     }
     int i = std::distance(samples.begin(), finda);

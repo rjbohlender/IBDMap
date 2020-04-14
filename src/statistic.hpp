@@ -50,7 +50,7 @@ public:
 
   std::vector<arma::sword> rows;
 
-  Statistic(arma::sp_colvec &&data_,
+  Statistic(arma::sp_colvec data_,
             Breakpoint bp_,
             std::vector<Indexer> &indexer_,
             std::vector<std::string> &samples_,

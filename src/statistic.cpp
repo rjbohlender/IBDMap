@@ -7,7 +7,7 @@
 #include "statistic.hpp"
 #include "split.hpp"
 
-Statistic::Statistic(arma::sp_colvec &&data_,
+Statistic::Statistic(arma::sp_colvec data_,
                      Breakpoint bp_,
                      std::vector<Indexer> &indexer_,
                      std::vector<std::string> &samples_,

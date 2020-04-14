@@ -28,23 +28,23 @@ public:
 
   /** Constructors */
   Splitter() = default;
-  Splitter(const string_type &str, const string_type &delim)
-	  : data_(str), delim_(delim) {
+  Splitter(const string_type &str, const string_type &delim, bool allow_adjacent=false)
+	  : data_(str), delim_(delim), allow_adjacent_(allow_adjacent) {
 	split();
   }
 
-  Splitter(const string_type &&str, const string_type &&delim)
-	  : data_(str), delim_(delim) {
+  Splitter(const string_type &&str, const string_type &&delim, bool allow_adjacent=false)
+	  : data_(str), delim_(delim), allow_adjacent_(allow_adjacent) {
 	split();
   }
 
-  Splitter(const string_type &str, const string_type &&delim)
-	  : data_(str), delim_(delim) {
+  Splitter(const string_type &str, const string_type &&delim, bool allow_adjacent=false)
+	  : data_(str), delim_(delim), allow_adjacent_(allow_adjacent) {
 	split();
   }
 
-  Splitter(const string_type &&str, const string_type &delim)
-	  : data_(str), delim_(delim) {
+  Splitter(const string_type &&str, const string_type &delim, bool allow_adjacent=false)
+	  : data_(str), delim_(delim), allow_adjacent_(allow_adjacent) {
 	split();
   }
 
@@ -52,6 +52,7 @@ public:
 	data_ = rhs.data_;
 	delim_ = rhs.delim_;
 	tokens_ = rhs.tokens_;
+	allow_adjacent_ = rhs.allow_adjacent_;
 
 	return *this;
   }
@@ -60,6 +61,7 @@ public:
 	data_ = std::move(rhs.data_);
 	delim_ = std::move(rhs.delim_);
 	tokens_ = std::move(rhs.tokens_);
+	allow_adjacent_ = std::move(rhs.allow_adjacent_);
 
 	return *this;
   }
@@ -151,7 +153,7 @@ private:
 	for(auto first = data_.data(), second = data_.data(), last = first + data_.size(); second != last && first != last; first = second + 1) {
 	  second = std::find_first_of(first, last, std::cbegin(delim_), std::cend(delim_));
 
-	  if(first != second)
+	  if(first != second || allow_adjacent_)
 	    tokens_.emplace_back(first, second-first);
 	}
 #endif
@@ -161,6 +163,7 @@ private:
   string_type data_;
   string_type delim_;
   std::vector<std::string> tokens_;
+  bool allow_adjacent_ = false;
 };
 }
 #endif // PGEN_SPLIT_HPP

@@ -133,7 +133,10 @@ class Parser {
     std::vector<Statistic> stats;
     stats.reserve(nbreakpoints);
 
-    // Generate permutations if we have covariates
+    // Maintain a single vector that we just update with each line
+	arma::sp_vec data(samples.size() * (samples.size() - 1) / 2.);
+
+	// Generate permutations if we have covariates
     Permute permute(params.seed);
     boost::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> bo_perms;
     if (covariates && phenotypes.size() == 1) {
@@ -149,13 +152,16 @@ class Parser {
     }
 
     arma::wall_clock timer;
+    long lineno = -1;
     while (std::getline(is, line)) {
-      arma::sp_vec data(samples.size() * (samples.size() - 1) / 2.);
-
+	  lineno++;
+	  if(lineno == 0) { // Skip the header
+        continue;
+      }
       int cscs_cnt = 0;
       int cscn_cnt = 0;
 
-      RJBUtil::Splitter<std::string_view> splitter(line, " \t");
+      RJBUtil::Splitter<std::string_view> splitter(line, "\t", true);
 
       std::string chrom;
 
@@ -176,40 +182,47 @@ class Parser {
       }
       last_dist = cur_dist;
 
-      if (splitter.size() > (params.lower_bound ? *params.lower_bound : 2)) { // Possibility of empty entries (ending breakpoints)
-        for (unsigned long i = 2; i < splitter.size(); i++) {
-          RJBUtil::Splitter<std::string_view> entry(splitter[i], ":");
-          RJBUtil::Splitter<std::string> pairs(entry[1], "-");
+	  RJBUtil::Splitter<std::string_view> additions(splitter[4], " ");
+	  RJBUtil::Splitter<std::string_view> deletions(splitter[5], " ");
+	  // Initialize breakpoint
+	  Breakpoint bp{};
+	  bp.breakpoint = std::make_pair(chrom, splitter[1]);
+	  breakpoints.push_back(bp);
 
-          arma::sword row_idx = indexer[0].translate(pairs[0], pairs[1]);
-          if (i == 2) {
-            Breakpoint bp{};
-            if (row_idx < 0) {
-              bp.breakpoint = std::make_pair(splitter[0], splitter[1]);
-              breakpoints.push_back(bp);
-              continue;
-            } else {
-              bp.breakpoint = std::make_pair(splitter[0], splitter[1]);
-              bp.segment_lengths.push_back(std::stod(entry[0]));
-              bp.ibd_pairs.emplace_back(std::make_pair(pairs[0], pairs[1]));
-              breakpoints.push_back(bp);
-            }
-          } else {
-            if (row_idx < 0) {
-              continue;
-            } else {
-              breakpoints.back().segment_lengths.push_back(std::stod(entry[0]));
-              breakpoints.back().ibd_pairs.push_back(std::make_pair(pairs[0], pairs[1]));
-            }
-          }
-          data(row_idx) = 1;
-        }
-      } else {
-        nbreakpoints--;
-        continue;
-      }
+	  for(auto &entry : additions) {
+	    if(entry == "NA") {
+	      break;
+	    }
+		RJBUtil::Splitter<std::string_view> vals(entry, ":");
+		RJBUtil::Splitter<std::string> pairs(vals[1], "-");
 
-      Statistic stat(std::move(data),
+		arma::sword row_idx = indexer[0].translate(pairs[0], pairs[1]);
+		if (row_idx < 0) {
+		  continue;
+		} else {
+		  breakpoints.back().segment_lengths.push_back(std::stod(vals[0]));
+		  breakpoints.back().ibd_pairs.push_back(std::make_pair(pairs[0], pairs[1]));
+		}
+		data(row_idx) += 1;
+	  }
+	  for(auto &entry : deletions) {
+	    if(entry == "NA") {
+	      break;
+	    }
+		RJBUtil::Splitter<std::string_view> vals(entry, ":");
+		RJBUtil::Splitter<std::string> pairs(vals[1], "-");
+
+		arma::sword row_idx = indexer[0].translate(pairs[0], pairs[1]);
+		if (row_idx < 0) {
+		  continue;
+		} else {
+		  breakpoints.back().segment_lengths.push_back(std::stod(vals[0]));
+		  breakpoints.back().ibd_pairs.push_back(std::make_pair(pairs[0], pairs[1]));
+		}
+		data(row_idx) -= 1;
+	  }
+
+      Statistic stat(data,
                      breakpoints.back(),
                      indexer,
                      samples,
@@ -440,9 +453,9 @@ class Parser {
   }
 
 public:
-  std::vector<std::string> samples;
-  std::vector<std::string> cov_samples;
-  std::set<std::string> skip;
+  std::vector<std::string> samples; // Samples in input order
+  std::vector<std::string> cov_samples; // Samples in covariate order
+  std::set<std::string> skip; // Skip samples with missing cov values
   std::vector<std::vector<int>> phenotypes;
   std::vector<Indexer> indexer;
   std::vector<Breakpoint> breakpoints;
@@ -454,9 +467,13 @@ public:
   GeneticMap gmap;
 
   /**
-   * @brief Constructor for the Parser -- Handles all input parsing.
-   * @param input_path Unified IBD format input file path
-   * @param pheno_path Phenotype path
+   * @brief Parser and data dispatcher
+   * @param input_path Path to the unified IBD format file
+   * @param pheno_path Path to the phenotype description file
+   * @param cov_path Path to the covariates -- for covariate adjusted permutation
+   * @param params_ Parameter injection for program options
+   * @param reporter_ Global reporter
+   * @param gmap_ Genetic map file for calculation of distances between breakpoints
    */
   Parser(StringT input_path, StringT pheno_path, boost::optional<StringT> cov_path, Parameters params_, std::shared_ptr<Reporter> reporter_, GeneticMap &gmap_)
       : nbreakpoints(0), params(std::move(params_)), reporter(std::move(reporter_)), gmap(std::move(gmap_)) {
