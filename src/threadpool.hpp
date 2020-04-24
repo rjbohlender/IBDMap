@@ -23,6 +23,7 @@ class ThreadPool {
   std::queue<std::packaged_task<Res(Args...)>> work_queue;
   std::vector<std::thread> threads;
   JoinThreads joiner;
+  Parameters params;
   void worker_thread()
   {
     std::unique_lock<std::mutex> lk(mut);
@@ -47,8 +48,8 @@ class ThreadPool {
 	}
   }
 public:
-  explicit ThreadPool(const Parameters &params) :
-  	done(false), ntasks(0), nsubmitted(0), joiner(threads)
+  explicit ThreadPool(const Parameters &params_) :
+  	done(false), ntasks(0), nsubmitted(0), joiner(threads), params(params_)
   {
     unsigned const thread_count=params.nthreads - 2;
 	try
@@ -77,8 +78,11 @@ public:
   void submit(std::packaged_task<Res(Args...)> &&f)
   {
     std::unique_lock lk(mut);
-    work_queue.push(std::move(f));
-    ntasks++;
+    while(ntasks > params.nthreads + 5) {
+      std::this_thread::sleep_for(std::chrono::nanoseconds(100000000));
+	}
+	work_queue.push(std::move(f));
+	ntasks++;
     nsubmitted++;
     lk.unlock();
     cv.notify_all();
