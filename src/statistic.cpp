@@ -336,7 +336,21 @@ void Statistic::run() {
   }
 
   reporter->submit(iss.str());
-  data.reset();
+  cleanup();
   done = true;
+}
+
+void Statistic::cleanup() {
+  data.reset();
+  phenotypes.clear();
+  phenotypes.shrink_to_fit();
+  permuted.clear();
+  permuted.shrink_to_fit();
+  permuted_cscs.clear();
+  permuted_cscs.shrink_to_fit();
+  permuted_cscn.clear();
+  permuted_cscn.shrink_to_fit();
+  permuted_cncn.clear();
+  permuted_cncn.shrink_to_fit();
 }
 

@@ -63,6 +63,7 @@ public:
   double calculate(std::vector<int> &phenotypes_, double cscs_count, double cscn_count, double cncn_count, int k);
 
   void run();
+  void cleanup();
 };
 
 #endif //CARVAIBD_STATISTIC_HPP
