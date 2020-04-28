@@ -126,7 +126,8 @@ class Parser {
   void parse_input(std::istream &is) {
     std::string line;
     unsigned long submitted = 0;
-    double last_dist = 0;
+	double cur_dist = 0;
+	double last_dist = 0;
 
     // Initialize ThreadPool
     ThreadPool<void> threadpool(params);
@@ -174,10 +175,14 @@ class Parser {
       int pos = std::stoi(splitter[1]);
 
       std::pair<std::pair<int, double>, std::pair<int, double>> nearest = gmap.find_nearest(chrom, pos);
-      double cur_dist = 0;
-      cur_dist = (pos - nearest.first.first) * (nearest.second.second - nearest.first.second) / (nearest.second.first - nearest.first.first) + nearest.first.second;
+	  if (nearest.first.first != nearest.second.first) {
+		cur_dist = (pos - nearest.first.first) * (nearest.second.second - nearest.first.second) / (nearest.second.first - nearest.first.first) + nearest.first.second;
+	  } else {
+		cur_dist = nearest.first.second;
+      }
 
       if (cur_dist - last_dist < params.min_dist) {
+        std::cerr << "skipping: " << chrom << " " << pos << std::endl;
         continue;
       }
       last_dist = cur_dist;

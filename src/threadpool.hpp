@@ -78,6 +78,7 @@ public:
   void submit(std::packaged_task<Res(Args...)> &&f)
   {
     std::unique_lock lk(mut);
+    std::cerr << "Submitting: ntasks = " << ntasks << std::endl;
     while(ntasks > params.nthreads + 5) {
       std::this_thread::sleep_for(std::chrono::nanoseconds(100000000));
 	}
