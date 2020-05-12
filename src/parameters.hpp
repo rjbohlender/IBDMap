@@ -20,6 +20,7 @@ struct Parameters {
   bool swap;
   bool contcont;
   double min_dist;
+  boost::optional<double> rsquared;
 };
 
 #endif //CARVAIBD_PARAMETERS_HPP

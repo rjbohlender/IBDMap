@@ -313,3 +313,4 @@ dkms.conf
 /test/
 /cmake-build*/
 /BioVU/
+/log/

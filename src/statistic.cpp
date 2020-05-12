@@ -296,7 +296,7 @@ void Statistic::run() {
           }
         }
       } else {
-        for (unsigned long i = phenotypes[0].size() - 1; i > 0; i--) {
+        for (long i = static_cast<long>(phenotypes[0].size()) - 1; i > 0; i--) {
           std::uniform_int_distribution<> dis(0, i);
           int j = dis(gen);
           for (k = 0; k < phenotypes.size(); k++) { // Permute all phenotypes the same way.

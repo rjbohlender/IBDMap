@@ -20,6 +20,7 @@ int main(int argc, char *argv[]) {
   bool contcont = false;
 
   boost::optional<arma::uword> lower_bound;
+  boost::optional<double> r2;
 
   desc.add_options()
       ("input,i",
@@ -46,7 +47,10 @@ int main(int argc, char *argv[]) {
       ("min_dist,m",
        po::value<double>()->default_value(0.0),
        "Sets the minimum genetic distance between sites. The parser will automatically skip breakpoints that are closer than the given distance. Default value of 0.0 cM.")
-      ("seed",
+	  ("rsquared,r",
+	   po::value(&r2),
+	   "Sets the maximum correlation between sites. The parser will automatically skip breakpoints that are closer than the given distance. Default value of 1.0.")
+	  ("seed",
        po::value<unsigned int>(),
        "Specify the seed to be shared by all breakpoints for equal permutations.")
       ("output,o",
@@ -104,7 +108,8 @@ int main(int argc, char *argv[]) {
       lower_bound,
       swap,
       contcont,
-      vm["min_dist"].as<double>()
+      vm["min_dist"].as<double>(),
+	  r2
   };
 
   if (parameters.nthreads < 3) {

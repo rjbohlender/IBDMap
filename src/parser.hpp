@@ -121,6 +121,7 @@ class Parser {
         continue;
       nbreakpoints++;
     }
+    std::cerr << "total breakpoints: " << nbreakpoints << std::endl;
   }
 
   void parse_input(std::istream &is) {
@@ -135,6 +136,7 @@ class Parser {
     stats.reserve(nbreakpoints);
 
     // Maintain a single vector that we just update with each line
+	arma::sp_vec last(samples.size() * (samples.size() - 1) / 2.);
 	arma::sp_vec data(samples.size() * (samples.size() - 1) / 2.);
 
 	// Generate permutations if we have covariates
@@ -174,25 +176,11 @@ class Parser {
 
       int pos = std::stoi(splitter[1]);
 
-      std::pair<std::pair<int, double>, std::pair<int, double>> nearest = gmap.find_nearest(chrom, pos);
-	  if (nearest.first.first != nearest.second.first) {
-		cur_dist = (pos - nearest.first.first) * (nearest.second.second - nearest.first.second) / (nearest.second.first - nearest.first.first) + nearest.first.second;
-	  } else {
-		cur_dist = nearest.first.second;
-      }
-
-      if (cur_dist - last_dist < params.min_dist) {
-        std::cerr << "skipping: " << chrom << " " << pos << std::endl;
-        continue;
-      }
-      last_dist = cur_dist;
-
 	  RJBUtil::Splitter<std::string_view> additions(splitter[4], " ");
 	  RJBUtil::Splitter<std::string_view> deletions(splitter[5], " ");
 	  // Initialize breakpoint
 	  Breakpoint bp{};
 	  bp.breakpoint = std::make_pair(chrom, splitter[1]);
-	  breakpoints.push_back(bp);
 
 	  for(auto &entry : additions) {
 	    if(entry == "NA") {
@@ -205,8 +193,8 @@ class Parser {
 		if (row_idx < 0) {
 		  continue;
 		} else {
-		  breakpoints.back().segment_lengths.push_back(std::stod(vals[0]));
-		  breakpoints.back().ibd_pairs.push_back(std::make_pair(pairs[0], pairs[1]));
+		  bp.segment_lengths.push_back(std::stod(vals[0]));
+		  bp.ibd_pairs.emplace_back(std::make_pair(pairs[0], pairs[1]));
 		}
 		data(row_idx) += 1;
 	  }
@@ -221,14 +209,50 @@ class Parser {
 		if (row_idx < 0) {
 		  continue;
 		} else {
-		  breakpoints.back().segment_lengths.push_back(std::stod(vals[0]));
-		  breakpoints.back().ibd_pairs.push_back(std::make_pair(pairs[0], pairs[1]));
+		  bp.segment_lengths.push_back(std::stod(vals[0]));
+		  bp.ibd_pairs.emplace_back(std::make_pair(pairs[0], pairs[1]));
 		}
 		data(row_idx) -= 1;
 	  }
 
-      Statistic stat(data,
-                     breakpoints.back(),
+	  // Must follow data update -- Data format is just change from previous breakpoint so skipping update is impossible
+	  std::pair<std::pair<int, double>, std::pair<int, double>> nearest = gmap.find_nearest(chrom, pos);
+	  if (nearest.first.first != nearest.second.first) {
+		cur_dist = (pos - nearest.first.first) * (nearest.second.second - nearest.first.second) / (nearest.second.first - nearest.first.first) + nearest.first.second;
+	  } else {
+		cur_dist = nearest.first.second;
+	  }
+
+	  if (cur_dist - last_dist < params.min_dist) {
+		continue;
+	  }
+
+	  auto cor = [](arma::sp_vec X, arma::sp_vec Y) -> double {
+	    double N = static_cast<double>(X.n_elem);
+	    double mxy = arma::mean(X % Y);
+	    double mx = arma::mean(X);
+	    double my = arma::mean(Y);
+	    double sdx = std::sqrt(arma::var(X));
+		double sdy = std::sqrt(arma::var(Y));
+
+		double r = N / (N - 1) * (mxy - mx * my) / (sdx * sdy);
+		return std::pow(r, 2);
+	  };
+
+	  double r2 = cor(data, last);
+	  std::cerr << "r2: " << r2 << std::endl;
+	  if(params.rsquared) {
+		if (r2 > *params.rsquared) {
+		  continue;
+		}
+	  }
+	  std::cerr << "dist: " << cur_dist - last_dist << std::endl;
+	  std::cerr << "fill rate: " << arma::accu(data) / data.n_elem << std::endl;
+	  last_dist = cur_dist;
+	  last = data;
+
+	  Statistic stat(data,
+                     bp,
                      indexer,
                      samples,
                      phenotypes,
@@ -307,11 +331,11 @@ class Parser {
       }
       lineno++;
     }
-    for (unsigned long k = 0; k < phenotypes.size(); k++) {
+    for (const auto &v : phenotypes) {
       int case_count = 0;
       int control_count = 0;
-      for (const auto &v : phenotypes[k]) {
-        switch (v) {
+      for (const auto &p : v) {
+        switch (p) {
         case 1:case_count++;
           break;
         case 0:control_count++;
@@ -320,7 +344,7 @@ class Parser {
         }
       }
 
-      indexer.emplace_back(Indexer(case_count, control_count, samples, phenotypes[k]));
+      indexer.emplace_back(Indexer(case_count, control_count, samples, phenotypes.back()));
     }
     if (fill_patterns.size() > 1) {
       groups = std::vector<std::vector<arma::uword>>();
@@ -463,7 +487,6 @@ public:
   std::set<std::string> skip; // Skip samples with missing cov values
   std::vector<std::vector<int>> phenotypes;
   std::vector<Indexer> indexer;
-  std::vector<Breakpoint> breakpoints;
   unsigned long nbreakpoints;
   Parameters params;
   std::shared_ptr<Reporter> reporter;
