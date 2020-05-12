@@ -229,7 +229,7 @@ class Parser {
 
 	  auto cor = [](arma::sp_vec X, arma::sp_vec Y) -> double {
 	    double N = static_cast<double>(X.n_elem);
-	    double mxy = arma::mean(X % Y);
+	    double mxy = arma::as_scalar(arma::mean(X % Y)); // as_scalar requrired for compatibility with older versions
 	    double mx = arma::mean(X);
 	    double my = arma::mean(Y);
 	    double sdx = std::sqrt(arma::var(X));
