@@ -239,9 +239,9 @@ class Parser {
 		return std::pow(r, 2);
 	  };
 
-	  double r2 = cor(data, last);
-	  std::cerr << "r2: " << r2 << std::endl;
 	  if(params.rsquared) {
+		double r2 = cor(data, last);
+		std::cerr << "r2: " << r2 << std::endl;
 		if (r2 > *params.rsquared) {
 		  continue;
 		}
