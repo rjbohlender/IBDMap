@@ -1,10 +1,9 @@
 #include <iostream>
 #include <boost/program_options.hpp>
+#include <boost/optional.hpp>
 #include <thread>
 #include "src/parser.hpp"
 #include "src/parameters.hpp"
-#include "src/threadpool.hpp"
-#include "src/statistic.hpp"
 #include "src/reporter.hpp"
 #include "src/geneticmap.hpp"
 
@@ -18,7 +17,10 @@ int main(int argc, char *argv[]) {
   bool global = false;
   bool swap = false;
   bool contcont = false;
+  bool verbose = false;
+  bool enable_testing = false;
 
+  boost::optional<std::string> cov;
   boost::optional<arma::uword> lower_bound;
   boost::optional<double> r2;
 
@@ -33,8 +35,8 @@ int main(int argc, char *argv[]) {
        po::value<std::vector<std::string>>()->required()->composing(),
        "Recombination map files. Assumed to be three columns, position, chromosome, cM. Header line is required.")
       ("cov,c",
-       po::value<boost::optional<std::string>>()->default_value(boost::none, ""),
-       ".ped format file describing case-control status of all samples.")
+       po::value(&cov),
+       "Path to covariates. Expected format is ID\tValue1\t...")
       ("threads,t",
        po::value<unsigned long>()->default_value(std::thread::hardware_concurrency() / 2),
        "Number of threads used in execution.")
@@ -62,6 +64,12 @@ int main(int argc, char *argv[]) {
       ("contcont",
        po::bool_switch(&contcont),
        "Use control/control pairs as part of statistic calculation.")
+	  ("verbose",
+	   po::bool_switch(&verbose),
+	   "Addtional diagnostic output.")
+	  ("enable_testing",
+	   po::bool_switch(&enable_testing),
+	   "Enable testing functions for Statistic class.")
       ("help,h", "Display this message.");
   po::variables_map vm;
   try {
@@ -96,10 +104,21 @@ int main(int argc, char *argv[]) {
     seed = std::random_device{}();
   }
 
-  std::cerr << "Reading genetic map.\n";
+  std::cerr << "Input: " << vm["input"].as<std::string>() << std::endl;
+  std::cerr << "Phenotypes: " << vm["pheno"].as<std::string>() << std::endl;
+  std::cerr << "GMAP: " << vm["gmap"].as<std::vector<std::string>>()[0] << std::endl;
+  if(vm.count("cov") > 0) {
+	std::cerr << "COV: " << *cov << std::endl;
+  }
+
+  if (verbose) {
+	std::cerr << "Reading genetic map.\n";
+  }
   GeneticMap gmap(vm["gmap"].as<std::vector<std::string>>());
 
-  std::cerr << "Constructing parameters.\n";
+  if (verbose) {
+	std::cerr << "Constructing parameters.\n";
+  }
   Parameters parameters{
       vm["permutations"].as<unsigned long>(),
       vm["threads"].as<unsigned long>(),
@@ -109,7 +128,9 @@ int main(int argc, char *argv[]) {
       swap,
       contcont,
       vm["min_dist"].as<double>(),
-	  r2
+	  r2,
+	  verbose,
+	  enable_testing
   };
 
   if (parameters.nthreads < 3) {
@@ -118,10 +139,12 @@ int main(int argc, char *argv[]) {
   // Initialize reporter
   auto reporter = std::make_shared<Reporter>(parameters.output_path);
 
-  std::cerr << "Running parser.\n";
+  if (verbose) {
+	std::cerr << "Running parser.\n";
+  }
   Parser<std::string> parser(vm["input"].as<std::string>(),
                              vm["pheno"].as<std::string>(),
-                             vm["cov"].as<boost::optional<std::string>>(),
+                             cov,
                              parameters,
                              reporter,
                              gmap);

@@ -8,18 +8,21 @@
 #include "split.hpp"
 
 Statistic::Statistic(arma::sp_colvec data_,
-                     Breakpoint bp_,
-                     std::vector<Indexer> &indexer_,
-                     std::vector<std::string> &samples_,
-                     std::vector<std::vector<int>> &phenotypes_,
-                     std::shared_ptr<Reporter> reporter_,
-                     Parameters &params_,
-                     boost::optional<std::vector<std::vector<arma::uword>>> groups_,
-                     boost::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms_) :
-    data(std::move(data_)), indexer(indexer_), samples(samples_), phenotypes(phenotypes_), params(params_), bp(std::move(bp_)),
-    reporter(std::move(reporter_)), groups(std::move(groups_)), perms(perms_) {
+					 Breakpoint bp_,
+					 std::shared_ptr<std::vector<Indexer>> indexer_,
+					 std::shared_ptr<std::vector<std::string>> samples_,
+					 std::shared_ptr<std::vector<std::vector<int>>> phenotypes_,
+					 std::shared_ptr<Reporter> reporter_,
+					 Parameters params_,
+					 boost::optional<std::vector<std::vector<arma::uword>>> groups_,
+					 boost::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms_) :
+	data(std::move(data_)), indexer(indexer_), samples(samples_), phenotypes(phenotypes_), params(std::move(params_)),
+	bp(std::move(bp_)),
+	reporter(std::move(reporter_)), groups(std::move(groups_)), perms(std::move(perms_)) {
 #ifndef NDEBUG
-  test_group_permutation();
+  if (params.enable_testing) {
+	test_group_permutation();
+  }
 #endif
 }
 
@@ -32,90 +35,87 @@ Statistic::calculate(std::vector<int> &phenotypes_, double cscs_count, double cs
   double cncn = 0;
 
   if (pairs.empty()) {
-    // Save time allocating the full amount
-    double ibd_pairs = arma::accu(data);
+	// Save time allocating the full amount
+	double ibd_pairs = arma::accu(data);
 
-    rows.reserve(ibd_pairs);
-    pairs.reserve(ibd_pairs);
-    for (auto it = data.begin(); it != data.end(); it++) {
-      auto[p1, p2] = indexer[0].back_translate(it.row());
-      pairs.emplace_back(std::make_pair(p1, p2));
-      rows.push_back(it.row()); // Store rows for later lookup
-      switch (phenotypes_[p1]) {
-      case 1:
-        switch (phenotypes_[p2]) {
-        case 1:cscs += 1.;
-          break;
-        case 0:cscn += 1.;
-          break;
-        case -1:break;
-        default:
-          std::cerr << "Phenotype: " << phenotypes_[p2] << " p2: " << p2 << std::endl;
-          throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
-        }
-        break;
-      case 0:
-        switch (phenotypes_[p2]) {
-        case 1:cscn += 1.;
-          break;
-        case 0:cncn += 1.;
-          break;
-        case -1:break;
-        default:
-          std::cerr << "Phenotype: " << phenotypes_[p2] << " p2: " << p2 << std::endl;
-          throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
-        }
-        break;
-      case -1:break;
-      default:
-        std::cerr << "Phenotype: " << phenotypes_[p1] << " p1: " << p1 << std::endl;
-        throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
-      }
-    }
+	for (auto it = data.begin(); it != data.end(); it++) {
+	  auto[p1, p2] = (*indexer)[0].back_translate(it.row());
+	  try {
+		pairs.emplace_back(std::make_pair(p1, p2));
+		rows.push_back(it.row()); // Store rows for later lookup
+	  } catch (std::length_error &e) {
+		std::cerr << "Failed to emplace or push at " << __LINE__ << std::endl;
+		throw (e);
+	  }
+	  switch (phenotypes_[p1]) {
+	  case 1:
+		switch (phenotypes_[p2]) {
+		case 1:cscs += 1.;
+		  break;
+		case 0:cscn += 1.;
+		  break;
+		case -1:break;
+		default:std::cerr << "Phenotype: " << phenotypes_[p2] << " p2: " << p2 << std::endl;
+		  throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
+		}
+		break;
+	  case 0:
+		switch (phenotypes_[p2]) {
+		case 1:cscn += 1.;
+		  break;
+		case 0:cncn += 1.;
+		  break;
+		case -1:break;
+		default:std::cerr << "Phenotype: " << phenotypes_[p2] << " p2: " << p2 << std::endl;
+		  throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
+		}
+		break;
+	  case -1:break;
+	  default:std::cerr << "Phenotype: " << phenotypes_[p1] << " p1: " << p1 << std::endl;
+		throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
+	  }
+	}
   } else {
-    for (int i = 0; i < pairs.size(); i++) {
-      const auto &p = pairs[i];
-      const auto &r = rows[i];
-      switch (phenotypes_[p.first]) {
-      case 1:
-        switch (phenotypes_[p.second]) {
-        case 1:cscs += 1.;
-          break;
-        case 0:cscn += 1.;
-          break;
-        case -1:break;
-        default:
-          std::cerr << "Phenotype: " << phenotypes_[p.second] << " p.second: " << p.second << std::endl;
-          throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
-        }
-        break;
-      case 0:
-        switch (phenotypes_[p.second]) {
-        case 1:cscn += 1.;
-          break;
-        case 0:cncn += 1.;
-          break;
-        case -1:break;
-        default:
-          std::cerr << "Phenotype: " << phenotypes_[p.second] << " p.second: " << p.second << std::endl;
-          throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
-        }
-        break;
-      case -1:break;
-      default:
-        std::cerr << "Phenotype: " << phenotypes_[p.first] << " p.first: " << p.first << std::endl;
-        throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
-      }
-    }
+	for (int i = 0; i < pairs.size(); i++) {
+	  const auto &p = pairs[i];
+	  const auto &r = rows[i];
+	  switch (phenotypes_[p.first]) {
+	  case 1:
+		switch (phenotypes_[p.second]) {
+		case 1:cscs += 1.;
+		  break;
+		case 0:cscn += 1.;
+		  break;
+		case -1:break;
+		default:std::cerr << "Phenotype: " << phenotypes_[p.second] << " p.second: " << p.second << std::endl;
+		  throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
+		}
+		break;
+	  case 0:
+		switch (phenotypes_[p.second]) {
+		case 1:cscn += 1.;
+		  break;
+		case 0:cncn += 1.;
+		  break;
+		case -1:break;
+		default:std::cerr << "Phenotype: " << phenotypes_[p.second] << " p.second: " << p.second << std::endl;
+		  throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
+		}
+		break;
+	  case -1:break;
+	  default:std::cerr << "Phenotype: " << phenotypes_[p.first] << " p.first: " << p.first << std::endl;
+		throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
+	  }
+	}
   }
   permuted_cscs[k].push_back(cscs);
   permuted_cscn[k].push_back(cscn);
   permuted_cncn[k].push_back(cncn);
 
   if (params.contcont) {
-    statistic = cscs / cscs_count - cscn / cscn_count - cncn / cncn_count;
+	statistic = cscs / cscs_count - cscn / cscn_count - cncn / cncn_count;
   } else {
-    statistic = cscs / cscs_count - cscn / cscn_count;
+	statistic = cscs / cscs_count - cscn / cscn_count;
   }
 
   return statistic;
@@ -143,196 +143,200 @@ void Statistic::test_group_permutation() {
   std::vector<std::vector<int>> tphenotypes;
 
   while (std::getline(test_data, line)) {
-    if (boost::starts_with(line, "#") || lineno == 0) { // Skip the header
-      lineno++;
-      continue;
-    }
-    RJBUtil::Splitter<std::string_view> splitter(line, " \t");
-    std::vector<bool> pattern;
-    for (int i = 1; i < splitter.size(); i++) {
-      if (tphenotypes.size() < i) {
-        tphenotypes.emplace_back();
-      }
-      if (splitter[i] == "NA") {
-        pattern.push_back(false);
-        tphenotypes[i - 1].push_back(-1);
-      } else {
-        pattern.push_back(true);
-        tphenotypes[i - 1].push_back(std::stoi(splitter[i]));
-        if (tphenotypes[i-1].back() != 0 && tphenotypes[i-1].back() != 1) {
-          std::cerr << splitter[0] << " " << splitter[1] << std::endl;
-        }
-      }
-    }
-    if (tfill_patterns.count(pattern) == 0) {
-      tfill_patterns.emplace(std::make_pair(pattern, std::vector<arma::uword>({lineno - 1})));
-    } else {
-      tfill_patterns[pattern].push_back(lineno - 1);
-    }
-    lineno++;
+	if (boost::starts_with(line, "#") || lineno == 0) { // Skip the header
+	  lineno++;
+	  continue;
+	}
+	RJBUtil::Splitter<std::string_view> splitter(line, " \t");
+	std::vector<bool> pattern;
+	for (int i = 1; i < splitter.size(); i++) {
+	  if (tphenotypes.size() < i) {
+		tphenotypes.emplace_back();
+	  }
+	  if (splitter[i] == "NA") {
+		pattern.push_back(false);
+		tphenotypes[i - 1].push_back(-1);
+	  } else {
+		pattern.push_back(true);
+		tphenotypes[i - 1].push_back(std::stoi(splitter[i]));
+		if (tphenotypes[i - 1].back() != 0 && tphenotypes[i - 1].back() != 1) {
+		  std::cerr << splitter[0] << " " << splitter[1] << std::endl;
+		}
+	  }
+	}
+	if (tfill_patterns.count(pattern) == 0) {
+	  tfill_patterns.emplace(std::make_pair(pattern, std::vector<arma::uword>({lineno - 1})));
+	} else {
+	  tfill_patterns[pattern].push_back(lineno - 1);
+	}
+	lineno++;
   }
   for (unsigned long k = 0; k < tphenotypes.size(); k++) {
-    int case_count = 0;
-    int control_count = 0;
-    for (const auto &v : tphenotypes[k]) {
-      switch (v) {
-      case 1:case_count++;
-        break;
-      case 0:control_count++;
-        break;
-      default:break;
-      }
-    }
+	int case_count = 0;
+	int control_count = 0;
+	for (const auto &v : tphenotypes[k]) {
+	  switch (v) {
+	  case 1:case_count++;
+		break;
+	  case 0:control_count++;
+		break;
+	  default:break;
+	  }
+	}
   }
   if (tfill_patterns.size() > 1) {
-    tgroups = std::vector<std::vector<arma::uword>>();
-    for (const auto &v : tfill_patterns) {
-      tgroups->push_back(v.second);
-    }
-    std::cerr << "Groups: " << tgroups->size() << std::endl;
-    std::cerr << "Group sizes: ";
-    for (const auto &v : tfill_patterns) {
-      std::cerr << v.second.size() << " ";
-      for (const auto &k : v.second) {
-        std::cerr << "idx: " << k << " ";
-      }
-    }
-    std::cerr << std::endl;
+	tgroups = std::vector<std::vector<arma::uword>>();
+	for (const auto &v : tfill_patterns) {
+	  tgroups->push_back(v.second);
+	}
+	std::cerr << "Groups: " << tgroups->size() << std::endl;
+	std::cerr << "Group sizes: ";
+	for (const auto &v : tfill_patterns) {
+	  std::cerr << v.second.size() << " ";
+	  for (const auto &k : v.second) {
+		std::cerr << "idx: " << k << " ";
+	  }
+	}
+	std::cerr << std::endl;
   }
 
   std::cerr << "Test phenotypes\n";
   unsigned long k = 0;
   for (k = 0; k < tphenotypes.size(); k++) {
-    for (const auto &v : tphenotypes[k]) {
-      std::cerr << v << " ";
-    }
-    std::cerr << std::endl;
+	for (const auto &v : tphenotypes[k]) {
+	  std::cerr << v << " ";
+	}
+	std::cerr << std::endl;
   }
 
   std::mt19937 gen(params.seed);
   for (const auto &v : *tgroups) { // For each of the set of group indices
-    std::vector<std::vector<int>> tphenotypes_tmp;
-    for (k = 0; k < tphenotypes.size(); k++) {
-      tphenotypes_tmp.emplace_back(std::vector<int>(v.size(), 0));
-      int x = 0;
-      for (const auto &i : v) {
-        tphenotypes_tmp[k][x] = tphenotypes[k][i];
-        x++;
-      }
-    }
-    for (int i = tphenotypes_tmp[0].size() - 1; i > 0; i--) { // Shuffle the indices
-      std::uniform_int_distribution<> dis(0, i);
-      int j = dis(gen);
-      for (k = 0; k < tphenotypes.size(); k++) {
-        std::swap(tphenotypes_tmp[k][i], tphenotypes_tmp[k][j]);
-      }
-    }
-    for (k = 0; k < tphenotypes.size(); k++) {
-      int x = 0;
-      for (const auto &i : v) {
-        tphenotypes[k][i] = tphenotypes_tmp[k][x];
-        x++;
-      }
-    }
+	std::vector<std::vector<int>> tphenotypes_tmp;
+	for (k = 0; k < tphenotypes.size(); k++) {
+	  try {
+		tphenotypes_tmp.emplace_back(std::vector<int>(v.size(), 0));
+	  } catch (std::length_error &e) {
+		std::cerr << "failed to emplace at line " << __LINE__ << std::endl;
+	  }
+	  int x = 0;
+	  for (const auto &i : v) {
+		tphenotypes_tmp[k][x] = tphenotypes[k][i];
+		x++;
+	  }
+	}
+	for (int i = tphenotypes_tmp[0].size() - 1; i > 0; i--) { // Shuffle the indices
+	  std::uniform_int_distribution<> dis(0, i);
+	  int j = dis(gen);
+	  for (k = 0; k < tphenotypes.size(); k++) {
+		std::swap(tphenotypes_tmp[k][i], tphenotypes_tmp[k][j]);
+	  }
+	}
+	for (k = 0; k < tphenotypes.size(); k++) {
+	  int x = 0;
+	  for (const auto &i : v) {
+		tphenotypes[k][i] = tphenotypes_tmp[k][x];
+		x++;
+	  }
+	}
   }
   std::cerr << "Test phenotypes after shuffle\n";
   for (k = 0; k < tphenotypes.size(); k++) {
-    for (const auto &v : tphenotypes[k]) {
-      std::cerr << v << " ";
-    }
-    std::cerr << std::endl;
+	for (const auto &v : tphenotypes[k]) {
+	  std::cerr << v << " ";
+	}
+	std::cerr << std::endl;
   }
 }
 
 void Statistic::run() {
   unsigned long k = 0;
   arma::vec odds;
-  for (; k < indexer.size(); k++) {
-    permuted.emplace_back();
-    permuted_cscs.emplace_back();
-    permuted_cscn.emplace_back();
-    permuted_cncn.emplace_back();
-    original.push_back(
-        calculate(indexer[k].phenotypes, indexer[k].case_case, indexer[k].case_cont, indexer[k].cont_cont, 0));
-    successes.push_back(0);
-    permutations.push_back(0);
+  for (; k < (*indexer).size(); k++) {
+	permuted.emplace_back();
+	permuted_cscs.emplace_back();
+	permuted_cscn.emplace_back();
+	permuted_cncn.emplace_back();
+	original.push_back(
+		calculate((*indexer)[k].phenotypes, (*indexer)[k].case_case, (*indexer)[k].case_cont, (*indexer)[k].cont_cont, 0));
+	successes.push_back(0);
+	permutations.push_back(0);
   }
 
   std::mt19937 gen(params.seed);
 
   while (permutations[k - 1] < params.nperms) {
-    if (perms && indexer.size() == 1) {
-      phenotypes[0] = (*(*perms))[permutations[0]];
-      double val = calculate(phenotypes[0], indexer[0].case_case, indexer[0].case_cont, indexer[0].cont_cont, 0);
-      if (val > original[0])
-        successes[0]++;
-      permutations[0]++;
-      permuted[0].push_back(val);
-    } else {
-      if (groups) { // If we need to do grouped permutation
-        for (const auto &v : *groups) { // For each of the set of group indices
-          std::vector<std::vector<int>> phenotypes_tmp;
-          for (k = 0; k < phenotypes.size(); k++) {
-            phenotypes_tmp.emplace_back(std::vector<int>(v.size(), 0));
-            int x = 0;
-            for (const auto &i : v) {
-              phenotypes_tmp[k][x] = phenotypes[k][i];
-              x++;
-            }
-          }
-          for (int i = phenotypes_tmp[0].size() - 1; i > 0; i--) { // Shuffle the indices
-            std::uniform_int_distribution<> dis(0, i);
-            int j = dis(gen);
-            for (k = 0; k < phenotypes.size(); k++) {
-              std::swap(phenotypes_tmp[k][i], phenotypes_tmp[k][j]);
-            }
-          }
-          for (k = 0; k < phenotypes.size(); k++) {
-            int x = 0;
-            for (const auto &i : v) {
-              phenotypes[k][i] = phenotypes_tmp[k][x];
-              x++;
-            }
-          }
-        }
-      } else {
-        for (long i = static_cast<long>(phenotypes[0].size()) - 1; i > 0; i--) {
-          std::uniform_int_distribution<> dis(0, i);
-          int j = dis(gen);
-          for (k = 0; k < phenotypes.size(); k++) { // Permute all phenotypes the same way.
-            std::swap(phenotypes[k][i], phenotypes[k][j]);
-          }
-        }
-      }
-    }
-    k = 0;
-    for (auto &v : phenotypes) {
-      double val = calculate(v, indexer[k].case_case, indexer[k].case_cont, indexer[k].cont_cont, k);
-      if (val > original[k])
-        successes[k]++;
-      permutations[k]++;
-      permuted[k].push_back(val);
-      k++;
-    }
+	if (perms && (*indexer).size() == 1) {
+	  phenotypes = (*perms);
+	  double val = calculate((*phenotypes)[0], (*indexer)[0].case_case, (*indexer)[0].case_cont, (*indexer)[0].cont_cont, 0);
+	  if (val > original[0])
+		successes[0]++;
+	  permutations[0]++;
+	  permuted[0].push_back(val);
+	} else {
+	  if (groups) { // If we need to do grouped permutation
+		for (const auto &v : *groups) { // For each of the set of group indices
+		  std::vector<std::vector<int>> phenotypes_tmp;
+		  for (k = 0; k < (*phenotypes).size(); k++) {
+			try {
+			  phenotypes_tmp.emplace_back(std::vector<int>(v.size(), 0));
+			} catch (std::length_error &e) {
+			  std::cerr << "failed to emplace at line " << __LINE__ << std::endl;
+			}
+			int x = 0;
+			for (const auto &i : v) {
+			  phenotypes_tmp[k][x] = (*phenotypes)[k][i];
+			  x++;
+			}
+		  }
+		  for (int i = phenotypes_tmp[0].size() - 1; i > 0; i--) { // Shuffle the indices
+			std::uniform_int_distribution<> dis(0, i);
+			int j = dis(gen);
+			for (k = 0; k < (*phenotypes).size(); k++) {
+			  std::swap(phenotypes_tmp[k][i], phenotypes_tmp[k][j]);
+			}
+		  }
+		  for (k = 0; k < (*phenotypes).size(); k++) {
+			int x = 0;
+			for (const auto &i : v) {
+			  (*phenotypes)[k][i] = phenotypes_tmp[k][x];
+			  x++;
+			}
+		  }
+		}
+	  } else {
+		for (long i = static_cast<long>((*phenotypes)[0].size()) - 1; i > 0; i--) {
+		  std::uniform_int_distribution<> dis(0, i);
+		  int j = dis(gen);
+		  for (k = 0; k < (*phenotypes).size(); k++) { // Permute all phenotypes the same way.
+			std::swap((*phenotypes)[k][i], (*phenotypes)[k][j]);
+		  }
+		}
+	  }
+	}
+	k = 0;
+	for (auto &v : (*phenotypes)) {
+	  double val = calculate(v, (*indexer)[k].case_case, (*indexer)[k].case_cont, (*indexer)[k].cont_cont, k);
+	  if (val > original[k])
+		successes[k]++;
+	  permutations[k]++;
+	  permuted[k].push_back(val);
+	  k++;
+	}
   }
 
-  std::cerr << bp.breakpoint.first << " " << bp.breakpoint.second << " cscs: " << permuted_cscs[0][0] << " cscn: " << permuted_cscn[0][0] << std::endl;
+  if (params.verbose) {
+	std::cerr << bp.breakpoint.first << " " << bp.breakpoint.second << " cscs: " << permuted_cscs[0][0] << " cscn: "
+			  << permuted_cscn[0][0] << std::endl;
+  }
 
   // Output
   std::stringstream iss;
-  if(bp.breakpoint.second == "8560476") {
-    std::cerr << bp.breakpoint.first << "\t" << bp.breakpoint.second << "\t" << original[0];
-    for(const auto &v : permuted[0]) {
-      std::cerr << "\t" << v;
-    }
-    std::cerr << std::endl;
-  }
   for (k = 0; k < original.size(); k++) {
-    iss << bp.breakpoint.first << "\t" << bp.breakpoint.second << "\t" << original[k];
-    for (int i = 0; i < params.nperms; i++) {
-      iss << "\t" << permuted[k][i];
-    }
-    iss << std::endl;
+	iss << bp.breakpoint.first << "\t" << bp.breakpoint.second << "\t" << original[k];
+	for (int i = 0; i < params.nperms; i++) {
+	  iss << "\t" << permuted[k][i];
+	}
+	iss << std::endl;
   }
 
   reporter->submit(iss.str());
@@ -342,8 +346,6 @@ void Statistic::run() {
 
 void Statistic::cleanup() {
   data.reset();
-  phenotypes.clear();
-  phenotypes.shrink_to_fit();
   permuted.clear();
   permuted.shrink_to_fit();
   permuted_cscs.clear();

@@ -13,14 +13,27 @@
 #include <thread>
 #include <future>
 
-template<typename Res, typename... Args>
+/**
+ * @brief  A generic threadpool that calls a run member function.
+ * @tparam Stat The statistic object that will have it's run function called.
+ *
+ * @note Origiinally we used two template parameters, Res and Args for a packaged
+ * task. I'm not directly using the Statistic objects to avoid the memory accumulation
+ * problem that results in excessive memory usage. We should now be able to analyze
+ * hapibd data easily, with little memory usage, despite the large number of breakpoints.
+ *
+ * The original approach was a result of wanting to preserve all the data in memory
+ * so that we could combine and calculate multiple testing corrected p-values in
+ * carvaIBD. However, we now use a script to post-process carvaIBD's output. Thus,
+ * we no longer need to keep the objects in memory, and we can free up that burden.
+ */
+template<typename Stat>
 class ThreadPool {
-  std::atomic<bool> done;
   std::atomic<int> ntasks;
   std::atomic<int> nsubmitted;
   mutable std::mutex mut;
   std::condition_variable cv;
-  std::queue<std::packaged_task<Res(Args...)>> work_queue;
+  std::queue<Stat> work_queue;
   std::vector<std::thread> threads;
   JoinThreads joiner;
   Parameters params;
@@ -29,27 +42,24 @@ class ThreadPool {
     std::unique_lock<std::mutex> lk(mut);
     while(!done || ntasks > 0)
 	{
-      std::packaged_task<Res(Args...)> task;
       cv.wait_for(lk, std::chrono::seconds(1), [this] { return !work_queue.empty() || done; });
       if(!work_queue.empty()) {
-        task = std::move(work_queue.front());
+        Stat task = std::move(work_queue.front());
         work_queue.pop();
 
-        auto f = task.get_future();
         // Done with queue; unlock
         lk.unlock();
-        task();
+        task.run();
         ntasks--;
 
         lk.lock();
-
-        f.get(); // Throw any errors -- holy fuck finally this is it
       }
 	}
   }
 public:
-  explicit ThreadPool(const Parameters &params_) :
-  	done(false), ntasks(0), nsubmitted(0), joiner(threads), params(params_)
+  std::atomic<bool> done;
+  explicit ThreadPool(Parameters params_) :
+  	done(false), ntasks(0), nsubmitted(0), joiner(threads), params(std::move(params_))
   {
     unsigned const thread_count=params.nthreads - 2;
 	try
@@ -75,10 +85,9 @@ public:
 	}
   }
 
-  void submit(std::packaged_task<Res(Args...)> &&f)
+  void submit(Stat &&f)
   {
     std::unique_lock lk(mut);
-    std::cerr << "Submitting: ntasks = " << ntasks << std::endl;
     while(ntasks > params.nthreads + 5) {
       std::this_thread::sleep_for(std::chrono::nanoseconds(100000000));
 	}

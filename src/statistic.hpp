@@ -20,10 +20,10 @@
  */
 class Statistic {
   arma::sp_colvec data;
-  std::vector<Indexer> &indexer;
-  std::vector<std::string> &samples;
-  std::vector<std::vector<int>> phenotypes;
-  Parameters &params;
+  std::shared_ptr<std::vector<Indexer>> indexer;
+  std::shared_ptr<std::vector<std::string>> samples;
+  std::shared_ptr<std::vector<std::vector<int>>> phenotypes;
+  Parameters params;
 
   std::shared_ptr<Reporter> reporter;
 
@@ -52,11 +52,11 @@ public:
 
   Statistic(arma::sp_colvec data_,
             Breakpoint bp_,
-            std::vector<Indexer> &indexer_,
-            std::vector<std::string> &samples_,
-            std::vector<std::vector<int>> &phenotypes_,
+            std::shared_ptr<std::vector<Indexer>> indexer_,
+            std::shared_ptr<std::vector<std::string>> samples_,
+            std::shared_ptr<std::vector<std::vector<int>>> phenotypes_,
             std::shared_ptr<Reporter> reporter_,
-            Parameters &params_,
+            Parameters params_,
             boost::optional<std::vector<std::vector<arma::uword>>> groups_,
             boost::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms_);
 

@@ -21,6 +21,8 @@ struct Parameters {
   bool contcont;
   double min_dist;
   boost::optional<double> rsquared;
+  bool verbose;
+  bool enable_testing;
 };
 
 #endif //CARVAIBD_PARAMETERS_HPP
