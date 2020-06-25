@@ -136,13 +136,8 @@ class Parser {
 	ThreadPool<Statistic> threadpool(params);
 
 	// Maintain a single vector that we just update with each line
-	arma::sp_vec last(samples.size() * (samples.size() - 1) / 2.);
-	arma::sp_vec data(samples.size() * (samples.size() - 1) / 2.);
-
-	// 3 pointers for each statistic class
-	auto index_ptr = std::shared_ptr<std::vector<Indexer>>(&indexer);
-	auto sample_ptr = std::shared_ptr<std::vector<std::string>>(&samples);
-	auto pheno_ptr = std::shared_ptr<std::vector<std::vector<int>>>(&phenotypes);
+	arma::sp_vec last(samples->size() * (samples->size() - 1) / 2.);
+	arma::sp_vec data(samples->size() * (samples->size() - 1) / 2.);
 
 	// Generate permutations if we have covariates
 	Permute permute(params.seed);
@@ -169,7 +164,7 @@ class Parser {
 	  }
 	  lr_out.close();
 
-	  permute.get_permutations(permutation_ptr, odds, indexer[0].case_count, params.nperms, params.nthreads - 2);
+	  permute.get_permutations(permutation_ptr, odds, (*indexer)[0].case_count, params.nperms, params.nthreads - 2);
 	  bo_perms = permutation_ptr;
 	}
 
@@ -208,7 +203,7 @@ class Parser {
 		RJBUtil::Splitter<std::string_view> vals(entry, ":");
 		RJBUtil::Splitter<std::string> pairs(vals[1], "-");
 
-		arma::sword row_idx = indexer[0].translate(pairs[0], pairs[1]);
+		arma::sword row_idx = (*indexer)[0].translate(pairs[0], pairs[1]);
 		if (row_idx < 0) {
 		  continue;
 		} else {
@@ -228,7 +223,7 @@ class Parser {
 		RJBUtil::Splitter<std::string_view> vals(entry, ":");
 		RJBUtil::Splitter<std::string> pairs(vals[1], "-");
 
-		arma::sword row_idx = indexer[0].translate(pairs[0], pairs[1]);
+		arma::sword row_idx = (*indexer)[0].translate(pairs[0], pairs[1]);
 		if (row_idx < 0) {
 		  continue;
 		} else {
@@ -285,9 +280,9 @@ class Parser {
 
 	  Statistic stat(data,
 					 bp,
-					 index_ptr,
-					 sample_ptr,
-					 pheno_ptr,
+					 indexer,
+					 samples,
+					 phenotypes,
 					 reporter,
 					 params,
 					 groups,
@@ -301,7 +296,7 @@ class Parser {
 	// 	}
 	  // }
 	}
-	while (!threadpool.done) {
+	while (threadpool.ntasks > 0) {
 	  // for(auto it = stats.begin(); it != stats.end(); it++) { // Cleanup as we go
 	// 	if ((*it).done) {
 	// 	  it = stats.erase(it);
@@ -336,7 +331,7 @@ class Parser {
 		continue;
 	  }
 
-	  samples.push_back(splitter[iid]);
+	  samples->push_back(splitter[iid]);
 	  std::vector<bool> pattern;
 	  for (int i = 1; i < splitter.size(); i++) {
 		if (phenotypes.size() < i) {
@@ -384,7 +379,7 @@ class Parser {
 		}
 	  }
 
-	  indexer.emplace_back(Indexer(case_count, control_count, samples, phenotypes.back()));
+	  indexer->emplace_back(Indexer(case_count, control_count, (*samples), phenotypes.back()));
 	}
 	if (fill_patterns.size() > 1) {
 	  groups = std::vector<std::vector<arma::uword>>();
@@ -406,8 +401,8 @@ class Parser {
 	}
 	if (covariates) {
 	  int i = 0;
-	  arma::uvec idx(samples.size());
-	  for (const auto &v : samples) {
+	  arma::uvec idx(samples->size());
+	  for (const auto &v : (*samples)) {
 		if (cov_samples[i] != v) {
 		  auto swap_val = std::find(cov_samples.begin(), cov_samples.end(), v);
 		  if (swap_val == cov_samples.end())
@@ -536,11 +531,11 @@ class Parser {
   }
 
 public:
-  std::vector<std::string> samples; // Samples in input order
+  std::shared_ptr<std::vector<std::string>> samples; // Samples in input order
   std::vector<std::string> cov_samples; // Samples in covariate order
   std::set<std::string> skip; // Skip samples with missing cov values
   std::vector<std::vector<int>> phenotypes;
-  std::vector<Indexer> indexer;
+  std::shared_ptr<std::vector<Indexer>> indexer;
   unsigned long nbreakpoints;
   Parameters params;
   std::shared_ptr<Reporter> reporter;
@@ -564,6 +559,11 @@ public:
 		 std::shared_ptr<Reporter> reporter_,
 		 GeneticMap &gmap_)
 	  : nbreakpoints(0), params(std::move(params_)), reporter(std::move(reporter_)), gmap(std::move(gmap_)) {
+    // Default construct shared ptrs
+    samples = std::make_shared<std::vector<std::string>>();
+	phenotypes = std::vector<std::vector<int>>();
+	indexer = std::make_shared<std::vector<Indexer>>();
+
 	Source bp_source(input_path);
 	std::istream bp_is(&(*bp_source.streambuf));
 	std::ifstream pheno_ifs(pheno_path);
@@ -592,7 +592,7 @@ public:
 	}
 	parse_pheno(pheno_ifs);
 
-	for (const auto &idx : indexer) {
+	for (const auto &idx : (*indexer)) {
 	  if(params.verbose) {
 		std::cerr << "ncases: " << idx.case_count << " ncontrols: " << idx.cont_count << std::endl;
 	  }

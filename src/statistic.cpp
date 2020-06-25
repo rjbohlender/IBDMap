@@ -11,7 +11,7 @@ Statistic::Statistic(arma::sp_colvec data_,
 					 Breakpoint bp_,
 					 std::shared_ptr<std::vector<Indexer>> indexer_,
 					 std::shared_ptr<std::vector<std::string>> samples_,
-					 std::shared_ptr<std::vector<std::vector<int>>> phenotypes_,
+					 std::vector<std::vector<int>> phenotypes_,
 					 std::shared_ptr<Reporter> reporter_,
 					 Parameters params_,
 					 boost::optional<std::vector<std::vector<arma::uword>>> groups_,
@@ -266,8 +266,8 @@ void Statistic::run() {
 
   while (permutations[k - 1] < params.nperms) {
 	if (perms && (*indexer).size() == 1) {
-	  phenotypes = (*perms);
-	  double val = calculate((*phenotypes)[0], (*indexer)[0].case_case, (*indexer)[0].case_cont, (*indexer)[0].cont_cont, 0);
+	  phenotypes = *(*perms);
+	  double val = calculate(phenotypes[0], (*indexer)[0].case_case, (*indexer)[0].case_cont, (*indexer)[0].cont_cont, 0);
 	  if (val > original[0])
 		successes[0]++;
 	  permutations[0]++;
@@ -276,7 +276,7 @@ void Statistic::run() {
 	  if (groups) { // If we need to do grouped permutation
 		for (const auto &v : *groups) { // For each of the set of group indices
 		  std::vector<std::vector<int>> phenotypes_tmp;
-		  for (k = 0; k < (*phenotypes).size(); k++) {
+		  for (k = 0; k < phenotypes.size(); k++) {
 			try {
 			  phenotypes_tmp.emplace_back(std::vector<int>(v.size(), 0));
 			} catch (std::length_error &e) {
@@ -284,37 +284,37 @@ void Statistic::run() {
 			}
 			int x = 0;
 			for (const auto &i : v) {
-			  phenotypes_tmp[k][x] = (*phenotypes)[k][i];
+			  phenotypes_tmp[k][x] = phenotypes[k][i];
 			  x++;
 			}
 		  }
 		  for (int i = phenotypes_tmp[0].size() - 1; i > 0; i--) { // Shuffle the indices
 			std::uniform_int_distribution<> dis(0, i);
 			int j = dis(gen);
-			for (k = 0; k < (*phenotypes).size(); k++) {
+			for (k = 0; k < phenotypes.size(); k++) {
 			  std::swap(phenotypes_tmp[k][i], phenotypes_tmp[k][j]);
 			}
 		  }
-		  for (k = 0; k < (*phenotypes).size(); k++) {
+		  for (k = 0; k < phenotypes.size(); k++) {
 			int x = 0;
 			for (const auto &i : v) {
-			  (*phenotypes)[k][i] = phenotypes_tmp[k][x];
+			  phenotypes[k][i] = phenotypes_tmp[k][x];
 			  x++;
 			}
 		  }
 		}
 	  } else {
-		for (long i = static_cast<long>((*phenotypes)[0].size()) - 1; i > 0; i--) {
+		for (long i = static_cast<long>(phenotypes[0].size()) - 1; i > 0; i--) {
 		  std::uniform_int_distribution<> dis(0, i);
 		  int j = dis(gen);
-		  for (k = 0; k < (*phenotypes).size(); k++) { // Permute all phenotypes the same way.
-			std::swap((*phenotypes)[k][i], (*phenotypes)[k][j]);
+		  for (k = 0; k < phenotypes.size(); k++) { // Permute all phenotypes the same way.
+			std::swap(phenotypes[k][i], phenotypes[k][j]);
 		  }
 		}
 	  }
 	}
 	k = 0;
-	for (auto &v : (*phenotypes)) {
+	for (auto &v : phenotypes) {
 	  double val = calculate(v, (*indexer)[k].case_case, (*indexer)[k].case_cont, (*indexer)[k].cont_cont, k);
 	  if (val > original[k])
 		successes[k]++;

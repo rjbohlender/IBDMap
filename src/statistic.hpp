@@ -22,7 +22,7 @@ class Statistic {
   arma::sp_colvec data;
   std::shared_ptr<std::vector<Indexer>> indexer;
   std::shared_ptr<std::vector<std::string>> samples;
-  std::shared_ptr<std::vector<std::vector<int>>> phenotypes;
+  std::vector<std::vector<int>> phenotypes;
   Parameters params;
 
   std::shared_ptr<Reporter> reporter;
@@ -51,14 +51,14 @@ public:
   std::vector<arma::sword> rows;
 
   Statistic(arma::sp_colvec data_,
-            Breakpoint bp_,
-            std::shared_ptr<std::vector<Indexer>> indexer_,
-            std::shared_ptr<std::vector<std::string>> samples_,
-            std::shared_ptr<std::vector<std::vector<int>>> phenotypes_,
-            std::shared_ptr<Reporter> reporter_,
-            Parameters params_,
-            boost::optional<std::vector<std::vector<arma::uword>>> groups_,
-            boost::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms_);
+			Breakpoint bp_,
+			std::shared_ptr<std::vector<Indexer>> indexer_,
+			std::shared_ptr<std::vector<std::string>> samples_,
+			std::vector<std::vector<int>> phenotypes_,
+			std::shared_ptr<Reporter> reporter_,
+			Parameters params_,
+			boost::optional<std::vector<std::vector<arma::uword>>> groups_,
+			boost::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms_);
 
   double calculate(std::vector<int> &phenotypes_, double cscs_count, double cscn_count, double cncn_count, int k);
 

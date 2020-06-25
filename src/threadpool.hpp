@@ -29,7 +29,6 @@
  */
 template<typename Stat>
 class ThreadPool {
-  std::atomic<int> ntasks;
   std::atomic<int> nsubmitted;
   mutable std::mutex mut;
   std::condition_variable cv;
@@ -58,6 +57,7 @@ class ThreadPool {
   }
 public:
   std::atomic<bool> done;
+  std::atomic<int> ntasks;
   explicit ThreadPool(Parameters params_) :
   	done(false), ntasks(0), nsubmitted(0), joiner(threads), params(std::move(params_))
   {
