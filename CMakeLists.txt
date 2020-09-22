@@ -19,38 +19,38 @@ if (UNIX)
 endif()
 
 set(PROJECT_SUPPORT_FILES
-        src/jointhreads.hpp
-        src/parser.hpp
-        src/split.hpp
-        src/isgzipped.hpp
-        src/permutation.cpp src/permutation.hpp
-        src/statistic.cpp src/statistic.hpp
-        src/threadpool.hpp
-        src/parameters.hpp
-        src/threadsafequeue.hpp
-        src/reporter.hpp
-        src/geneticmap.hpp
-        src/indexsort.hpp
-        src/breakpoint.hpp
-        src/indexer.hpp
-        src/glm.hpp
-        third_party/stocc/stocc.h
-        third_party/stocc/sfmt.cpp third_party/stocc/sfmt.h
-        third_party/stocc/stoc3.cpp
-        third_party/stocc/fnchyppr.cpp
-        third_party/stocc/wnchyppr.cpp
-        third_party/stocc/stoc1.cpp
-        third_party/stocc/stoc2.cpp
-        third_party/stocc/randomc.h
-        third_party/stocc/mersenne.cpp
-        third_party/stocc/erfres.cpp
-        third_party/stocc/userintf.cpp
-        link/binomial.cpp
-        link/binomial.hpp
-        link/family.cpp
-        link/family.hpp
-        link/gaussian.cpp
-        link/gaussian.hpp)
+    src/jointhreads.hpp
+    src/parser.hpp
+    src/split.hpp
+    src/isgzipped.hpp
+    src/permutation.cpp src/permutation.hpp
+    src/statistic.cpp src/statistic.hpp
+    src/threadpool.hpp
+    src/parameters.hpp
+    src/threadsafequeue.hpp
+    src/reporter.hpp
+    src/geneticmap.hpp
+    src/indexsort.hpp
+    src/breakpoint.hpp
+    src/indexer.hpp
+    src/glm.hpp
+    third_party/stocc/stocc.h
+    third_party/stocc/sfmt.cpp third_party/stocc/sfmt.h
+    third_party/stocc/stoc3.cpp
+    third_party/stocc/fnchyppr.cpp
+    third_party/stocc/wnchyppr.cpp
+    third_party/stocc/stoc1.cpp
+    third_party/stocc/stoc2.cpp
+    third_party/stocc/randomc.h
+    third_party/stocc/mersenne.cpp
+    third_party/stocc/erfres.cpp
+    third_party/stocc/userintf.cpp
+    link/binomial.cpp
+    link/binomial.hpp
+    link/family.cpp
+    link/family.hpp
+    link/gaussian.cpp
+    link/gaussian.hpp src/info.cpp src/info.hpp)
 
 include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party")
 include_directories(${ARMADILLO_INCLUDE_DIRS})

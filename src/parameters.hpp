@@ -23,6 +23,7 @@ struct Parameters {
   boost::optional<double> rsquared;
   bool verbose;
   bool enable_testing;
+  boost::optional<std::vector<int>> range;
 };
 
 #endif //CARVAIBD_PARAMETERS_HPP

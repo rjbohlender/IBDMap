@@ -23,6 +23,7 @@ int main(int argc, char *argv[]) {
   boost::optional<std::string> cov;
   boost::optional<arma::uword> lower_bound;
   boost::optional<double> r2;
+  boost::optional<std::string> range;
 
   desc.add_options()
       ("input,i",
@@ -36,7 +37,7 @@ int main(int argc, char *argv[]) {
        "Recombination map files. Assumed to be three columns, position, chromosome, cM. Header line is required.")
       ("cov,c",
        po::value(&cov),
-       "Path to covariates. Expected format is ID\tValue1\t...")
+       "Path to covariates. Expected format is ID Value1 ...")
       ("threads,t",
        po::value<unsigned long>()->default_value(std::thread::hardware_concurrency() / 2),
        "Number of threads used in execution.")
@@ -52,6 +53,9 @@ int main(int argc, char *argv[]) {
 	  ("rsquared,r",
 	   po::value(&r2),
 	   "Sets the maximum correlation between sites. The parser will automatically skip breakpoints that are closer than the given distance. Default value of 1.0.")
+	  ("range",
+	   po::value(&range),
+	   "Range of positions, separated by a comma. e.g., 100000,250000 will only analyze breakpoints with positions in that range, inclusive of the endpoints.")
 	  ("seed",
        po::value<unsigned int>(),
        "Specify the seed to be shared by all breakpoints for equal permutations.")
@@ -64,7 +68,7 @@ int main(int argc, char *argv[]) {
       ("contcont",
        po::bool_switch(&contcont),
        "Use control/control pairs as part of statistic calculation.")
-	  ("verbose",
+	  ("verbose,v",
 	   po::bool_switch(&verbose),
 	   "Addtional diagnostic output.")
 	  ("enable_testing",
@@ -104,6 +108,25 @@ int main(int argc, char *argv[]) {
     seed = std::random_device{}();
   }
 
+  std::vector<int> range_values;
+  if(range) {
+    RJBUtil::Splitter<std::string> splitter(*range, ",");
+    if (splitter.size() != 2) {
+      std::cerr << "Range expects a comma separated pair of integer values." << std::endl;
+      std::cerr << desc << std::endl;
+      return 1;
+    }
+    try {
+	  range_values.push_back(std::stoi(splitter[0]));
+	  range_values.push_back(std::stoi(splitter[1]));
+	} catch(std::exception &e) {
+	  std::cerr << "Range expects a comma separated pair of integer values." << std::endl;
+	  std::cerr << e.what() << std::endl;
+	  std::cerr << desc << std::endl;
+	  return 1;
+	}
+  }
+
   std::cerr << "Input: " << vm["input"].as<std::string>() << std::endl;
   std::cerr << "Phenotypes: " << vm["pheno"].as<std::string>() << std::endl;
   std::cerr << "GMAP: " << vm["gmap"].as<std::vector<std::string>>()[0] << std::endl;
@@ -132,6 +155,9 @@ int main(int argc, char *argv[]) {
 	  verbose,
 	  enable_testing
   };
+  if (range_values.size() == 2) {
+    parameters.range = range_values;
+  }
 
   if (parameters.nthreads < 3) {
     throw (std::runtime_error("ERROR: Need at least 3 threads."));

@@ -106,10 +106,6 @@ struct Source {
  * 	The total number of pairs is constant.
  * 	The statistic is based on the rate of sharing at the locus relative to the rate of sharing globally.
  * 	But how do we permute? How do we determine the case-control status of the individuals?
- *
- * 	TODO We have a problem with permutation of the test statistic
- * 	The statistic doesn't depend on control-control pairs. Under permutation, many of our original pairs will be
- * 	control control pairs. Is there a problem with pairs moving in and out of the sample space?
  */
 template<class StringT>
 class Parser {
@@ -189,6 +185,11 @@ class Parser {
 	  }
 
 	  int pos = std::stoi(splitter[1]);
+	  if(params.range) {
+	    if(pos < (*params.range)[0] || pos > (*params.range)[1]) {
+	      continue;
+	    }
+	  }
 
 	  RJBUtil::Splitter<std::string_view> additions(splitter[splitter.size() - 2], " ");
 	  RJBUtil::Splitter<std::string_view> deletions(splitter[splitter.size() - 1], " ");
@@ -251,7 +252,7 @@ class Parser {
 	  }
 
 	  auto cor = [](arma::sp_vec X, arma::sp_vec Y) -> double {
-		double N = static_cast<double>(X.n_elem);
+		auto N = static_cast<double>(X.n_elem);
 		double mxy = arma::as_scalar(arma::mean(X % Y)); // as_scalar requrired for compatibility with older versions
 		double mx = arma::mean(X);
 		double my = arma::mean(Y);
