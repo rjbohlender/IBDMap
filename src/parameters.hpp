@@ -24,6 +24,8 @@ struct Parameters {
   bool verbose;
   bool enable_testing;
   boost::optional<std::vector<int>> range;
+  boost::optional<double> cM;
+  boost::optional<double> AF;
+  boost::optional<std::string> info;
 };
-
 #endif //CARVAIBD_PARAMETERS_HPP

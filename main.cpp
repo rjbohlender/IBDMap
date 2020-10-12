@@ -24,6 +24,9 @@ int main(int argc, char *argv[]) {
   boost::optional<arma::uword> lower_bound;
   boost::optional<double> r2;
   boost::optional<std::string> range;
+  boost::optional<double> cm;
+  boost::optional<double> af;
+  boost::optional<std::string> info;
 
   desc.add_options()
       ("input,i",
@@ -38,7 +41,10 @@ int main(int argc, char *argv[]) {
       ("cov,c",
        po::value(&cov),
        "Path to covariates. Expected format is ID Value1 ...")
-      ("threads,t",
+	  ("info",
+	   po::value(&info),
+	   "Path to supporting info file. Expected format is chr segID ...")
+	  ("threads,t",
        po::value<unsigned long>()->default_value(std::thread::hardware_concurrency() / 2),
        "Number of threads used in execution.")
       ("permutations,n",
@@ -50,6 +56,12 @@ int main(int argc, char *argv[]) {
       ("min_dist,m",
        po::value<double>()->default_value(0.0),
        "Sets the minimum genetic distance between sites. The parser will automatically skip breakpoints that are closer than the given distance. Default value of 0.0 cM.")
+	  ("cm",
+	   po::value(&cm),
+	   "Sets the minimum segment length for segments to be included. The parser will automatically skip segments that are smaller than the given length.")
+	  ("af",
+	   po::value(&af),
+	   "Sets the maximum allele frequency for segments to be included. The parser will automatically skip segments that are more frequent than the given cutoff.")
 	  ("rsquared,r",
 	   po::value(&r2),
 	   "Sets the maximum correlation between sites. The parser will automatically skip breakpoints that are closer than the given distance. Default value of 1.0.")
@@ -133,6 +145,9 @@ int main(int argc, char *argv[]) {
   if(vm.count("cov") > 0) {
 	std::cerr << "COV: " << *cov << std::endl;
   }
+  if(info) {
+    std::cerr << "INFO: " << *info << std::endl;
+  }
 
   if (verbose) {
 	std::cerr << "Reading genetic map.\n";
@@ -153,11 +168,12 @@ int main(int argc, char *argv[]) {
       vm["min_dist"].as<double>(),
 	  r2,
 	  verbose,
-	  enable_testing
+	  enable_testing,
+	  range_values.size() == 2 ? range_values : boost::optional<std::vector<int>>(),
+	  cm,
+	  af,
+	  info
   };
-  if (range_values.size() == 2) {
-    parameters.range = range_values;
-  }
 
   if (parameters.nthreads < 3) {
     throw (std::runtime_error("ERROR: Need at least 3 threads."));

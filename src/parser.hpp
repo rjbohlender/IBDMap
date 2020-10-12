@@ -25,6 +25,7 @@
 #include "../link/binomial.hpp"
 #include "glm.hpp"
 #include "geneticmap.hpp"
+#include "info.hpp"
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/iostreams/filtering_streambuf.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
@@ -166,13 +167,26 @@ class Parser {
 
 	arma::wall_clock timer;
 	long lineno = -1;
+	std::map<std::string, int> indices;
 	while (std::getline(is, line)) {
+	  if (boost::starts_with(line, "##")) {
+	    // In header, process and continue
+	    line = line.substr(2, line.size());
+	    RJBUtil::Splitter<std::string> hsplit(line, ":");
+	    auto idx_it = std::find(hsplit.begin(), hsplit.end(), "ID1-ID2");
+		indices["ID1-ID2"] = std::distance(hsplit.begin(), idx_it);
+		idx_it = std::find(hsplit.begin(), hsplit.end(), "segID");
+		indices["segID"] = std::distance(hsplit.begin(), idx_it);
+	    continue;
+	  }
+
 	  lineno++;
 	  if (lineno == 0) { // Skip the header
+		if (indices.find("ID1-ID2") == indices.end()) {
+		  indices["ID1-ID2"] = 1;
+		}
 		continue;
 	  }
-	  int cscs_cnt = 0;
-	  int cscn_cnt = 0;
 
 	  RJBUtil::Splitter<std::string_view> splitter(line, "\t", true);
 
@@ -202,12 +216,17 @@ class Parser {
 		  break;
 		}
 		RJBUtil::Splitter<std::string_view> vals(entry, ":");
-		RJBUtil::Splitter<std::string> pairs(vals[1], "-");
+		RJBUtil::Splitter<std::string> pairs(vals[indices["ID1-ID2"]], "-");
 
 		arma::sword row_idx = (*indexer)[0].translate(pairs[0], pairs[1]);
 		if (row_idx < 0) {
 		  continue;
 		} else {
+		  if (info) {
+			if ((*info).filter_segment(vals[indices["segID"]], params)) {
+			  continue;
+			}
+		  }
 		  try {
 			bp.segment_lengths.push_back(std::stod(vals[0]));
 		  } catch(std::invalid_argument &e) {
@@ -222,12 +241,17 @@ class Parser {
 		  break;
 		}
 		RJBUtil::Splitter<std::string_view> vals(entry, ":");
-		RJBUtil::Splitter<std::string> pairs(vals[1], "-");
+		RJBUtil::Splitter<std::string> pairs(vals[indices["ID1-ID2"]], "-");
 
 		arma::sword row_idx = (*indexer)[0].translate(pairs[0], pairs[1]);
 		if (row_idx < 0) {
 		  continue;
 		} else {
+		  if (info) {
+			if ((*info).filter_segment(vals[indices["segID"]], params)) {
+			  continue;
+			}
+		  }
 		  try {
 			bp.segment_lengths.push_back(std::stod(vals[0]));
 		  } catch(std::invalid_argument &e) {
@@ -251,7 +275,7 @@ class Parser {
 		continue;
 	  }
 
-	  auto cor = [](arma::sp_vec X, arma::sp_vec Y) -> double {
+	  auto cor = [](const arma::sp_vec& X, const arma::sp_vec& Y) -> double {
 		auto N = static_cast<double>(X.n_elem);
 		double mxy = arma::as_scalar(arma::mean(X % Y)); // as_scalar requrired for compatibility with older versions
 		double mx = arma::mean(X);
@@ -543,6 +567,7 @@ public:
   boost::optional<std::vector<std::vector<arma::uword>>> groups;
   boost::optional<arma::mat> covariates;
   GeneticMap gmap;
+  boost::optional<Info> info;
 
   /**
    * @brief Parser and data dispatcher
@@ -564,6 +589,11 @@ public:
     samples = std::make_shared<std::vector<std::string>>();
 	phenotypes = std::vector<std::vector<int>>();
 	indexer = std::make_shared<std::vector<Indexer>>();
+	if (params.info) {
+	  Source info_source(*params.info);
+	  std::istream info_stream(&(*info_source.streambuf));
+	  info = Info(info_stream);
+	}
 
 	Source bp_source(input_path);
 	std::istream bp_is(&(*bp_source.streambuf));

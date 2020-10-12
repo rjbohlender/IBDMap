@@ -6,13 +6,9 @@
 #include "info.hpp"
 #include "split.hpp"
 
-Info::Info(const std::string &fpath) {
+Info::Info(std::istream &ifs) {
   std::string line;
   int lineno = -1;
-  std::ifstream ifs(fpath);
-  if(!ifs.is_open()) {
-    throw(std::runtime_error("ERROR: Failed to open info file."));
-  }
   while(std::getline(ifs, line)) {
     lineno++;
 	RJBUtil::Splitter<std::string> splitter(line, " \t");
@@ -32,7 +28,7 @@ Info::Info(const std::string &fpath) {
 	data[splitter[1]] = {};
 	for(int i = 2; i < splitter.size(); i++) {
 	  try {
-		data[splitter[i]].push_back(std::stod(splitter[i]));
+		data[splitter[1]].push_back(std::stod(splitter[i]));
 	  } catch(std::exception &e) {
 		throw(std::runtime_error("ERROR: Error while reading info file. Failed to convert item to double."));
 	  }
@@ -45,4 +41,19 @@ Info::Info(const std::string &fpath) {
 
 double Info::get_field(const std::string &segment, const std::string &field) {
   return data[segment][field_map[field]];
+}
+
+bool Info::filter_segment(const std::string &segment, const Parameters &params) {
+  // If neither filter is used the segment will automatically pass.
+  // If only a single is used, passing will depend on the single filter.
+  bool AF = true;
+  bool cM = true;
+  if (params.AF) {
+    AF = get_field(segment, "AF") < *params.AF;
+  }
+  if (params.cM) {
+    cM = get_field(segment, "cM") >= *params.cM;
+  }
+  return !(AF & cM); // If both filters are used the segment must pass both filters.
+  // We negate because the logic is, true = filter, false = keep
 }
