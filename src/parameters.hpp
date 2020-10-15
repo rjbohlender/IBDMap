@@ -22,12 +22,12 @@ struct Parameters {
   std::string output_path;
   unsigned seed;
   std::optional<arma::uword> lower_bound;
-  bool swap;
-  bool contcont;
+  bool swap = false;
+  bool contcont = false;
   double min_dist;
   std::optional<double> rsquared;
-  bool verbose;
-  bool enable_testing;
+  bool verbose = false;
+  bool enable_testing = false;
   std::optional<std::vector<int>> range;
   std::optional<double> cM;
   std::optional<double> AF;
