@@ -3,6 +3,10 @@ project(carvaIBD)
 
 set(CMAKE_CXX_STANDARD 17)
 
+set(SugarPPIncludeDir ${CMAKE_SOURCE_DIR}/third_party/SugarPP)
+include_directories(${SugarPPIncludeDir})
+
+
 set(Boost_USE_MULTITHREADED TRUE)
 
 find_package(Armadillo REQUIRED)
@@ -50,7 +54,9 @@ set(PROJECT_SUPPORT_FILES
     link/family.cpp
     link/family.hpp
     link/gaussian.cpp
-    link/gaussian.hpp src/info.cpp src/info.hpp)
+    link/gaussian.hpp
+    src/info.cpp
+    src/info.hpp)
 
 include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party")
 include_directories(${ARMADILLO_INCLUDE_DIRS})

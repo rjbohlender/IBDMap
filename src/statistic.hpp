@@ -21,7 +21,6 @@
 class Statistic {
   arma::sp_colvec data;
   std::shared_ptr<std::vector<Indexer>> indexer;
-  std::shared_ptr<std::vector<std::string>> samples;
   std::vector<std::vector<int>> phenotypes;
   Parameters params;
 
@@ -29,7 +28,21 @@ class Statistic {
 
   std::vector<std::pair<arma::sword, arma::sword>> pairs;
 
-  void test_group_permutation();
+  std::mt19937 gen;
+
+  static void x1(int y, double &cscs, double &cscn);
+  static void x0(int y, double &cscn, double &cncn);
+  void test_group_permutation() const;
+  void initialize();
+  void joint_shuffle(std::vector<std::vector<int>> &phen);
+  void joint_permute();
+  static void group_unpack(std::vector<std::vector<int>> &p_original,
+										const std::vector<std::vector<int>> &p_tmp,
+										const std::vector<arma::uword> &group_indices);
+  static void group_pack(const std::vector<std::vector<int>> &p_original,
+						 std::vector<std::vector<int>> &p_tmp,
+						 const std::vector<arma::uword> &groupIndices);
+  void build_output(std::stringstream &ss);
 
 public:
   bool done = false;
@@ -41,26 +54,23 @@ public:
 
   std::vector<double> original;
   std::vector<double> successes;
-  std::vector<double> permutations;
+  std::vector<size_t> permutations;
 
   std::vector<std::vector<double>> permuted;
   std::vector<std::vector<double>> permuted_cscs;
   std::vector<std::vector<double>> permuted_cscn;
   std::vector<std::vector<double>> permuted_cncn;
 
-  std::vector<arma::sword> rows;
-
   Statistic(arma::sp_colvec data_,
 			Breakpoint bp_,
 			std::shared_ptr<std::vector<Indexer>> indexer_,
-			std::shared_ptr<std::vector<std::string>> samples_,
 			std::vector<std::vector<int>> phenotypes_,
 			std::shared_ptr<Reporter> reporter_,
 			Parameters params_,
 			boost::optional<std::vector<std::vector<arma::uword>>> groups_,
 			boost::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms_);
 
-  double calculate(std::vector<int> &phenotypes_, double cscs_count, double cscn_count, double cncn_count, int k);
+  double calculate(std::vector<int> &phenotypes_, double cscs_count, double cscn_count, double cncn_count, size_t k);
 
   void run();
   void cleanup();

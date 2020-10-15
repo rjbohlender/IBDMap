@@ -306,7 +306,6 @@ class Parser {
 	  Statistic stat(data,
 					 bp,
 					 indexer,
-					 samples,
 					 phenotypes,
 					 reporter,
 					 params,
