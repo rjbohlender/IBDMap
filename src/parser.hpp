@@ -11,6 +11,8 @@
 #include <armadillo>
 #include <utility>
 #include <unordered_map>
+#include <optional>
+#include <set>
 
 #include "split.hpp"
 #include "isgzipped.hpp"
@@ -29,7 +31,6 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/iostreams/filtering_streambuf.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
-#include <boost/optional.hpp>
 
 template<class StringT>
 struct Source {
@@ -138,7 +139,7 @@ class Parser {
 
 	// Generate permutations if we have covariates
 	Permute permute(params.seed);
-	boost::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> bo_perms;
+	std::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> o_perms;
 	if (covariates && phenotypes.size() == 1) {
 	  auto permutation_ptr = std::make_shared<std::vector<std::vector<int32_t>>>();
 
@@ -162,7 +163,7 @@ class Parser {
 	  lr_out.close();
 
 	  permute.get_permutations(permutation_ptr, odds, (*indexer)[0].case_count, params.nperms, params.nthreads - 2);
-	  bo_perms = permutation_ptr;
+	  o_perms = permutation_ptr;
 	}
 
 	arma::wall_clock timer;
@@ -310,7 +311,7 @@ class Parser {
 					 reporter,
 					 params,
 					 groups,
-					 bo_perms);
+					 o_perms);
 	  threadpool.submit(std::move(stat));
 	  submitted++;
 	  // for(auto it = stats.begin(); it != stats.end(); it++) { // Cleanup as we go
@@ -563,10 +564,10 @@ public:
   unsigned long nbreakpoints;
   Parameters params;
   std::shared_ptr<Reporter> reporter;
-  boost::optional<std::vector<std::vector<arma::uword>>> groups;
-  boost::optional<arma::mat> covariates;
+  std::optional<std::vector<std::vector<arma::uword>>> groups;
+  std::optional<arma::mat> covariates;
   GeneticMap gmap;
-  boost::optional<Info> info;
+  std::optional<Info> info;
 
   /**
    * @brief Parser and data dispatcher
@@ -579,7 +580,7 @@ public:
    */
   Parser(StringT input_path,
 		 StringT pheno_path,
-		 boost::optional<StringT> cov_path,
+		 std::optional<StringT> cov_path,
 		 Parameters params_,
 		 std::shared_ptr<Reporter> reporter_,
 		 GeneticMap &gmap_)

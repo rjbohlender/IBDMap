@@ -61,25 +61,23 @@ public:
    * @brief Collects multiple genetic maps into a single object
    * @param paths Set of paths, one or more
    */
-  explicit GeneticMap(const std::vector<std::string> &paths) {
-    if(paths.empty()) {
+  explicit GeneticMap(const std::string &path) {
+    if(path.empty()) {
       throw std::runtime_error("ERROR: no filepaths given to the genetic map object.");
     }
-    for(auto &path : paths) {
-	  IsGzipped<std::string> is_gzipped;
-	  boost::iostreams::filtering_streambuf<boost::iostreams::input> streambuf;
-	  std::ifstream ifs;
-	  if (is_gzipped(path)) {
-		ifs.open(path, std::ios_base::in | std::ios_base::binary);
-		streambuf.push(boost::iostreams::gzip_decompressor());
-		streambuf.push(ifs);
-	  } else {
-		ifs.open(path, std::ios_base::in);
-		streambuf.push(ifs);
-	  }
-	  std::istream is(&streambuf);
-	  parse(is);
-    }
+	IsGzipped<std::string> is_gzipped;
+	boost::iostreams::filtering_streambuf<boost::iostreams::input> streambuf;
+	std::ifstream ifs;
+	if (is_gzipped(path)) {
+	  ifs.open(path, std::ios_base::in | std::ios_base::binary);
+	  streambuf.push(boost::iostreams::gzip_decompressor());
+	  streambuf.push(ifs);
+	} else {
+	  ifs.open(path, std::ios_base::in);
+	  streambuf.push(ifs);
+	}
+	std::istream is(&streambuf);
+	parse(is);
   }
 
   /**

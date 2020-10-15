@@ -34,7 +34,7 @@ class Statistic {
   static void x0(int y, double &cscn, double &cncn);
   void test_group_permutation() const;
   void initialize();
-  void joint_shuffle(std::vector<std::vector<int>> &phen);
+  static void joint_shuffle(std::vector<std::vector<int>> &phen, std::mt19937 &gen);
   void joint_permute();
   static void group_unpack(std::vector<std::vector<int>> &p_original,
 										const std::vector<std::vector<int>> &p_tmp,
@@ -49,8 +49,8 @@ public:
 
   Breakpoint bp;
 
-  boost::optional<std::vector<std::vector<arma::uword>>> groups;
-  boost::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms;
+  std::optional<std::vector<std::vector<arma::uword>>> groups;
+  std::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms;
 
   std::vector<double> original;
   std::vector<double> successes;
@@ -67,8 +67,8 @@ public:
 			std::vector<std::vector<int>> phenotypes_,
 			std::shared_ptr<Reporter> reporter_,
 			Parameters params_,
-			boost::optional<std::vector<std::vector<arma::uword>>> groups_,
-			boost::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms_);
+			std::optional<std::vector<std::vector<arma::uword>>> groups_,
+			std::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms_);
 
   double calculate(std::vector<int> &phenotypes_, double cscs_count, double cscn_count, double cncn_count, size_t k);
 

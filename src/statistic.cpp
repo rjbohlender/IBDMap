@@ -14,8 +14,8 @@ Statistic::Statistic(arma::sp_colvec data_,
 					 std::vector<std::vector<int>> phenotypes_,
 					 std::shared_ptr<Reporter> reporter_,
 					 Parameters params_,
-					 boost::optional<std::vector<std::vector<arma::uword>>> groups_,
-					 boost::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms_) :
+					 std::optional<std::vector<std::vector<arma::uword>>> groups_,
+					 std::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms_) :
 	data(std::move(data_)), indexer(std::move(indexer_)), phenotypes(std::move(phenotypes_)), params(std::move(params_)),
 	bp(std::move(bp_)),
 	reporter(std::move(reporter_)), groups(std::move(groups_)), perms(std::move(perms_)), gen(params.seed) {
@@ -186,35 +186,12 @@ void Statistic::test_group_permutation() const {
 	std::cerr << std::endl;
   }
 
-  std::mt19937 gen(params.seed);
+  std::mt19937 tgen(params.seed);
   for (const auto &v : *tgroups) { // For each of the set of group indices
 	std::vector<std::vector<int>> tphenotypes_tmp;
-	for (k = 0; k < tphenotypes.size(); k++) {
-	  try {
-		tphenotypes_tmp.emplace_back(std::vector<int>(v.size(), 0));
-	  } catch (std::length_error &e) {
-		std::cerr << "failed to emplace at line " << __LINE__ << std::endl;
-	  }
-	  int x = 0;
-	  for (const auto &i : v) {
-		tphenotypes_tmp[k][x] = tphenotypes[k][i];
-		x++;
-	  }
-	}
-	for (unsigned long i = tphenotypes_tmp[0].size() - 1; i > 0; i--) { // Shuffle the indices
-	  std::uniform_int_distribution<> dis(0, i);
-	  int j = dis(gen);
-	  for (k = 0; k < tphenotypes.size(); k++) {
-		std::swap(tphenotypes_tmp[k][i], tphenotypes_tmp[k][j]);
-	  }
-	}
-	for (k = 0; k < tphenotypes.size(); k++) {
-	  int x = 0;
-	  for (const auto &i : v) {
-		tphenotypes[k][i] = tphenotypes_tmp[k][x];
-		x++;
-	  }
-	}
+	group_pack(tphenotypes, tphenotypes_tmp, v);
+	joint_shuffle(tphenotypes_tmp, tgen);
+	group_unpack(tphenotypes, tphenotypes_tmp, v);
   }
   std::cerr << "Test phenotypes after shuffle\n";
   for (k = 0; k < tphenotypes.size(); k++) {
@@ -239,11 +216,11 @@ void Statistic::run() {
 		for (const auto &groupIndices : *groups) {
 		  std::vector<std::vector<int>> phenotypes_tmp;
 		  group_pack(phenotypes, phenotypes_tmp, groupIndices);
-		  joint_shuffle(phenotypes_tmp);
+		  joint_shuffle(phenotypes_tmp, gen);
 		  group_unpack(phenotypes, phenotypes_tmp, groupIndices);
 		}
 	  } else {
-		joint_shuffle(phenotypes);
+		joint_shuffle(phenotypes, gen);
 	  }
 	}
 	joint_permute();
@@ -303,17 +280,22 @@ void Statistic::group_unpack(std::vector<std::vector<int>> &p_original,
 }
 
 void Statistic::joint_permute() {
+  double val;
   for (auto [i, p] : Enumerate(phenotypes)) {
-	double val = calculate(p, (*indexer)[i].case_case, (*indexer)[i].case_cont, (*indexer)[i].cont_cont, i);
-	if (val > original[i]) {
-	  successes[i]++;
+    if (perms) {
+	  val = calculate(p, (*indexer)[0].case_case, (*indexer)[0].case_cont, (*indexer)[0].cont_cont, 0);
+    } else {
+	  val = calculate(p, (*indexer)[i].case_case, (*indexer)[i].case_cont, (*indexer)[i].cont_cont, i);
+    }
+	if (val > original[0]) {
+	  successes[0]++;
 	}
-	permutations[i]++;
-	permuted[i].push_back(val);
+	permutations[0]++;
+	permuted[0].push_back(val);
   }
 }
 
-void Statistic::joint_shuffle(std::vector<std::vector<int>> &phen) {
+void Statistic::joint_shuffle(std::vector<std::vector<int>> &phen, std::mt19937 &gen) {
   for (size_t i = phen[0].size() - 1; i > 0; i--) {
 	std::uniform_int_distribution<> dis(0, i);
 	int j = dis(gen);
@@ -324,13 +306,13 @@ void Statistic::joint_shuffle(std::vector<std::vector<int>> &phen) {
 }
 
 void Statistic::initialize() {
-  for (auto idx : (*indexer)) {
+  for (auto [i, idx] : Enumerate(*indexer)) {
 	permuted.emplace_back();
 	permuted_cscs.emplace_back();
 	permuted_cscn.emplace_back();
 	permuted_cncn.emplace_back();
 	original.push_back(
-		calculate(idx.phenotypes, idx.case_case, idx.case_cont, idx.cont_cont, 0));
+		calculate(idx.phenotypes, idx.case_case, idx.case_cont, idx.cont_cont, i));
 	successes.push_back(0);
 	permutations.push_back(0);
   }

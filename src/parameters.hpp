@@ -5,27 +5,31 @@
 #ifndef CARVAIBD_PARAMETERS_HPP
 #define CARVAIBD_PARAMETERS_HPP
 
-#include <boost/optional.hpp>
+#include <optional>
 #include <armadillo>
 
 /**
  * @brief Runtime parameters
  */
 struct Parameters {
-  unsigned long nperms;
-  unsigned long nthreads;
+  std::string input;
+  std::string pheno;
+  std::string gmap;
+  std::optional<std::string> cov;
+  std::optional<std::string> info;
+  size_t nperms;
+  size_t nthreads;
   std::string output_path;
-  unsigned int seed;
-  boost::optional<arma::uword> lower_bound;
+  unsigned seed;
+  std::optional<arma::uword> lower_bound;
   bool swap;
   bool contcont;
   double min_dist;
-  boost::optional<double> rsquared;
+  std::optional<double> rsquared;
   bool verbose;
   bool enable_testing;
-  boost::optional<std::vector<int>> range;
-  boost::optional<double> cM;
-  boost::optional<double> AF;
-  boost::optional<std::string> info;
+  std::optional<std::vector<int>> range;
+  std::optional<double> cM;
+  std::optional<double> AF;
 };
 #endif //CARVAIBD_PARAMETERS_HPP
