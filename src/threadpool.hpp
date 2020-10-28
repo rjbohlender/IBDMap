@@ -36,66 +36,58 @@ class ThreadPool {
   std::vector<std::thread> threads;
   JoinThreads joiner;
   Parameters params;
-  void worker_thread()
-  {
-    std::unique_lock<std::mutex> lk(mut);
-    while(!done || ntasks > 0)
-	{
-      cv.wait_for(lk, std::chrono::seconds(1), [this] { return !work_queue.empty() || done; });
-      if(!work_queue.empty()) {
-        Stat task = std::move(work_queue.front());
-        work_queue.pop();
+  void worker_thread() {
+	std::unique_lock<std::mutex> lk(mut);
+	while (!done || ntasks > 0) {
+	  cv.wait_for(lk, std::chrono::seconds(1), [this] { return !work_queue.empty() || done; });
+	  if (!work_queue.empty()) {
+		Stat task = std::move(work_queue.front());
+		work_queue.pop();
 
-        // Done with queue; unlock
-        lk.unlock();
-        task.run();
-        ntasks--;
+		// Done with queue; unlock
+		lk.unlock();
+		task.run();
+		ntasks--;
 
-        lk.lock();
-      }
+		lk.lock();
+	  }
 	}
   }
 public:
   std::atomic<bool> done;
   std::atomic<int> ntasks;
   explicit ThreadPool(Parameters params_) :
-  	done(false), ntasks(0), nsubmitted(0), joiner(threads), params(std::move(params_))
-  {
-    unsigned const thread_count=params.nthreads - 2;
-	try
-	{
-	  for(unsigned i = 0; i < thread_count; ++i)
-	  {
-	    threads.emplace_back(
-	    	std::thread(&ThreadPool::worker_thread, this));
+	  done(false), ntasks(0), nsubmitted(0), joiner(threads), params(std::move(params_)) {
+	unsigned const thread_count = params.nthreads - 2;
+	try {
+	  for (unsigned i = 0; i < thread_count; ++i) {
+		threads.emplace_back(
+			std::thread(&ThreadPool::worker_thread, this));
 	  }
 	}
-	catch (...)
-	{
-	  done=true;
+	catch (...) {
+	  done = true;
 	  throw;
 	}
   }
-  ~ThreadPool()
-  {
-    done=true;
-    cv.notify_all();
+  ~ThreadPool() {
+	done = true;
+	cv.notify_all();
 	while (!work_queue.empty() || ntasks > 0) {
 	  std::this_thread::sleep_for(std::chrono::nanoseconds(100000000));
 	}
   }
 
-  void submit(Stat &&f)
-  {
-    std::unique_lock lk(mut);
-    while(ntasks > params.nthreads + 5) {
-      std::this_thread::sleep_for(std::chrono::nanoseconds(100000000));
+  void submit(Stat &&f) {
+	std::unique_lock lk(mut);
+	while (ntasks > params.nthreads + 5) {
+	  std::this_thread::sleep_for(std::chrono::nanoseconds(100000000));
 	}
 	work_queue.push(std::move(f));
 	ntasks++;
-    nsubmitted++;
-    lk.unlock();
-    cv.notify_all();
+	nsubmitted++;
+	lk.unlock();
+	cv.notify_all();
   }
 };
 

@@ -166,6 +166,13 @@ class Parser {
 	  o_perms = permutation_ptr;
 	}
 
+	#ifndef NDEBUG
+		if (params.enable_testing) {
+		  Statistic::test_statistic();
+		  Statistic::test_group_permutation(params.seed);
+		}
+	#endif
+
 	arma::wall_clock timer;
 	long lineno = -1;
 	std::map<std::string, int> indices;

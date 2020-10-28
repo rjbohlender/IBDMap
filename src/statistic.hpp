@@ -32,13 +32,12 @@ class Statistic {
 
   static void x1(int y, double &cscs, double &cscn);
   static void x0(int y, double &cscn, double &cncn);
-  void test_group_permutation() const;
   void initialize();
   static void joint_shuffle(std::vector<std::vector<int>> &phen, std::mt19937 &gen);
   void joint_permute();
   static void group_unpack(std::vector<std::vector<int>> &p_original,
-										const std::vector<std::vector<int>> &p_tmp,
-										const std::vector<arma::uword> &group_indices);
+						   const std::vector<std::vector<int>> &p_tmp,
+						   const std::vector<arma::uword> &group_indices);
   static void group_pack(const std::vector<std::vector<int>> &p_original,
 						 std::vector<std::vector<int>> &p_tmp,
 						 const std::vector<arma::uword> &groupIndices);
@@ -74,6 +73,8 @@ public:
 
   void run();
   void cleanup();
+  static void test_statistic();
+  static void test_group_permutation(unsigned int seed);
 };
 
 #endif //CARVAIBD_STATISTIC_HPP

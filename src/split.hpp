@@ -18,32 +18,32 @@ namespace RJBUtil {
  *
  * @remark  Removed string_view, as string_views can't be built from iterators.
  */
-template<typename _String_t>
+template<typename String_t>
 class Splitter {
 public:
   /** Aliases */
-  using string_type = _String_t;
+  using string_type = String_t;
   using const_iter = typename string_type::const_iterator;
-  using size_type = typename _String_t::size_type;
+  using size_type = typename String_t::size_type;
 
   /** Constructors */
   Splitter() = default;
-  Splitter(const string_type &str, const string_type &delim, bool allow_adjacent=false)
+  Splitter(const string_type &str, const string_type &delim, bool allow_adjacent = false)
 	  : data_(str), delim_(delim), allow_adjacent_(allow_adjacent) {
 	split();
   }
 
-  Splitter(const string_type &&str, const string_type &&delim, bool allow_adjacent=false)
+  Splitter(const string_type &&str, const string_type &&delim, bool allow_adjacent = false)
 	  : data_(str), delim_(delim), allow_adjacent_(allow_adjacent) {
 	split();
   }
 
-  Splitter(const string_type &str, const string_type &&delim, bool allow_adjacent=false)
+  Splitter(const string_type &str, const string_type &&delim, bool allow_adjacent = false)
 	  : data_(str), delim_(delim), allow_adjacent_(allow_adjacent) {
 	split();
   }
 
-  Splitter(const string_type &&str, const string_type &delim, bool allow_adjacent=false)
+  Splitter(const string_type &&str, const string_type &delim, bool allow_adjacent = false)
 	  : data_(str), delim_(delim), allow_adjacent_(allow_adjacent) {
 	split();
   }
@@ -91,7 +91,7 @@ public:
   }
 
   auto erase(std::vector<std::string>::iterator &pos) {
-    tokens_.erase(pos);
+	tokens_.erase(pos);
   }
 
   auto erase(std::vector<std::string>::const_iterator &pos) {
@@ -99,11 +99,11 @@ public:
   }
 
   auto front() {
-    return tokens_.front();
+	return tokens_.front();
   }
 
   auto back() {
-    return tokens_.back();
+	return tokens_.back();
   }
 
   template<typename _Integer>
@@ -150,11 +150,12 @@ private:
 	}
 #else
 	// Faster version described at: https://www.bfilipek.com/2018/07/string-view-perf-followup.html
-	for(auto first = data_.data(), second = data_.data(), last = first + data_.size(); second != last && first != last; first = second + 1) {
+	for (auto first = data_.data(), second = data_.data(), last = first + data_.size(); second != last && first != last;
+		 first = second + 1) {
 	  second = std::find_first_of(first, last, std::cbegin(delim_), std::cend(delim_));
 
-	  if(first != second || allow_adjacent_)
-	    tokens_.emplace_back(first, second-first);
+	  if (first != second || allow_adjacent_)
+		tokens_.emplace_back(first, second - first);
 	}
 #endif
   }

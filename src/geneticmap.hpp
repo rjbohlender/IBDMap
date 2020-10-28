@@ -30,27 +30,27 @@ class GeneticMap {
   void parse(std::istream &is) {
 	// Format: pos	chr	cM -- tab separated, header in the file
 	std::string line;
-	while(std::getline(is, line)) {
+	while (std::getline(is, line)) {
 	  RJBUtil::Splitter<std::string_view> splitter(line, " \t");
 	  if (splitter[0] == "pos") { // Skip header
-	    continue;
+		continue;
 	  }
 	  std::string chrom;
 	  int pos;
 	  double gpos;
-	  if(!boost::starts_with(splitter[1], "chr")) {
-	    std::stringstream ss;
-	    ss << "chr" << splitter[1];
-	    chrom = ss.str();
+	  if (!boost::starts_with(splitter[1], "chr")) {
+		std::stringstream ss;
+		ss << "chr" << splitter[1];
+		chrom = ss.str();
 	  } else {
-	    chrom = splitter[1];
+		chrom = splitter[1];
 	  }
 	  pos = std::stoi(splitter[0]);
 	  gpos = std::stod(splitter[2]);
 
-	  if(gmap_.find(chrom) == gmap_.end()) {
-	    gmap_[chrom] = {};
-	    gmap_[chrom][pos] = gpos;
+	  if (gmap_.find(chrom) == gmap_.end()) {
+		gmap_[chrom] = {};
+		gmap_[chrom][pos] = gpos;
 	  } else {
 		gmap_[chrom][pos] = gpos;
 	  }
@@ -62,9 +62,9 @@ public:
    * @param paths Set of paths, one or more
    */
   explicit GeneticMap(const std::string &path) {
-    if(path.empty()) {
-      throw std::runtime_error("ERROR: no filepaths given to the genetic map object.");
-    }
+	if (path.empty()) {
+	  throw std::runtime_error("ERROR: no filepath given to the genetic map object.");
+	}
 	IsGzipped<std::string> is_gzipped;
 	boost::iostreams::filtering_streambuf<boost::iostreams::input> streambuf;
 	std::ifstream ifs;
@@ -91,14 +91,20 @@ public:
   std::pair<std::pair<int, double>, std::pair<int, double>> find_nearest(const std::string &chrom, int pos) {
 	// If variant found in gmap then return pair with equal values, otherwise return prior and following.
 	// The interpolation will drop out, leaving us with the correct value when the variant is found.
-    auto lower = std::lower_bound(gmap_[chrom].begin(), gmap_[chrom].end(), pos, [](auto v1, int pos) { return v1.first < pos; });
-	auto upper = std::upper_bound(gmap_[chrom].begin(), gmap_[chrom].end(), pos, [](int pos, auto v1) { return pos < v1.first; });
-	if(lower == upper) { // Value not found
+	auto lower = std::lower_bound(gmap_[chrom].begin(),
+								  gmap_[chrom].end(),
+								  pos,
+								  [](auto v1, int pos) { return v1.first < pos; });
+	auto upper = std::upper_bound(gmap_[chrom].begin(),
+								  gmap_[chrom].end(),
+								  pos,
+								  [](int pos, auto v1) { return pos < v1.first; });
+	if (lower == upper) { // Value not found
 	  if (lower == gmap_[chrom].begin()) { // Can't get lower value, return as is.
 		return std::make_pair(*lower, *upper);
 	  } else if (lower == gmap_[chrom].end()) { // Position falls outside map, return highest value
-	    lower--;
-	    upper--;
+		lower--;
+		upper--;
 		return std::make_pair(*lower, *upper);
 	  } else { // Get the value bracketing below
 		lower--;

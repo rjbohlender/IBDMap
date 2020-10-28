@@ -9,16 +9,16 @@
 #include <thread>
 
 class JoinThreads {
-  std::vector<std::thread>& threads;
+  std::vector<std::thread> &threads;
 public:
-  JoinThreads(std::vector<std::thread>& threads_)
-  : threads(threads_) {}
+  JoinThreads(std::vector<std::thread> &threads_)
+	  : threads(threads_) {}
   ~JoinThreads() {
-    for(unsigned long i = 0; i < threads.size(); ++i) {
-      if(threads[i].joinable()) {
-        threads[i].join();
-      }
-    }
+	for (unsigned long i = 0; i < threads.size(); ++i) {
+	  if (threads[i].joinable()) {
+		threads[i].join();
+	  }
+	}
   }
 };
 
