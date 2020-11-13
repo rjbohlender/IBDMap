@@ -116,6 +116,11 @@ void Statistic::run() {
 	  }
 	}
 	joint_permute();
+	if (params.adaptive) { // Only terminate early if all phenotypes are done
+	  if (std::all_of(successes.begin(), successes.end(), [&](double &v){ return v >= *params.adaptive; })) {
+	    break;
+	  }
+	}
   }
 
   if (params.verbose) {
