@@ -13,14 +13,11 @@
 #include "isgzipped.hpp"
 
 #include <map>
-// If removing abseil, use std::map, as it is still ordered
-
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/iostreams/filtering_streambuf.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 
 class GeneticMap {
-  // Can be changed for a std::map if abseil dependency is removed.
   std::map<std::string, std::map<int, double>> gmap_;
 
   /**
@@ -65,7 +62,6 @@ public:
 	if (path.empty()) {
 	  throw std::runtime_error("ERROR: no filepath given to the genetic map object.");
 	}
-	IsGzipped<std::string> is_gzipped;
 	boost::iostreams::filtering_streambuf<boost::iostreams::input> streambuf;
 	std::ifstream ifs;
 	if (is_gzipped(path)) {
@@ -85,8 +81,6 @@ public:
    * @param chrom Chromosome to search on
    * @param pos Position to search around
    * @return Pair of pairs with positions and recombination rates
-   *
-   * TODO: Instead of returning a pair of pairs, make a custom object that contains the information in a cleaner, self-documenting way.
    */
   std::pair<std::pair<int, double>, std::pair<int, double>> find_nearest(const std::string &chrom, int pos) {
 	// If variant found in gmap then return pair with equal values, otherwise return prior and following.

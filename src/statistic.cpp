@@ -7,7 +7,7 @@
 #include "statistic.hpp"
 #include "split.hpp"
 #include <Range/Enumerate.hpp>
-#include <fmt-7.0.3/include/fmt/ostream.h>
+#include <fmt/include/fmt/ostream.h>
 
 Statistic::Statistic(arma::sp_colvec data_,
 					 Breakpoint bp_,
@@ -119,8 +119,14 @@ void Statistic::run() {
   }
 
   if (params.verbose) {
-	std::cerr << bp.breakpoint.first << " " << bp.breakpoint.second << " cscs: " << permuted_cscs[0][0] << " cscn: "
-			  << permuted_cscn[0][0] << std::endl;
+	fmt::print(std::cerr,
+			   "{} {} cscs: {} cscn: {} cncn: {}\n",
+			   bp.breakpoint.first,
+			   bp.breakpoint.second,
+			   permuted_cscs[0][0],
+			   permuted_cncn[0][0],
+			   permuted_cncn[0][0]
+	);
   }
 
   // Output

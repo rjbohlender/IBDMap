@@ -9,7 +9,7 @@
 #include <iostream>
 #include <thread>
 #include <queue>
-#include <fmt-7.0.3/include/fmt/ostream.h>
+#include <fmt/include/fmt/ostream.h>
 #include "threadsafequeue.hpp"
 
 /**

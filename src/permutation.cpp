@@ -6,7 +6,7 @@
 #include <ctime>
 #include <thread>
 #include <cassert>
-#include <fmt-7.0.3/include/fmt/ostream.h>
+#include <fmt/include/fmt/ostream.h>
 #include "permutation.hpp"
 
 Permute::Permute()

@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(SugarPPIncludeDir ${CMAKE_SOURCE_DIR}/third_party/SugarPP)
 include_directories(${SugarPPIncludeDir})
 
-add_subdirectory(third_party/fmt-7.0.3)
+add_subdirectory(third_party/fmt/)
 
 set(Boost_USE_MULTITHREADED TRUE)
 
@@ -53,7 +53,12 @@ set(PROJECT_SUPPORT_FILES
     link/gaussian.cpp
     link/gaussian.hpp
     src/info.cpp
-    src/info.hpp)
+    src/info.hpp
+    src/math.hpp
+    src/math.cpp
+    src/parser.cpp
+    src/source.cpp
+    src/source.hpp)
 
 include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party")
 include_directories(${ARMADILLO_INCLUDE_DIRS})
