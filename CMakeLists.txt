@@ -3,9 +3,7 @@ project(carvaIBD)
 
 set(CMAKE_CXX_STANDARD 17)
 
-set(SugarPPIncludeDir ${CMAKE_SOURCE_DIR}/third_party/SugarPP)
-include_directories(${SugarPPIncludeDir})
-
+add_subdirectory(third_party/SugarPP/)
 add_subdirectory(third_party/fmt/)
 
 set(Boost_USE_MULTITHREADED TRUE)

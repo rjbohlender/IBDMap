@@ -6,7 +6,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include "statistic.hpp"
 #include "split.hpp"
-#include <Range/Enumerate.hpp>
+#include <SugarPP/include/sugarpp/range/enumerate.hpp>
 #include <fmt/include/fmt/ostream.h>
 
 Statistic::Statistic(arma::sp_colvec data_,
