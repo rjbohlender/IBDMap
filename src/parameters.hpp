@@ -36,7 +36,6 @@ public:
   std::optional<double> cM;
   std::optional<double> AF;
   std::optional<std::set<std::string>> sample_list;
-  std::optional<size_t> adaptive;
 
   void print(std::ostream &os) {
     fmt::print(os, "Input: {}\n", input);
@@ -54,9 +53,6 @@ public:
 	fmt::print(os, "Seed: {}\n", seed);
 	if (lower_bound) {
 	  fmt::print(os, "Lower Bound: {}\n", *lower_bound);
-	}
-	if (adaptive) {
-	  fmt::print(os, "Adaptive Threshold: {}\n", *adaptive);
 	}
 	fmt::print(os, "Swap: {}\n", swap);
 	fmt::print(os, "Contcont: {}\n", contcont);

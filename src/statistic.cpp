@@ -116,11 +116,6 @@ void Statistic::run() {
 	  }
 	}
 	joint_permute();
-	if (params.adaptive) { // Only terminate early if all phenotypes are done
-	  if (std::all_of(successes.begin(), successes.end(), [&](double &v){ return v >= *params.adaptive; })) {
-	    break;
-	  }
-	}
   }
 
   if (params.verbose) {
@@ -187,14 +182,14 @@ void Statistic::joint_permute() {
   for (auto[i, p] : Enumerate(phenotypes)) {
 	if (perms) {
 	  val = calculate(p, (*indexer)[0].case_case, (*indexer)[0].case_cont, (*indexer)[0].cont_cont, 0);
-	  if (val > original[0]) {
+	  if (val >= original[0]) {
 		successes[0]++;
 	  }
 	  permutations[0]++;
 	  permuted[0].push_back(val);
 	} else {
 	  val = calculate(p, (*indexer)[i].case_case, (*indexer)[i].case_cont, (*indexer)[i].cont_cont, i);
-	  if (val > original[i]) {
+	  if (val >= original[i]) {
 		successes[i]++;
 	  }
 	  permutations[i]++;
