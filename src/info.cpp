@@ -17,8 +17,8 @@ Info::Info(std::istream &ifs) {
 	  if (splitter[0] != "chr") {
 		throw (std::runtime_error("ERROR: Malformed info file. First field should be chr."));
 	  }
-	  if (splitter[1] != "segID") {
-		throw (std::runtime_error("ERROR: Malformed info file. Second field should be segID."));
+	  if (splitter[1] != "clusterID") {
+		throw (std::runtime_error("ERROR: Malformed info file. Second field should be clusterID."));
 	  }
 	  for (int i = 2; i < splitter.size(); i++) {
 		field_map[splitter[i]] = i - 2;
@@ -48,8 +48,9 @@ bool Info::filter_segment(const std::string &segment, const Parameters &params) 
   // If only a single is used, passing will depend on the single filter.
   bool AF = true;
   bool cM = true;
+  double af_val = get_field(segment, "freq");
   if (params.AF) {
-	AF = get_field(segment, "AF") < *params.AF;
+	AF = get_field(segment, "freq") < *params.AF;
   }
   if (params.cM) {
 	cM = get_field(segment, "cM") >= *params.cM;

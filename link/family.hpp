@@ -17,6 +17,8 @@ struct Family {
   virtual arma::vec variance(const arma::vec &mu) noexcept = 0;
   virtual arma::vec mueta(const arma::vec &eta) noexcept = 0;
   virtual arma::vec dev_resids(const arma::vec &y, const arma::vec &mu, const arma::vec &weight) noexcept = 0;
+  virtual void initialize(arma::vec &y, arma::vec &n, arma::vec &mu, arma::vec &weight) noexcept = 0;
+  virtual double aic(arma::vec &y, arma::vec &n, arma::vec &mu, arma::vec &weight, double dev, double rank) noexcept = 0;
 };
 
 #endif //PERMUTE_ASSOCIATE_LINK_HPP

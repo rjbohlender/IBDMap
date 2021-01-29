@@ -40,18 +40,34 @@ void Parser::parse_input(std::istream &is) {
   arma::wall_clock timer;
   long lineno = -1;
   std::map<std::string, int> indices;
+  long long total_delta = 0;
   while (std::getline(is, line)) {
-	if (boost::starts_with(line, "##")) {
-	  // In header, process and continue
-	  line = line.substr(2, line.size());
+	if (params.dash && boost::starts_with(line, "##")) {
+	  // Processing Header
+	  // Example:
+	  // ####cluster: clusterID:IIDs:hapIDs
+	  // ##singleton: IID1-IID2:hapID1-hapID2:cM
+	  size_t header_chars = 0;
+	  for (const auto c : line) {
+	    if (c == '#') {
+	      header_chars++;
+	    }
+	  }
+	  line = line.substr(header_chars, line.size()); // Strip the leading header characters.
+
 	  RJBUtil::Splitter<std::string> hsplit(line, ":");
-	  auto idx_it = std::find(hsplit.begin(), hsplit.end(), "ID1-ID2");
-	  indices["ID1-ID2"] = std::distance(hsplit.begin(), idx_it);
-	  idx_it = std::find(hsplit.begin(), hsplit.end(), "segID");
-	  indices["segID"] = std::distance(hsplit.begin(), idx_it);
+
+	  // There are two breakpoint classes to handle. cluster and singleton.
+	  // IDs that are expected to be present:
+	  // clusterID, IIDs, hapIDs, IID1-IID2, hapID1-hapID2, cM
+	  for (auto it = hsplit.begin() + 1; it != hsplit.end(); it++) {
+	    indices[*it] = std::distance(hsplit.begin() + 1, it);
+	  }
+
 	  continue;
 	}
 
+	// Legacy format handling
 	lineno++;
 	if (lineno == 0) { // Skip the header
 	  if (indices.find("ID1-ID2") == indices.end()) {
@@ -77,14 +93,28 @@ void Parser::parse_input(std::istream &is) {
 	  }
 	}
 
-	RJBUtil::Splitter<std::string_view> additions(splitter[splitter.size() - 2], " ");
-	RJBUtil::Splitter<std::string_view> deletions(splitter[splitter.size() - 1], " ");
 	// Initialize breakpoint
 	Breakpoint bp{};
 	bp.breakpoint = std::make_pair(chrom, splitter[1]);
 
-	update_data(data, indices, additions, bp, 1);
-	update_data(data, indices, deletions, bp, -1);
+	if (params.dash) {
+	  // chr pos n.cluster n.cluster.haplotype n.cluster.pair n.singleton.pair cluster.add cluster.del singleton.add singleton.del
+	  RJBUtil::Splitter<std::string> cluster_add(splitter[splitter.size() - 4], " ");
+	  RJBUtil::Splitter<std::string> cluster_del(splitter[splitter.size() - 3], " ");
+	  RJBUtil::Splitter<std::string> singleton_add(splitter[splitter.size() - 2], " ");
+	  RJBUtil::Splitter<std::string> singleton_del(splitter[splitter.size() - 1], " ");
+
+	  update_data(data, indices, cluster_del, bp, -1, true);
+	  update_data(data, indices, singleton_del, bp, -1, false);
+	  update_data(data, indices, cluster_add, bp, 1, true);
+	  update_data(data, indices, singleton_add, bp, 1, false);
+	} else {
+	  RJBUtil::Splitter<std::string> additions(splitter[splitter.size() - 2], " ");
+	  RJBUtil::Splitter<std::string> deletions(splitter[splitter.size() - 1], " ");
+
+	  update_data(data, indices, additions, bp, 1, false);
+	  update_data(data, indices, deletions, bp, -1, false);
+	}
 
 	// Must follow data update -- Data format is just change from previous breakpoint so skipping update is impossible
 	std::pair<std::pair<int, double>, std::pair<int, double>> nearest = gmap.find_nearest(chrom, pos);
@@ -109,10 +139,12 @@ void Parser::parse_input(std::istream &is) {
 	  }
 	}
 
+#ifndef NDEBUG
 	if (params.verbose) {
 	  std::cerr << "dist: " << cur_dist - last_dist << std::endl;
 	  std::cerr << "fill rate: " << arma::accu(data) / data.n_elem << std::endl;
 	}
+#endif
 	last_dist = cur_dist;
 	last = data;
 
@@ -138,7 +170,7 @@ void Parser::generate_cov_adj_perms(Permute &permute,
 
   arma::vec Y = arma::conv_to<arma::vec>::from(phenotypes[0]);
   Binomial link;
-  GLM<Binomial> fit(*covariates, Y, link);
+  GLM<Binomial> fit(*covariates, Y, link, params);
   arma::vec odds = fit.mu_ / (1 - fit.mu_);
 
   std::string lr_path = params.output_path.empty() ? "lr.txt" : params.output_path + ".lr.txt";
@@ -167,9 +199,20 @@ bool Parser::check_sample_list(const std::string &sample_pair) {
 
 void Parser::update_data(arma::sp_vec &data,
 						 std::map<std::string, int> &indices,
-						 RJBUtil::Splitter<std::string_view> &changes,
+						 RJBUtil::Splitter<std::string> &changes,
 						 Breakpoint &bp,
-						 int value) {
+						 int value,
+						 bool cluster) {
+  std::string iid_key;
+  if (params.dash) {
+    if (cluster) {
+      iid_key = "IIDs";
+    } else {
+      iid_key = "IID1-IID2";
+    }
+  } else {
+    iid_key = "ID1-ID2";
+  }
   for (auto &entry : changes) {
 	if (entry == "NA") {
 	  break;
@@ -179,28 +222,62 @@ void Parser::update_data(arma::sp_vec &data,
 		continue;
 	  }
 	}
-	RJBUtil::Splitter<std::string_view> vals(entry, ":");
-	RJBUtil::Splitter<std::string> pairs(vals[indices["ID1-ID2"]], "-");
 
-	arma::sword row_idx = (*indexer)[0].translate(pairs[0], pairs[1]);
-	if (row_idx < 0) {
-	  continue;
+
+	if (params.dash && cluster) {
+	  RJBUtil::Splitter<std::string> vals(entry, ":");
+	  RJBUtil::Splitter<std::string> iids(vals[indices[iid_key]], ",");
+
+	  std::sort(iids.begin(), iids.end());
+
+	  for (auto it1 = iids.begin(); it1 != iids.end(); it1++) {
+	    for (auto it2 = it1 + 1; it2 != iids.end(); it2++) {
+		  arma::sword row_idx = (*indexer)[0].translate(*it1, *it2);
+
+		  int id_idx = indices["clusterID"];
+		  if (iids.size() / 35647. > *params.AF && row_idx >= 0) {
+		    fmt::print("Found filterable. Segment: {} Frequency: {}\n", vals[id_idx], iids.size() / 35647.);
+		  }
+
+		  auto ids = fmt::format("{},{}", *it1, *it2);
+		  if (row_idx < 0) {
+			continue;
+		  } else {
+			if (info) {
+			  if ((*info).filter_segment(vals[indices["clusterID"]], params)) {
+				continue;
+			  }
+			}
+			if (value > 0) {
+			  bp.ibd_pairs.emplace_back(std::make_pair(*it1, *it2));
+			}
+		  }
+		  data(row_idx) += value;
+	    }
+	  }
+
 	} else {
-	  if (info) {
-		if ((*info).filter_segment(vals[indices["segID"]], params)) {
-		  continue;
+	  RJBUtil::Splitter<std::string_view> vals(entry, ":");
+	  RJBUtil::Splitter<std::string> pairs(vals[indices[iid_key]], "-");
+
+	  std::sort(pairs.begin(), pairs.end());
+	  arma::sword row_idx = (*indexer)[0].translate(pairs[0], pairs[1]);
+
+	  auto ids = fmt::format("{},{}", pairs[0], pairs[1]);
+	  if (row_idx < 0) {
+		continue;
+	  } else {
+		if (value > 0) {
+		  try {
+			bp.segment_lengths.push_back(std::stod(vals[indices["cM"]]));
+		  } catch (std::invalid_argument &e) {
+			bp.segment_lengths.push_back(nan("1"));
+		  }
+		  bp.ibd_pairs.emplace_back(std::make_pair(pairs[0], pairs[1]));
 		}
 	  }
-	  if (value > 0) {
-		try {
-		  bp.segment_lengths.push_back(std::stod(vals[0]));
-		} catch (std::invalid_argument &e) {
-		  bp.segment_lengths.push_back(nan("1"));
-		}
-		bp.ibd_pairs.emplace_back(std::make_pair(pairs[0], pairs[1]));
-	  }
+	  data(row_idx) += value;
 	}
-	data(row_idx) += value;
   }
 }
 
@@ -243,7 +320,7 @@ void Parser::parse_pheno(std::istream &is) {
 		phenotypes[i - 1].push_back(std::stoi(splitter[i]));
 		if (phenotypes[i - 1].back() != 0 && phenotypes[i - 1].back() != 1) {
 		  if (params.verbose) {
-			std::cerr << splitter[0] << " " << splitter[1] << std::endl;
+		    fmt::print(std::cerr, "{} {}\n", splitter[0], splitter[1]);
 		  }
 		}
 		if (params.swap) { // Swap case-control status

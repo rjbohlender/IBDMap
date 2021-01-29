@@ -36,6 +36,7 @@ public:
   std::optional<double> cM;
   std::optional<double> AF;
   std::optional<std::set<std::string>> sample_list;
+  std::string optimizer = "irls";
 
   void print(std::ostream &os) {
     fmt::print(os, "Input: {}\n", input);

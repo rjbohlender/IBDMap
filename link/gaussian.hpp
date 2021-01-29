@@ -19,7 +19,7 @@ struct Gaussian : Family {
   const LinkID linkid;
   const std::string linkname;
 
-  explicit Gaussian(const std::string &link = "identity");
+  explicit Gaussian(const std::string &link="identity");
 
   arma::vec link(const arma::mat &X, const arma::vec &beta) noexcept override;
   arma::vec link(const arma::vec &mu) noexcept override;
@@ -28,6 +28,8 @@ struct Gaussian : Family {
   arma::vec variance(const arma::vec &mu) noexcept override;
   arma::vec mueta(const arma::vec &eta) noexcept override;
   arma::vec dev_resids(const arma::vec &y, const arma::vec &mu, const arma::vec &weight) noexcept override;
+  void initialize(arma::vec &y, arma::vec &n, arma::vec &mu, arma::vec &weight) noexcept override;
+  double aic(arma::vec &y, arma::vec &n, arma::vec &mu, arma::vec &weight, double dev, double rank) noexcept override;
 
   LinkID check_linkid(const std::string &link);
 };

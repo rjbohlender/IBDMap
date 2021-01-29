@@ -32,7 +32,8 @@ int main(int argc, char *argv[]) {
   app.add_option("-g,--gmap",
 				 params.gmap,
 				 "Recombination map files. Assumed to be three columns, "
-				 "position, chromosome, cM. Header line is required.")
+				 "position, chromosome, cM. Header line is required. "
+	 			 "Expected format is physical_pos\tchromosome\tgenetic_position")
 	 ->required();
   app.add_option("-c,--cov",
 				 params.cov,
@@ -144,7 +145,7 @@ int main(int argc, char *argv[]) {
   struct OutContainer {
 	std::string chrom;
 	int pos;
-	std::vector<std::vector<std::string>> data;
+	std::vector<std::vector<std::string>> data; // Two dimensional to handle multiple phenotypes in a single file
   };
   if (!params.output_path.empty()) {
 	std::ifstream reinput(params.output_path);

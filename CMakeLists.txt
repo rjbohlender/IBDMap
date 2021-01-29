@@ -8,9 +8,12 @@ add_subdirectory(third_party/fmt/)
 
 set(Boost_USE_MULTITHREADED TRUE)
 
+LIST(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/")
+
 find_package(Armadillo REQUIRED)
 find_package(Threads REQUIRED)
 find_package(Boost 1.66.0 COMPONENTS iostreams REQUIRED)
+find_package(Gperftools)
 
 if (UNIX)
     find_package(LAPACK REQUIRED)
@@ -72,5 +75,8 @@ target_link_libraries(carvaIBD ${LAPACK_LIBRARIES})
 target_link_libraries(carvaIBD ${BLAS_LIBRARIES})
 target_link_libraries(carvaIBD ${ARMADILLO_LIBRARIES})
 target_link_libraries(carvaIBD ${Boost_LIBRARIES})
+if(Gperftools_FOUND)
+  target_link_libraries(carvaIBD ${Gperftools_LIBRARIES})
+endif()
 
 target_compile_definitions(carvaIBD PRIVATE MAXCOLORS=10000000)

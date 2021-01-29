@@ -94,9 +94,10 @@ class Parser {
   bool check_sample_list(const std::string &sample_pair);
   void update_data(arma::sp_vec &data,
 				   std::map<std::string, int> &indices,
-				   RJBUtil::Splitter<std::string_view> &changes,
+				   RJBUtil::Splitter<std::string> &changes,
 				   Breakpoint &bp,
-				   int value);
+				   int value,
+				   bool cluster);
   void parse_pheno(std::istream &is);
   void parse_cov(std::istream &is);
 

@@ -27,7 +27,7 @@ struct Permute {
 	int seed;
   };
 
-  void get_permutations(std::shared_ptr<std::vector<std::vector<int32_t>>> permutations,
+  void get_permutations(const std::shared_ptr<std::vector<std::vector<int32_t>>>& permutations,
 						arma::vec &odds,
 						int ncases,
 						int nperm,

@@ -37,7 +37,7 @@ Statistic::calculate(std::vector<int> &phenotypes_, double cscs_count, double cs
 	  try {
 		pairs.emplace_back(p);
 	  } catch (std::length_error &e) {
-		std::cerr << "Failed to emplace or push at " << __LINE__ << std::endl;
+		fmt::print(std::cerr, "Failed to emplace or push at line {}.", __LINE__);
 		throw (e);
 	  }
 	}
@@ -53,7 +53,7 @@ Statistic::calculate(std::vector<int> &phenotypes_, double cscs_count, double cs
 	  x0(y, cscn, cncn);
 	} else if (x == -1) {
 	} else {
-	  std::cerr << "Phenotype: " << x << " p1: " << p1 << std::endl;
+	  fmt::print(std::cerr, "Phenotype: {} p1: {}\n", x, p1);
 	  throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
 	}
   }
@@ -78,7 +78,7 @@ void Statistic::x1(int y, double &cscs, double &cscn) {
 	cscn += 1.;
   } else if (y == -1) {
   } else {
-	std::cerr << "Phenotype: " << y << std::endl;
+    fmt::print(std::cerr, "Phenotype: {}\n", y);
 	throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
   }
 }
@@ -90,7 +90,7 @@ void Statistic::x0(int y, double &cscn, double &cncn) {
 	cncn += 1.;
   } else if (y == -1) {
   } else {
-	std::cerr << "Phenotype: " << y << std::endl;
+	fmt::print(std::cerr, "Phenotype: {}\n", y);
 	throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
   }
 }
@@ -140,11 +140,15 @@ void Statistic::run() {
 
 void Statistic::build_output(std::stringstream &ss) {
   for (auto[i, o] : Enumerate(original)) {
-	ss << bp.breakpoint.first << "\t" << bp.breakpoint.second << "\t" << o;
+    double cscs = (*indexer)[i].case_case;
+	double cscn = (*indexer)[i].case_cont;
+	double cncn = (*indexer)[i].cont_cont;
+    fmt::print(ss, "{}\t{}\t", bp.breakpoint.first, bp.breakpoint.second);
+    fmt::print(ss, "{}\t{}\t{}\t{}", permuted_cscs[i][0] / cscs, permuted_cscn[i][0] / cscn, permuted_cncn[i][0] / cncn, o);
 	for (int j = 0; j < params.nperms; j++) {
-	  ss << "\t" << permuted[i][j];
+	  fmt::print(ss, "\t{}", permuted[i][j]);
 	}
-	ss << std::endl;
+	fmt::print(ss, "\n");
   }
 }
 
@@ -155,7 +159,7 @@ void Statistic::group_pack(const std::vector<std::vector<int>> &p_original,
 	try {
 	  p_tmp.emplace_back(std::vector<int>(groupIndices.size(), 0));
 	} catch (std::length_error &e) {
-	  fmt::print(std::cerr, "Failed to emplace at line ", __LINE__);
+	  fmt::print(std::cerr, "Failed to emplace at line {}.", __LINE__);
 	}
 	int x = 0;
 	for (const auto &j : groupIndices) {

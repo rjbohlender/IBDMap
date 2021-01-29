@@ -7,7 +7,7 @@ scale datasets.
 
 This project has submodules that need to be initialized after cloning the directory from github. 
 
-```{bash}
+```bash
 git submodule init
 git submodule update
 ```
@@ -19,7 +19,7 @@ Dependencies:
     
 Create a build directory and run CMAKE and make from within the build directory:
 
-```{bash}
+```bash
 mkdir build && cd build
 
 cmake -DCMAKE_BUILD_TYPE=Release ..
