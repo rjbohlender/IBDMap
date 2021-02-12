@@ -117,6 +117,11 @@ int main(int argc, char *argv[]) {
 	params.sample_list = std::set<std::string>(tmp_sample_vec.begin(), tmp_sample_vec.end());
   }
 
+  if (params.info && !params.dash) {
+    fmt::print(std::cerr, "Info files are only supported with the --dash option.");
+    std::exit(-1);
+  }
+
   params.print(std::cerr);
   GeneticMap gmap(params.gmap);
 

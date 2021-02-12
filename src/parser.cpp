@@ -3,6 +3,7 @@
 //
 
 #include "parser.hpp"
+#include "inputvalidator.hpp"
 
 void Parser::count_breakpoints(std::istream &is) {
   nbreakpoints = 0;
@@ -22,6 +23,7 @@ void Parser::parse_input(std::istream &is) {
   unsigned long submitted = 0;
   double cur_dist = 0;
   double last_dist = 0;
+  InputValidator iv(params.dash);
 
   // Initialize ThreadPool
   ThreadPool<Statistic> threadpool(params);
@@ -69,6 +71,7 @@ void Parser::parse_input(std::istream &is) {
 
 	// Legacy format handling
 	lineno++;
+	iv.check_ibd(line, lineno);
 	if (lineno == 0) { // Skip the header
 	  if (indices.find("ID1-ID2") == indices.end()) {
 		indices["ID1-ID2"] = 1;
@@ -234,11 +237,6 @@ void Parser::update_data(arma::sp_vec &data,
 	    for (auto it2 = it1 + 1; it2 != iids.end(); it2++) {
 		  arma::sword row_idx = (*indexer)[0].translate(*it1, *it2);
 
-		  int id_idx = indices["clusterID"];
-		  if (iids.size() / 35647. > *params.AF && row_idx >= 0) {
-		    fmt::print("Found filterable. Segment: {} Frequency: {}\n", vals[id_idx], iids.size() / 35647.);
-		  }
-
 		  auto ids = fmt::format("{},{}", *it1, *it2);
 		  if (row_idx < 0) {
 			continue;
@@ -286,15 +284,20 @@ void Parser::parse_pheno(std::istream &is) {
   int phe = 1;
   std::string line;
   arma::uword lineno = 0;
+  long real_lineno = 0;
   std::map<std::vector<bool>, std::vector<arma::uword>> fill_patterns;
+  InputValidator iv(params.dash);
 
   bool notified = false;
 
   while (std::getline(is, line)) {
 	if (boost::starts_with(line, "#") || lineno == 0) { // Skip the header
+	  iv.check_pheno(line, real_lineno);
 	  lineno++;
+	  real_lineno++;
 	  continue;
 	}
+	iv.check_pheno(line, real_lineno);
 	RJBUtil::Splitter<std::string_view> splitter(line, " \t");
 	if (splitter.size() > 2 && !notified) {
 	  std::cerr << "Multiple phenotypes provided. Covariates will be ignored." << std::endl;
@@ -303,6 +306,7 @@ void Parser::parse_pheno(std::istream &is) {
 
 	if (!splitter.empty() && skip.find(splitter[0]) != skip.end()) {
 	  // Skip samples with missing cov values; don't increment lineno because we're treating them as if they don't exist
+	  real_lineno++;
 	  continue;
 	}
 
@@ -519,7 +523,7 @@ Parser::Parser(const std::string& input_path,
   if (params.info) {
 	Source info_source(*params.info);
 	std::istream info_stream(&(*info_source.streambuf));
-	info = Info(info_stream);
+	info = Info(info_stream, params);
   }
 
   Source bp_source(input_path);

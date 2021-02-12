@@ -5,12 +5,15 @@
 #include <fstream>
 #include "info.hpp"
 #include "split.hpp"
+#include "inputvalidator.hpp"
 
-Info::Info(std::istream &ifs) {
+Info::Info(std::istream &ifs, Parameters &params) {
   std::string line;
-  int lineno = -1;
+  long lineno = -1;
+  InputValidator iv(true);
   while (std::getline(ifs, line)) {
 	lineno++;
+	iv.check_info(line, lineno, bool(params.AF), bool(params.cM));
 	RJBUtil::Splitter<std::string> splitter(line, " \t");
 	if (lineno == 0) { // Handle header
 	  // First two fields should be fixed as chr and segID

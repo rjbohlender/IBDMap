@@ -11,6 +11,7 @@
 #include <sstream>
 #include "split.hpp"
 #include "isgzipped.hpp"
+#include "inputvalidator.hpp"
 
 #include <map>
 #include <boost/algorithm/string/predicate.hpp>
@@ -27,7 +28,11 @@ class GeneticMap {
   void parse(std::istream &is) {
 	// Format: pos	chr	cM -- tab separated, header in the file
 	std::string line;
+	int lineno = -1;
+	InputValidator iv(false);
 	while (std::getline(is, line)) {
+	  lineno++;
+	  iv.check_gmap(line, lineno);
 	  RJBUtil::Splitter<std::string_view> splitter(line, " \t");
 	  if (splitter[0] == "pos") { // Skip header
 		continue;

@@ -14,7 +14,7 @@ class Info {
   std::map<std::string, std::vector<double>> data;
   std::map<std::string, int> field_map;
 public:
-  explicit Info(std::istream &ifs);
+  Info(std::istream &ifs, Parameters &params);
 
   double get_field(const std::string &segment, const std::string &field);
   bool filter_segment(const std::string &segment, const Parameters &params);
