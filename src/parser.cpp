@@ -51,9 +51,9 @@ void Parser::parse_input(std::istream &is) {
 	  // ##singleton: IID1-IID2:hapID1-hapID2:cM
 	  size_t header_chars = 0;
 	  for (const auto c : line) {
-	    if (c == '#') {
-	      header_chars++;
-	    }
+		if (c == '#') {
+		  header_chars++;
+		}
 	  }
 	  line = line.substr(header_chars, line.size()); // Strip the leading header characters.
 
@@ -63,7 +63,7 @@ void Parser::parse_input(std::istream &is) {
 	  // IDs that are expected to be present:
 	  // clusterID, IIDs, hapIDs, IID1-IID2, hapID1-hapID2, cM
 	  for (auto it = hsplit.begin() + 1; it != hsplit.end(); it++) {
-	    indices[*it] = std::distance(hsplit.begin() + 1, it);
+		indices[*it] = std::distance(hsplit.begin() + 1, it);
 	  }
 
 	  continue;
@@ -208,13 +208,13 @@ void Parser::update_data(arma::sp_vec &data,
 						 bool cluster) {
   std::string iid_key;
   if (params.dash) {
-    if (cluster) {
-      iid_key = "IIDs";
-    } else {
-      iid_key = "IID1-IID2";
-    }
+	if (cluster) {
+	  iid_key = "IIDs";
+	} else {
+	  iid_key = "IID1-IID2";
+	}
   } else {
-    iid_key = "ID1-ID2";
+	iid_key = "ID1-ID2";
   }
   for (auto &entry : changes) {
 	if (entry == "NA") {
@@ -226,7 +226,6 @@ void Parser::update_data(arma::sp_vec &data,
 	  }
 	}
 
-
 	if (params.dash && cluster) {
 	  RJBUtil::Splitter<std::string> vals(entry, ":");
 	  RJBUtil::Splitter<std::string> iids(vals[indices[iid_key]], ",");
@@ -234,7 +233,7 @@ void Parser::update_data(arma::sp_vec &data,
 	  std::sort(iids.begin(), iids.end());
 
 	  for (auto it1 = iids.begin(); it1 != iids.end(); it1++) {
-	    for (auto it2 = it1 + 1; it2 != iids.end(); it2++) {
+		for (auto it2 = it1 + 1; it2 != iids.end(); it2++) {
 		  arma::sword row_idx = (*indexer)[0].translate(*it1, *it2);
 
 		  auto ids = fmt::format("{},{}", *it1, *it2);
@@ -251,18 +250,31 @@ void Parser::update_data(arma::sp_vec &data,
 			}
 		  }
 		  data(row_idx) += value;
-	    }
+		}
 	  }
 
 	} else {
 	  RJBUtil::Splitter<std::string_view> vals(entry, ":");
 	  RJBUtil::Splitter<std::string> pairs(vals[indices[iid_key]], "-");
 
+	  if (vals.size() < 2) {
+		throw (std::runtime_error("Incorrectly formatted entry in IBD input file."));
+	  }
+
 	  std::sort(pairs.begin(), pairs.end());
 	  arma::sword row_idx = (*indexer)[0].translate(pairs[0], pairs[1]);
 
+	  double segment_length;
+	  try {
+		segment_length = std::stod(vals[indices["cM"]]);
+	  } catch (std::exception &e) {
+		throw (std::runtime_error("Failed to convert segment length to numeric in IBD entry."));
+	  }
+
 	  auto ids = fmt::format("{},{}", pairs[0], pairs[1]);
 	  if (row_idx < 0) {
+		continue;
+	  } else if (params.cM && segment_length < *params.cM) {
 		continue;
 	  } else {
 		if (value > 0) {
@@ -324,7 +336,7 @@ void Parser::parse_pheno(std::istream &is) {
 		phenotypes[i - 1].push_back(std::stoi(splitter[i]));
 		if (phenotypes[i - 1].back() != 0 && phenotypes[i - 1].back() != 1) {
 		  if (params.verbose) {
-		    fmt::print(std::cerr, "{} {}\n", splitter[0], splitter[1]);
+			fmt::print(std::cerr, "{} {}\n", splitter[0], splitter[1]);
 		  }
 		}
 		if (params.swap) { // Swap case-control status
@@ -509,8 +521,8 @@ void Parser::parse_cov(std::istream &is) {
   covariates = design;
 }
 
-Parser::Parser(const std::string& input_path,
-			   const std::string& pheno_path,
+Parser::Parser(const std::string &input_path,
+			   const std::string &pheno_path,
 			   std::optional<std::string> cov_path,
 			   Parameters params_,
 			   std::shared_ptr<Reporter> reporter_,

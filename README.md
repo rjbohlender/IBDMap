@@ -87,3 +87,32 @@ Results can be combined using a python package provided along with carvaIBD. The
 python package IBDreduce is designed to use a small amount of memory to collapse
 all the results from across chromosomes, and across permutation sets within a
 chromosome.
+
+## Data Formatting
+
+We support a couple different file formats for IBD data. If the data has been formatted from GERMLINE, hapibd, or iLASH, then the following columns are required:
+
+```tsv
+chr pos segments pairs add del
+```
+
+If the data has been passed through DASH then there are two expected files. The data file should have the following columns:
+
+```tsv
+ chr pos n.cluster n.cluster.haplotype n.cluster.pair n.singleton.pair cluster.add cluster.del singleton.add singleton.del
+```
+
+The second file is an info file that contains information about the clusters found by DASH. The following columns are expected:
+
+```tsv
+chr clusterID start end count
+```
+
+Additionally there are two optional columns that are required if the corresponding filtering arguments are used. The
+filtering arguments are -af which filters on cluster frequency, and -cM which filters on cluster length. The columns
+are:
+
+```tsv
+freq cM
+```
+
