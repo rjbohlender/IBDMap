@@ -116,3 +116,7 @@ are:
 freq cM
 ```
 
+## Major Changes
+
+3/16/2021: Output files are gzipped by default now. This only applies when the -o option is given. Otherwise output is
+to std::cout.

@@ -2,6 +2,8 @@
 #include <optional>
 #include <thread>
 #include <fmt/include/fmt/ostream.h>
+#include <fmt/include/fmt/core.h>
+#include <boost/iostreams/device/file.hpp>
 #include "src/parser.hpp"
 #include "src/parameters.hpp"
 #include "src/reporter.hpp"
@@ -146,52 +148,8 @@ int main(int argc, char *argv[]) {
 				gmap);
 
   // Sort output
+  fmt::print(std::cerr, "Sorting output.\n");
+  reporter->resort();
   reporter.reset();  // Ensure output is complete
-  struct OutContainer {
-	std::string chrom;
-	int pos;
-	std::vector<std::vector<std::string>> data; // Two dimensional to handle multiple phenotypes in a single file
-  };
-  if (!params.output_path.empty()) {
-	std::ifstream reinput(params.output_path);
-
-	std::string line;
-	std::vector<OutContainer> sortable_output;
-	while (std::getline(reinput, line)) {
-	  RJBUtil::Splitter<std::string> splitter(line, " \t");
-	  std::vector<std::string> stats;
-	  if (splitter.size() > 0) {
-		if (sortable_output.empty() || sortable_output.back().pos != std::stoi(splitter[1])) {
-		  for (int i = 2; i < splitter.size(); i++) {
-			stats.push_back(splitter[i]);
-		  }
-		  OutContainer oc{
-			  splitter[0],
-			  std::stoi(splitter[1]),
-			  std::vector<std::vector<std::string>>()
-		  };
-		  oc.data.emplace_back(std::move(stats));
-		  sortable_output.emplace_back(std::move(oc));
-		} else {
-		  // Continuing the output
-		  for (int i = 2; i < splitter.size(); i++) {
-			stats.push_back(splitter[i]);
-		  }
-		  sortable_output.back().data.emplace_back(std::move(stats));
-		}
-	  }
-	}
-	std::sort(sortable_output.begin(),
-			  sortable_output.end(),
-			  [](OutContainer &a, OutContainer &b) { return a.pos < b.pos; });
-	reinput.close();
-	std::ofstream reoutput(params.output_path);
-	for (const auto &v: sortable_output) {
-	  for (const auto &w : v.data) {
-		fmt::print(reoutput, "{}\t{}\t{}\n", v.chrom, v.pos, fmt::join(w.begin(), w.end(), "\t"));
-	  }
-	}
-	reoutput.close();
-  }
   fmt::print(std::cerr, "Total runtime: {}\n", timer.toc());
 }
