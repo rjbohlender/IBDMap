@@ -1,9 +1,6 @@
 #include <iostream>
 #include <optional>
-#include <thread>
 #include <fmt/include/fmt/ostream.h>
-#include <fmt/include/fmt/core.h>
-#include <boost/iostreams/device/file.hpp>
 #include "src/parser.hpp"
 #include "src/parameters.hpp"
 #include "src/reporter.hpp"
@@ -20,32 +17,33 @@ int main(int argc, char *argv[]) {
   Parameters params;
   std::vector<int> tmp_range_vec;
   std::vector<std::string> tmp_sample_vec;
+  std::vector<double> tmp_cm_vec;
   CLI::App app{"carvaIBD is an IBD mapping tool for large scale IBD datasets."};
 
   app.add_option("-i,--input",
 				 params.input,
-				 "Unified IBD input file.")->required();
+				 "Unified IBD input file.")->required()->check(CLI::ExistingFile);
   app.add_option("-p,--pheno",
 				 params.pheno,
 				 "Path to file containing sample phenotype pairs. 1 for "
 				 "affected, 0 for unaffected, NA for sample to be skipped. "
 				 "Header line is required.")
-	 ->required();
+	 ->required()->check(CLI::ExistingFile);
   app.add_option("-g,--gmap",
 				 params.gmap,
 				 "Recombination map files. Assumed to be three columns, "
 				 "position, chromosome, cM. Header line is required. "
 	 			 "Expected format is physical_pos\tchromosome\tgenetic_position")
-	 ->required();
+	 ->required()->check(CLI::ExistingFile);
   app.add_option("-c,--cov",
 				 params.cov,
-				 "Path to covariates. Expected format is ID Value1 Value2 ...");
+				 "Path to covariates. Expected format is ID Value1 Value2 ...")->check(CLI::ExistingFile);
   app.add_option("--info",
 				 params.info,
-				 "Path to supporting info file. Expected format is chr segID ...");
+				 "Path to supporting info file. Expected format is chr segID ...")->check(CLI::ExistingFile);
   app.add_option("-t,--threads",
 				 params.nthreads,
-				 "Number of threads used in execution.");
+				 "Number of threads used in execution.")->default_val(std::thread::hardware_concurrency() - 1);
   app.add_option("-n,--permutations",
 				 params.nperms,
 				 "Number of permutations.");
@@ -55,15 +53,15 @@ int main(int argc, char *argv[]) {
 				 "that must be present at breakpoint for it to be included.");
   app.add_option("-m,--min_dist",
 				 params.min_dist,
-				 "Sets the minimum genetic distance between sites. "
+				 "Sets the minimum genetic distance between breakpoints. "
 				 "The parser will automatically skip breakpoints that are "
 				 "closer than the given distance. Default value of 0.0 cM.")
 	 ->default_val(0.0);
   app.add_option("--cm",
-				 params.cM,
+				 tmp_cm_vec,
 				 "Sets the minimum segment length for segments to be included. "
 				 "The parser will automatically skip segments that are smaller "
-				 "than the given length.");
+				 "than the given length.")->delimiter(',');
   app.add_option("--af",
 				 params.AF,
 				 "Sets the maximum allele frequency for segments to be "
@@ -118,6 +116,9 @@ int main(int argc, char *argv[]) {
   if (!tmp_sample_vec.empty()) {
 	params.sample_list = std::set<std::string>(tmp_sample_vec.begin(), tmp_sample_vec.end());
   }
+  if (!tmp_cm_vec.empty()) {
+    params.cM = tmp_cm_vec;
+  }
 
   if (params.info && !params.dash) {
     fmt::print(std::cerr, "Info files are only supported with the --dash option.");
@@ -131,9 +132,6 @@ int main(int argc, char *argv[]) {
 	fmt::print(std::cerr, "Constructing parameters.\n");
   }
 
-  if (params.nthreads < 3) {
-	throw (std::runtime_error("ERROR: Need at least 3 threads."));
-  }
   // Initialize reporter
   auto reporter = std::make_shared<Reporter>(params.output_path);
 

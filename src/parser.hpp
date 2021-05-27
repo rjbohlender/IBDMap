@@ -92,7 +92,7 @@ class Parser {
   void generate_cov_adj_perms(Permute &permute,
 							  std::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> &o_perms);
   bool check_sample_list(const std::string &sample_pair);
-  void update_data(arma::sp_vec &data,
+  void update_data(arma::sp_mat &data,
 				   std::map<std::string, int> &indices,
 				   RJBUtil::Splitter<std::string> &changes,
 				   Breakpoint &bp,

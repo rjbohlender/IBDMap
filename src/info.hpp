@@ -17,7 +17,7 @@ public:
   Info(std::istream &ifs, Parameters &params);
 
   double get_field(const std::string &segment, const std::string &field);
-  bool filter_segment(const std::string &segment, const Parameters &params);
+  bool filter_segment(const std::string &segment, const Parameters &params, const arma::uword col_num);
 };
 
 #endif //CARVAIBD_INFO_HPP

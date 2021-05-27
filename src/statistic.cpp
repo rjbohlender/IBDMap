@@ -9,7 +9,7 @@
 #include <SugarPP/include/sugarpp/range/enumerate.hpp>
 #include <fmt/include/fmt/ostream.h>
 
-Statistic::Statistic(arma::sp_colvec data_,
+Statistic::Statistic(arma::sp_mat data_,
 					 Breakpoint bp_,
 					 std::shared_ptr<std::vector<Indexer>> indexer_,
 					 std::vector<std::vector<int>> phenotypes_,
@@ -18,49 +18,53 @@ Statistic::Statistic(arma::sp_colvec data_,
 					 std::optional<std::vector<std::vector<arma::uword>>> groups_,
 					 std::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms_) :
 	data(std::move(data_)), indexer(std::move(indexer_)), phenotypes(std::move(phenotypes_)),
-	params(std::move(params_)),
+	params(std::move(params_)), keep_index(0),
 	bp(std::move(bp_)), reporter(std::move(reporter_)), groups(std::move(groups_)), perms(std::move(perms_)),
 	gen(params.seed) {
+  null_mean = std::vector<arma::vec>(phenotypes.size(), arma::vec(data.n_cols, arma::fill::zeros));
+  null_sd = std::vector<arma::vec>(phenotypes.size(), arma::vec(data.n_cols, arma::fill::zeros));
 }
 
-double
+arma::vec
 Statistic::calculate(std::vector<int> &phenotypes_, double cscs_count, double cscn_count, double cncn_count, size_t k) {
-  double statistic;
-
-  double cscs = 0;
-  double cscn = 0;
-  double cncn = 0;
-
   if (pairs.empty()) {
-	for (auto it = data.begin(); it != data.end(); ++it) {
-	  auto p = (*indexer)[k].back_translate(it.row());
-	  try {
-		pairs.emplace_back(p);
-	  } catch (std::length_error &e) {
-		fmt::print(std::cerr, "Failed to emplace or push at line {}.", __LINE__);
-		throw (e);
+    for (arma::uword i = 0; i < data.n_cols; i++) {
+	  pairs.emplace_back(std::vector<std::pair<arma::sword, arma::sword>>());
+	  arma::sp_colvec tmp = data.col(i);
+	  for (auto it = tmp.begin(); it != tmp.end(); ++it) {
+		auto p = (*indexer)[k].back_translate(it.row());
+		try {
+		  pairs[i].emplace_back(p);
+		} catch (std::length_error &e) {
+		  fmt::print(std::cerr, "Failed to emplace or push at line {}.", __LINE__);
+		  throw (e);
+		}
 	  }
-	}
+    }
   }
 
-  for (auto &p : pairs) {
-	auto&[p1, p2] = p;
-	int x = phenotypes_[p1];
-	int y = phenotypes_[p2];
-	if (x == 1) {
-	  x1(y, cscs, cscn);
-	} else if (x == 0) {
-	  x0(y, cscn, cncn);
-	} else if (x == -1) {
-	} else {
-	  fmt::print(std::cerr, "Phenotype: {} p1: {}\n", x, p1);
-	  throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
-	}
+  cscs = arma::vec(pairs.size(), arma::fill::zeros);
+  cscn = arma::vec(pairs.size(), arma::fill::zeros);
+  cncn = arma::vec(pairs.size(), arma::fill::zeros);
+
+  for (auto[i, col] : Enumerate(pairs)) {
+	for (auto &p : col) {
+	  auto&[p1, p2] = p;
+	  int x = phenotypes_[p1];
+	  int y = phenotypes_[p2];
+	  if (x == 1) {
+		x1(y, cscs(i), cscn(i));
+	  } else if (x == 0) {
+		x0(y, cscn(i), cncn(i));
+	  } else if (x == -1) {
+	  } else {
+		fmt::print(std::cerr, "Phenotype: {} p1: {}\n", x, p1);
+		throw (std::runtime_error("ERROR: invalid phenotype in calculate."));
+	  }
+    }
   }
 
-  permuted_cscs[k].push_back(cscs);
-  permuted_cscn[k].push_back(cscn);
-  permuted_cncn[k].push_back(cncn);
+  arma::vec statistic;
 
   if (params.contcont) {
 	statistic = cscs / cscs_count - cscn / cscn_count - cncn / cncn_count;
@@ -96,6 +100,7 @@ void Statistic::x0(int y, double &cscn, double &cncn) {
 }
 
 void Statistic::run() {
+  estimate_null_variance();
   initialize();
 
   arma::vec odds;
@@ -185,20 +190,27 @@ void Statistic::joint_permute() {
   double val;
   for (auto[i, p] : Enumerate(phenotypes)) {
 	if (perms) {
-	  val = calculate(p, (*indexer)[0].case_case, (*indexer)[0].case_cont, (*indexer)[0].cont_cont, 0);
+	  arma::vec ret = (calculate(p, (*indexer)[0].case_case, (*indexer)[0].case_cont, (*indexer)[0].cont_cont, 0) - null_mean[i]) / null_sd[i];
+	  keep_index = ret.index_max();
+	  val = ret(keep_index);
 	  if (val >= original[0]) {
 		successes[0]++;
 	  }
 	  permutations[0]++;
 	  permuted[0].push_back(val);
 	} else {
-	  val = calculate(p, (*indexer)[i].case_case, (*indexer)[i].case_cont, (*indexer)[i].cont_cont, i);
+	  arma::vec ret = (calculate(p, (*indexer)[i].case_case, (*indexer)[i].case_cont, (*indexer)[i].cont_cont, i) - null_mean[i]) / null_sd[i];
+	  keep_index = ret.index_max();
+	  val = ret(keep_index);
 	  if (val >= original[i]) {
 		successes[i]++;
 	  }
 	  permutations[i]++;
 	  permuted[i].push_back(val);
 	}
+	permuted_cscs[i].push_back(cscs(keep_index));
+	permuted_cscn[i].push_back(cscn(keep_index));
+	permuted_cncn[i].push_back(cncn(keep_index));
   }
 }
 
@@ -213,13 +225,18 @@ void Statistic::joint_shuffle(std::vector<std::vector<int>> &phen, std::mt19937 
 }
 
 void Statistic::initialize() {
+  arma::vec ret;
   for (auto[i, idx] : Enumerate(*indexer)) {
 	permuted.emplace_back();
 	permuted_cscs.emplace_back();
 	permuted_cscn.emplace_back();
 	permuted_cncn.emplace_back();
-	original.push_back(
-		calculate(idx.phenotypes, idx.case_case, idx.case_cont, idx.cont_cont, i));
+	ret = (calculate(idx.phenotypes, idx.case_case, idx.case_cont, idx.cont_cont, i) - null_mean[i])/ null_sd[i];
+	keep_index = ret.index_max();
+	original.push_back(ret(keep_index));
+	permuted_cscs[i].push_back(cscs(keep_index));
+	permuted_cscn[i].push_back(cscn(keep_index));
+	permuted_cncn[i].push_back(cncn(keep_index));
 	successes.push_back(0);
 	permutations.push_back(0);
   }
@@ -235,6 +252,37 @@ void Statistic::cleanup() {
   permuted_cscn.shrink_to_fit();
   permuted_cncn.clear();
   permuted_cncn.shrink_to_fit();
+}
+
+void Statistic::estimate_null_variance() {
+  std::mt19937 local_gen(0); // Null variance always uses the same seed to ensure consistency.
+  std::vector<arma::mat> var_vals(phenotypes.size(), arma::mat(1000, data.n_cols, arma::fill::zeros));
+
+  // Make a copy so we don't change the outcome of the later permutation
+  std::vector<std::vector<int>> mutable_phen = phenotypes;
+
+  for (int i = 0; i < 1000; i++) {
+    if (groups) {
+	  for (const auto &groupIndices : *groups) {
+		std::vector<std::vector<int>> phenotypes_tmp;
+		group_pack(mutable_phen, phenotypes_tmp, groupIndices);
+		joint_shuffle(phenotypes_tmp, local_gen);
+		group_unpack(mutable_phen, phenotypes_tmp, groupIndices);
+	  }
+	} else {
+      joint_shuffle(mutable_phen, local_gen);
+    }
+	for (auto[j, p] : Enumerate(mutable_phen)) {
+	  var_vals[j].row(i) = calculate(p, (*indexer)[j].case_case, (*indexer)[j].case_cont, (*indexer)[j].cont_cont, j).t();
+	}
+  }
+  for (int i = 0; i < phenotypes.size(); i++) {
+    null_mean[i] = arma::mean(var_vals[i], 0).t();
+	null_sd[i] = arma::sqrt(arma::var(var_vals[i], 0, 0).t());
+	if (!arma::all(null_sd[i])) { // Avoid dividing by zero in cases with no variation.
+	  null_sd[i].fill(1.);
+	}
+  }
 }
 
 void Statistic::test_statistic() {

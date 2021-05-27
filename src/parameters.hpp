@@ -13,8 +13,7 @@
 /**
  * @brief Runtime parameters
  */
-class Parameters {
-public:
+struct Parameters {
   std::string input;
   std::string pheno;
   std::string gmap;
@@ -33,7 +32,7 @@ public:
   bool enable_testing = false;
   bool dash = false;
   std::optional<std::vector<int>> range;
-  std::optional<double> cM;
+  std::optional<std::vector<double>> cM;
   std::optional<double> AF;
   std::optional<std::set<std::string>> sample_list;
   std::string optimizer = "irls";
@@ -67,7 +66,7 @@ public:
 	  fmt::print(os, "Range: {}\n", fmt::join(*range, "-"));
 	}
 	if (cM) {
-	  fmt::print(os, "cM: {}\n", *cM);
+	  fmt::print(os, "cM: {}\n", fmt::join(*cM, ","));
 	}
 	if (AF) {
 	  fmt::print(os, "AF: {}\n", *AF);

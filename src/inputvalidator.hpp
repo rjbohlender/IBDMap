@@ -7,6 +7,8 @@
 
 #include <string>
 
+bool exists(const std::string &path);
+
 /**
  * @brief Validator for input files to ensure properly formatted input.
  */

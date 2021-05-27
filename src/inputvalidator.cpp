@@ -2,12 +2,18 @@
 // Created by Bohlender,Ryan James on 2/11/21.
 //
 
+#include <sys/stat.h>
 #include <iostream>
 #include <fmt/include/fmt/ostream.h>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include "inputvalidator.hpp"
 #include "split.hpp"
+
+bool exists(const std::string &path) {
+  struct stat sb;
+  return (stat(path.c_str(), &sb) == 0);
+}
 
 InputValidator::InputValidator(bool dash)
 	: dash(dash) {}
@@ -120,7 +126,7 @@ void InputValidator::check_ibd(const std::string &line, size_t line_no) {
 
 		fmt::print(std::cerr,
 				   "IBD input header not properly formatted. Missing columns: {}",
-				   fmt::join(missing.begin(), missing.end(), " "));
+				   fmt::join(missing.begin(), missing.end(), ", "));
 		std::exit(-1);
 	  } else {
 		ibd_column_count = splitter.size();
@@ -162,7 +168,7 @@ void InputValidator::check_info(const std::string &line, size_t line_no, const b
 	if (missing.size() > 0) {
 	  fmt::print(std::cerr,
 				 "Info input header not properly formatted. Missing columns: {}",
-				 fmt::join(missing.begin(), missing.end(), " "));
+				 fmt::join(missing.begin(), missing.end(), ", "));
 	  std::exit(-1);
 	} else {
 	  info_column_count = splitter.size();

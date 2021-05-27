@@ -29,8 +29,9 @@ void Parser::parse_input(std::istream &is) {
   ThreadPool<Statistic> threadpool(params);
 
   // Maintain a single vector that we just update with each line
-  arma::sp_vec last(samples->size() * (samples->size() - 1) / 2.);
-  arma::sp_vec data(samples->size() * (samples->size() - 1) / 2.);
+  arma::uword n_cols = params.cM ? params.cM->size() : 1;
+  arma::sp_mat last(samples->size() * (samples->size() - 1) / 2., n_cols);
+  arma::sp_mat data(samples->size() * (samples->size() - 1) / 2., n_cols);
 
   // Generate permutations if we have covariates
   Permute permute(params.seed);
@@ -200,12 +201,13 @@ bool Parser::check_sample_list(const std::string &sample_pair) {
 	  && params.sample_list->find(vals[1]) == params.sample_list->end();
 }
 
-void Parser::update_data(arma::sp_vec &data,
+void Parser::update_data(arma::sp_mat &data,
 						 std::map<std::string, int> &indices,
 						 RJBUtil::Splitter<std::string> &changes,
 						 Breakpoint &bp,
 						 int value,
 						 bool cluster) {
+  arma::uword col_num = 0;
   std::string iid_key;
   if (params.dash) {
 	if (cluster) {
@@ -235,24 +237,24 @@ void Parser::update_data(arma::sp_vec &data,
 	  for (auto it1 = iids.begin(); it1 != iids.end(); it1++) {
 		for (auto it2 = it1 + 1; it2 != iids.end(); it2++) {
 		  arma::sword row_idx = (*indexer)[0].translate(*it1, *it2);
-
 		  auto ids = fmt::format("{},{}", *it1, *it2);
-		  if (row_idx < 0) {
-			continue;
-		  } else {
-			if (info) {
-			  if ((*info).filter_segment(vals[indices["clusterID"]], params)) {
-				continue;
+		  for (col_num = 0; col_num < data.n_cols; col_num++) {
+			if (row_idx < 0) {
+			  break;
+			} else {
+			  if (info) {
+				if ((*info).filter_segment(vals[indices["clusterID"]], params, col_num)) {
+				  continue;
+				}
+			  }
+			  if (value > 0) {
+				bp.ibd_pairs.emplace_back(std::make_pair(*it1, *it2));
 			  }
 			}
-			if (value > 0) {
-			  bp.ibd_pairs.emplace_back(std::make_pair(*it1, *it2));
-			}
+			data(row_idx, col_num) += value;
 		  }
-		  data(row_idx) += value;
 		}
 	  }
-
 	} else {
 	  RJBUtil::Splitter<std::string_view> vals(entry, ":");
 	  RJBUtil::Splitter<std::string> pairs(vals[indices[iid_key]], "-");
@@ -263,30 +265,31 @@ void Parser::update_data(arma::sp_vec &data,
 
 	  std::sort(pairs.begin(), pairs.end());
 	  arma::sword row_idx = (*indexer)[0].translate(pairs[0], pairs[1]);
-
-	  double segment_length;
-	  try {
-		segment_length = std::stod(vals[indices["cM"]]);
-	  } catch (std::exception &e) {
-		throw (std::runtime_error("Failed to convert segment length to numeric in IBD entry."));
-	  }
-
-	  auto ids = fmt::format("{},{}", pairs[0], pairs[1]);
-	  if (row_idx < 0) {
-		continue;
-	  } else if (params.cM && segment_length < *params.cM) {
-		continue;
-	  } else {
-		if (value > 0) {
-		  try {
-			bp.segment_lengths.push_back(std::stod(vals[indices["cM"]]));
-		  } catch (std::invalid_argument &e) {
-			bp.segment_lengths.push_back(nan("1"));
-		  }
-		  bp.ibd_pairs.emplace_back(std::make_pair(pairs[0], pairs[1]));
+	  for (col_num = 0; col_num < data.n_cols; col_num++) {
+		double segment_length = DBL_MAX;
+		try {
+		  segment_length = std::stod(vals[indices["cM"]]);
+		} catch (std::exception &e) {
+		  // throw (std::runtime_error("Failed to convert segment length to numeric in IBD entry."));
 		}
+
+		auto ids = fmt::format("{},{}", pairs[0], pairs[1]);
+		if (row_idx < 0) {
+		  break;
+		} else if (params.cM && segment_length < (*params.cM)[col_num]) {
+		  continue;
+		} else {
+		  if (value > 0) {
+			try {
+			  bp.segment_lengths.push_back(std::stod(vals[indices["cM"]]));
+			} catch (std::invalid_argument &e) {
+			  bp.segment_lengths.push_back(nan("1"));
+			}
+			bp.ibd_pairs.emplace_back(std::make_pair(pairs[0], pairs[1]));
+		  }
+		}
+		data(row_idx, col_num) += value;
 	  }
-	  data(row_idx) += value;
 	}
   }
 }
