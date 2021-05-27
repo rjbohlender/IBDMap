@@ -66,6 +66,22 @@ another, perhaps newer compiler:
 cmake -DCMAKE_CXX_COMPILER=<path_to_executable> ..
 ```
 
+## Program Execution
+
+Our IBD Mapping process requires several input files. Phenotype information should be provided for each sample. Any
+samples in the data without phenotype information are automatically dropped from analysis. IBD segments identified using
+an outside program, e.g., GERMLINE or iLASH, should be processed into our input format. Each breakpoint is a segment
+transition point where we either add new segment carriers or end IBD segments and delete carriers of those segments.
+Each breakpoint is the unit being tested in permutation. Also required are a genetic map file, and if the user is
+providing DASH processed data, an additional info file containing information about the identified segments.
+
+Each breakpoint is read, the data vector is updated according to the additions and deletions for the breakpoint, and
+then the breakpoint is submitted to a process queue to await a thread to work on it. For each breakpoint, we first
+calculate the variance of the test statistic under the null hypothesis using 1000 permutations on a separate, constant
+seed. All test statistics are scaled by the standard deviation of the null test statistic distribution, so that the
+statistics are all on the same scale. The original value of the test statistic is calculated, and the permuted test
+statistics are stored, and eventually output for all permutations.
+
 ## Map-Reduce
 
 Biobank scale datasets can require substantial computation time to complete

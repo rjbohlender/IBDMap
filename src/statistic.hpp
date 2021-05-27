@@ -31,8 +31,23 @@ class Statistic {
 
   std::mt19937 gen;
 
-  std::vector<arma::vec> null_mean;
-  std::vector<arma::vec> null_sd;
+  Breakpoint bp;
+
+  std::vector<double> original;
+  std::vector<double> successes;
+  std::vector<size_t> permutations;
+
+  std::optional<std::vector<std::vector<arma::uword>>> groups;
+  std::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms;
+
+  arma::vec cscs;
+  arma::vec cscn;
+  arma::vec cncn;
+
+  std::vector<std::vector<double>> permuted;
+  std::vector<std::vector<double>> permuted_cscs;
+  std::vector<std::vector<double>> permuted_cscn;
+  std::vector<std::vector<double>> permuted_cncn;
 
   static void x1(int y, double &cscs, double &cscn);
   static void x0(int y, double &cscn, double &cncn);
@@ -46,28 +61,9 @@ class Statistic {
 						 std::vector<std::vector<int>> &p_tmp,
 						 const std::vector<arma::uword> &groupIndices);
   void build_output(std::stringstream &ss);
-  void estimate_null_variance();
 
 public:
   bool done = false;
-
-  Breakpoint bp;
-
-  std::optional<std::vector<std::vector<arma::uword>>> groups;
-  std::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms;
-
-  std::vector<double> original;
-  std::vector<double> successes;
-  std::vector<size_t> permutations;
-
-  arma::vec cscs;
-  arma::vec cscn;
-  arma::vec cncn;
-
-  std::vector<std::vector<double>> permuted;
-  std::vector<std::vector<double>> permuted_cscs;
-  std::vector<std::vector<double>> permuted_cscn;
-  std::vector<std::vector<double>> permuted_cncn;
 
   Statistic(arma::sp_mat data_,
 			Breakpoint bp_,

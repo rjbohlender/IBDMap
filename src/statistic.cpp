@@ -19,10 +19,8 @@ Statistic::Statistic(arma::sp_mat data_,
 					 std::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms_) :
 	data(std::move(data_)), indexer(std::move(indexer_)), phenotypes(std::move(phenotypes_)),
 	params(std::move(params_)), keep_index(0),
-	bp(std::move(bp_)), reporter(std::move(reporter_)), groups(std::move(groups_)), perms(std::move(perms_)),
-	gen(params.seed) {
-  null_mean = std::vector<arma::vec>(phenotypes.size(), arma::vec(data.n_cols, arma::fill::zeros));
-  null_sd = std::vector<arma::vec>(phenotypes.size(), arma::vec(data.n_cols, arma::fill::zeros));
+	reporter(std::move(reporter_)), gen(params.seed), bp(std::move(bp_)), groups(std::move(groups_)), perms(std::move(perms_))
+	 {
 }
 
 arma::vec
@@ -100,7 +98,6 @@ void Statistic::x0(int y, double &cscn, double &cncn) {
 }
 
 void Statistic::run() {
-  estimate_null_variance();
   initialize();
 
   arma::vec odds;
@@ -190,7 +187,7 @@ void Statistic::joint_permute() {
   double val;
   for (auto[i, p] : Enumerate(phenotypes)) {
 	if (perms) {
-	  arma::vec ret = (calculate(p, (*indexer)[0].case_case, (*indexer)[0].case_cont, (*indexer)[0].cont_cont, 0) - null_mean[i]) / null_sd[i];
+	  arma::vec ret = calculate(p, (*indexer)[0].case_case, (*indexer)[0].case_cont, (*indexer)[0].cont_cont, 0);
 	  keep_index = ret.index_max();
 	  val = ret(keep_index);
 	  if (val >= original[0]) {
@@ -199,7 +196,7 @@ void Statistic::joint_permute() {
 	  permutations[0]++;
 	  permuted[0].push_back(val);
 	} else {
-	  arma::vec ret = (calculate(p, (*indexer)[i].case_case, (*indexer)[i].case_cont, (*indexer)[i].cont_cont, i) - null_mean[i]) / null_sd[i];
+	  arma::vec ret = calculate(p, (*indexer)[i].case_case, (*indexer)[i].case_cont, (*indexer)[i].cont_cont, i);
 	  keep_index = ret.index_max();
 	  val = ret(keep_index);
 	  if (val >= original[i]) {
@@ -231,7 +228,7 @@ void Statistic::initialize() {
 	permuted_cscs.emplace_back();
 	permuted_cscn.emplace_back();
 	permuted_cncn.emplace_back();
-	ret = (calculate(idx.phenotypes, idx.case_case, idx.case_cont, idx.cont_cont, i) - null_mean[i])/ null_sd[i];
+	ret = calculate(idx.phenotypes, idx.case_case, idx.case_cont, idx.cont_cont, i);
 	keep_index = ret.index_max();
 	original.push_back(ret(keep_index));
 	permuted_cscs[i].push_back(cscs(keep_index));
@@ -252,37 +249,6 @@ void Statistic::cleanup() {
   permuted_cscn.shrink_to_fit();
   permuted_cncn.clear();
   permuted_cncn.shrink_to_fit();
-}
-
-void Statistic::estimate_null_variance() {
-  std::mt19937 local_gen(0); // Null variance always uses the same seed to ensure consistency.
-  std::vector<arma::mat> var_vals(phenotypes.size(), arma::mat(1000, data.n_cols, arma::fill::zeros));
-
-  // Make a copy so we don't change the outcome of the later permutation
-  std::vector<std::vector<int>> mutable_phen = phenotypes;
-
-  for (int i = 0; i < 1000; i++) {
-    if (groups) {
-	  for (const auto &groupIndices : *groups) {
-		std::vector<std::vector<int>> phenotypes_tmp;
-		group_pack(mutable_phen, phenotypes_tmp, groupIndices);
-		joint_shuffle(phenotypes_tmp, local_gen);
-		group_unpack(mutable_phen, phenotypes_tmp, groupIndices);
-	  }
-	} else {
-      joint_shuffle(mutable_phen, local_gen);
-    }
-	for (auto[j, p] : Enumerate(mutable_phen)) {
-	  var_vals[j].row(i) = calculate(p, (*indexer)[j].case_case, (*indexer)[j].case_cont, (*indexer)[j].cont_cont, j).t();
-	}
-  }
-  for (int i = 0; i < phenotypes.size(); i++) {
-    null_mean[i] = arma::mean(var_vals[i], 0).t();
-	null_sd[i] = arma::sqrt(arma::var(var_vals[i], 0, 0).t());
-	if (!arma::all(null_sd[i])) { // Avoid dividing by zero in cases with no variation.
-	  null_sd[i].fill(1.);
-	}
-  }
 }
 
 void Statistic::test_statistic() {
