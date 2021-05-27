@@ -314,3 +314,4 @@ dkms.conf
 /cmake-build*/
 /BioVU/
 /log/
+/output/

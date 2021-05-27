@@ -1,6 +1,7 @@
 #include <iostream>
 #include <optional>
 #include <fmt/include/fmt/ostream.h>
+#include <sys/stat.h>
 #include "src/parser.hpp"
 #include "src/parameters.hpp"
 #include "src/reporter.hpp"
@@ -18,6 +19,7 @@ int main(int argc, char *argv[]) {
   std::vector<int> tmp_range_vec;
   std::vector<std::string> tmp_sample_vec;
   std::vector<double> tmp_cm_vec;
+
   CLI::App app{"carvaIBD is an IBD mapping tool for large scale IBD datasets."};
 
   app.add_option("-i,--input",
@@ -89,7 +91,7 @@ int main(int argc, char *argv[]) {
 				 "equal permutations.");
   app.add_option("-o,--output",
 				 params.output_path,
-				 "Output to a specified file. Default output is stdout.");
+				 "Output to a specified file. Default output is is /output/{date-time}.results.gz.");
   app.add_flag("--swap_pheno",
 			   params.swap,
 			   "Swap case-control status of individuals. Useful for "
@@ -108,6 +110,21 @@ int main(int argc, char *argv[]) {
 			   "Expect input to be formatted by DASH.");
 
   CLI11_PARSE(app, argc, argv);
+
+  // Default output location
+  if (params.output_path.empty()) {
+    const char* out_dir = "./output";
+    struct stat buffer;
+    if(stat(out_dir, &buffer) != 0) {
+      mkdir(out_dir, 0755);
+	}
+    char cur_time[100];
+    std::time_t t = std::time(nullptr);
+    std::strftime(cur_time, 99, "%F-%T", std::localtime(&t));
+	std::stringstream default_output;
+	default_output << out_dir << "/" << cur_time << ".results.gz";
+	params.output_path = default_output.str();
+  }
 
   // Have to handle this way because optional wrapped vector arguments don't seem to be supported.
   if (tmp_range_vec.size() == 2) {
