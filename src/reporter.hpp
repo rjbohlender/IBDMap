@@ -1,6 +1,9 @@
-//
-// Created by Bohlender,Ryan James on 10/2/19.
-//
+/**
+ * @file reporter.hpp
+ * @brief Results output classes
+ *
+ * Created by Bohlender,Ryan James on 10/2/19.
+ */
 
 #ifndef CARVAIBD_REPORTER_HPP
 #define CARVAIBD_REPORTER_HPP
@@ -19,6 +22,14 @@
 #include <boost/iostreams/device/file.hpp>
 #include <zstr/src/zstr.hpp>
 
+/**
+ * @brief Container for the results so they can be sorted.
+ *
+ * Our program is multithreaded and as a result the output is not necessarily
+ * ordered the same as it was input. The final step of analysis requires the
+ * output be sorted, so output is sorted in a final sorting step after writing
+ * out the results of every thread.
+ */
 struct OutContainer {
   std::string chrom;
   int pos;
@@ -27,6 +38,15 @@ struct OutContainer {
 
 /**
  * @brief Thread safe shared writing class
+ *
+ * Our program is multithreaded and thus can run into conflicts when writing
+ * with more than one thread to the same output. To solve this problem we
+ * implement a writing object that has a single shared state distributed amongst
+ * the threads. Using a lock and a queue, each thread can acquire the lock,
+ * submit a string for printing, and return. A condition variable is used to
+ * notify the print thread that a string has been submitted and the queue
+ * should be checked for additional work. Once the work is complete the lock is
+ * returned and the thread waits for additional work.
  */
 class Reporter {
   std::atomic_bool done;
@@ -64,6 +84,12 @@ class Reporter {
   }
 
 public:
+  /**
+   * @brief Contructor for the reporter
+   * @param output Path to the output file.
+   *
+   * Should always be instantiated inside a std::make_shared call.
+   */
   explicit Reporter(std::string output) :
 	  done(false), nstrings(0), nsubmitted(0), nwritten(0), out_path(std::move(output)) {
 	print_thread = std::thread(&Reporter::print, std::ref(*this));
@@ -82,6 +108,10 @@ public:
 	}
   }
 
+  /**
+   * @brief Locking submission function for submitting work
+   * @param s The string to be printed.
+   */
   void submit(const std::string &s) {
 	std::unique_lock<std::mutex> lk(mut);
 	string_queue.push(s);
@@ -91,7 +121,15 @@ public:
 	data_cond.notify_all();
   }
 
-  void resort() {
+  /**
+   * @brief Ensure that the output is in sorted order.
+   *
+   * Read through all the output, collect it, sort it by position, then
+   * write to a final file. Output is initially written to the output location
+   * with a .tmp extension added. All output is zipped to save space as the
+   * output can be quite large for large jobs.
+   */
+  void sort() {
     // Ensure printing is completed and print thread is terminated before sorting.
 	while (!string_queue.empty() || nstrings > 0) {
 	  fmt::print(std::cerr, "queue size: {} nstrings: {}\n", string_queue.size(), nstrings);
@@ -115,11 +153,11 @@ public:
 		line_no++;
 		RJBUtil::Splitter<std::string> splitter(line, " \t");
 		std::vector<std::string> stats;
-		if (splitter.size() > 0) {
+		if (splitter.size() > 0) { // Either the first phenotype, or a new position
 		  if (sortable_output.empty() || sortable_output.back().pos != std::stoi(splitter[1])) {
-			for (int i = 2; i < splitter.size(); i++) {
-			  stats.push_back(splitter[i]);
-			}
+		    // Same position output is guaranteed to be adjacent so we only need to check the back.
+		    // We need to allocate a new output container if we've reached a position we haven't seen
+		    std::copy(splitter.begin() + 2, splitter.end(), std::back_inserter(stats));
 			OutContainer oc{
 				splitter[0],
 				std::stoi(splitter[1]),
@@ -127,16 +165,12 @@ public:
 			};
 			oc.data.emplace_back(std::move(stats));
 			sortable_output.emplace_back(std::move(oc));
-		  } else {
-			// Continuing the output
-			for (int i = 2; i < splitter.size(); i++) {
-			  stats.push_back(splitter[i]);
-			}
+		  } else { // Continuing the output
+			std::copy(splitter.begin() + 2, splitter.end(), std::back_inserter(stats));
 			sortable_output.back().data.emplace_back(std::move(stats));
 		  }
 		}
 	  }
-	  fmt::print(std::cerr, "Lines read: {}\n", line_no);
 	  std::sort(sortable_output.begin(),
 				sortable_output.end(),
 				[](OutContainer &a, OutContainer &b) { return a.pos < b.pos; });

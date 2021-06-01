@@ -164,7 +164,7 @@ int main(int argc, char *argv[]) {
 
   // Sort output
   fmt::print(std::cerr, "Sorting output.\n");
-  reporter->resort();
+  reporter->sort();
   reporter.reset();  // Ensure output is complete
   fmt::print(std::cerr, "Total runtime: {}\n", timer.toc());
 }
