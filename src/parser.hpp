@@ -61,7 +61,7 @@
  * 	A 2D matrix, with rows = sample pairs, columns = breakpoints, should be enough.
  * 	This matrix should be very sparse. Most pairs will not be IBD at every locus.
  * 	Size $\approx (n(n-1)/2 + n * m) \times c$ where n, m are the number of
- * 	cases and controls, and c is the number of SNPs. We have to use sparse matrices
+ * 	cases and controls, and c is the number of Breakpoints. We have to use sparse matrices
  * 	for this, because a dense matrix is far too large. Assuming n = 100, m = 100, c = 1e6,
  * 	we have a 396GB dense matrix.
  *

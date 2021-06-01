@@ -16,7 +16,10 @@
 /**
  * @brief Class to handle converting individual indices into row index
  *
- * Invertible mapping function between sample pairs and rows.
+ * Invertible mapping function between sample pairs and rows. Pairs are given
+ * as a single index, while pairs of individual indices correspond to the coordinates
+ * in the cartesian product of the samples, excluding matches to self. Autozygous
+ * samples are dropped currently.
  */
 struct Indexer {
   // Class counts and categories
@@ -42,15 +45,28 @@ struct Indexer {
 		  std::vector<int> phenotypes_)
 	  : case_count(case_count_), cont_count(cont_count_), sz(samples_.size()), phenotypes(std::move(phenotypes_)),
 		samples(std::move(samples_)), case_case(0), case_cont(0), cont_cont(0) {
-	setup(case_count_, cont_count_);
+	setup();
 #ifndef NDEBUG
 	test_run();
 #endif
   }
 
-  void setup(arma::uword case_count_,
-			 arma::uword cont_count_) {
-	IndexSort indexSort(samples);
+  /**
+   * @brief Sort samples and phenotypes and map the individuals to the correct positions.
+   *
+   * For n samples there are n^2 positions that we need to map. We exclude the
+   * autozygous pairs. There is not an absolute order on pairs, for example does
+   * (1, 2) occur before or after (2, 1)? We impose our own order on the samples
+   * so that they occur in a specific way. We sort the samples lexicographically
+   * and order the samples so that case-case pairs occur first, then case-control
+   * pairs, then control-control pairs, in descending order.
+   *
+   * Envisioning a 2d plane with samples on both the x and y axes, we have
+   * a point corresponding to every pair of samples. In the output space, case-case
+   * pairs occur before case-control pairs, followed by control-control pairs.
+   */
+  void setup() {
+	IndexSort indexSort(samples); // Ensure that both samples and phenotypes are sorted in the same order.
 	indexSort.sort_vector(samples);
 	indexSort.sort_vector(phenotypes); // Both must be sorted
 	case_case = case_count * (case_count - 1.) / 2.;
@@ -63,7 +79,7 @@ struct Indexer {
 
 	arma::sword start = 0;
 	arma::sword k = samples.size() - 1;
-	for (; k > 0; k--) {
+	for (; k > 0; k--) { // How many rows correspond to each sample.
 	  start += k;
 	  transitions.push_back(start);
 	}
@@ -85,14 +101,20 @@ struct Indexer {
 	}
   }
 
+  /**
+   * @brief Convert a pair of sample ids to a position in an ordered array
+   * @param a The first sample
+   * @param b The second sample
+   * @return index of the pair in an array that corresponds to all the distinct pairs.
+   */
   arma::sword translate(const std::string &a, const std::string &b) {
 	auto finda = std::lower_bound(samples.begin(), samples.end(), a);
 	auto findb = std::lower_bound(samples.begin(), samples.end(), b);
 	if (*finda != a || *findb != b || a == b) {
 	  return -1;
 	}
-	int i = std::distance(samples.begin(), finda);
-	int j = std::distance(samples.begin(), findb);
+	long i = std::distance(samples.begin(), finda);
+	long j = std::distance(samples.begin(), findb);
 	if (i == j) {
 	  throw (std::runtime_error("Searching for two of the same pair."));
 	}
@@ -108,6 +130,17 @@ struct Indexer {
 	return start + j - i - 1;
   }
 
+  /**
+   * @brief The inverse of the translate operation, map from pair space to pairs of individuals
+   * @param row The row of the pairs.
+   * @return The pair of samples corresponding to the given row.
+   *
+   * Our translate function is bijective and thus has an inverse. In other words,
+   * all samples have a distinct output for a distinct input, so we can "undo"
+   * the translate operation by enforcing a specific relationship between the
+   * order the cases and controls appear in, and the order that they are mapped
+   * into IBD pairs.
+   */
   std::pair<arma::sword, arma::sword> back_translate(arma::uword row) {
 	arma::sword i = -1;
 	arma::sword j = -1;
@@ -119,12 +152,19 @@ struct Indexer {
 	  i += 1;
 	  j = i + 1;
 	} else {
-	  j = i > 0 ? row - *(bound - 1) + i + 1 : row + 1;
+	  if (i > 0) {
+		j = row - *(bound - 1) + i + 1;
+	  } else {
+		j = row + 1;
+	  }
 	}
 
 	return std::make_pair(i, j);
   }
 
+  /**
+   * @brief Logic test for the implementation of indexing the pairs.
+   */
   static void test_run() {
 	std::vector<std::string> test_samples{
 		"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"
@@ -167,6 +207,9 @@ struct Indexer {
 	  return start + j - i - 1;
 	};
 
+	/**
+	 * @brief Test function for mapping from the ordered rows to the product coordinates
+	 */
 	auto test_back_translate = [&](arma::sword row) {
 	  arma::sword i = -1;
 	  arma::sword j = -1;

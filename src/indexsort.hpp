@@ -23,11 +23,16 @@ public:
 	idx = std::vector<std::size_t>(v.size());
 	std::iota(idx.begin(), idx.end(), 0);
 
-	// sort indexes based on comparing values in v
+	// sort indices based on comparing values in v
 	sort(idx.begin(), idx.end(),
 		 [&v](std::size_t i1, std::size_t i2) { return v[i1] < v[i2]; });
   }
 
+  /**
+   * @brief Sort a std::vector<> of a given type by the values of another vector.
+   * @tparam X The type of the vector to be sorted. Allows sorting different types by the same index set.
+   * @param v The vector to be sorted. Mutates the vector itself.
+   */
   template<typename X>
   void sort_vector(std::vector<X> &v) {
 	if (v.size() != idx.size()) {
