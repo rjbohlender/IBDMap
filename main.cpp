@@ -60,10 +60,10 @@ int main(int argc, char *argv[]) {
 				 "closer than the given distance. Default value of 0.0 cM.")
 	 ->default_val(0.0);
   app.add_option("--cm",
-				 tmp_cm_vec,
+				 params.cM,
 				 "Sets the minimum segment length for segments to be included. "
 				 "The parser will automatically skip segments that are smaller "
-				 "than the given length.")->delimiter(',');
+				 "than the given length.");
   app.add_option("--af",
 				 params.AF,
 				 "Sets the maximum allele frequency for segments to be "
@@ -132,9 +132,6 @@ int main(int argc, char *argv[]) {
   }
   if (!tmp_sample_vec.empty()) {
 	params.sample_list = std::set<std::string>(tmp_sample_vec.begin(), tmp_sample_vec.end());
-  }
-  if (!tmp_cm_vec.empty()) {
-    params.cM = tmp_cm_vec;
   }
 
   if (params.info && !params.dash) {

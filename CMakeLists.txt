@@ -14,6 +14,7 @@ find_package(Armadillo REQUIRED)
 find_package(Threads REQUIRED)
 find_package(Boost 1.66.0 COMPONENTS iostreams REQUIRED)
 find_package(Gperftools)
+find_package(ZLIB REQUIRED)
 
 if (UNIX)
     find_package(LAPACK REQUIRED)
@@ -59,13 +60,16 @@ set(PROJECT_SUPPORT_FILES
     src/math.cpp
     src/parser.cpp
     src/source.cpp
-    src/source.hpp)
+    src/source.hpp
+    src/inputvalidator.cpp
+    src/inputvalidator.hpp)
 
 include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party")
 include_directories(${ARMADILLO_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${LAPACK_INCLUDE_DIRS})
 include_directories(${BLAS_INCLUDE_DIRS})
+include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party/zstr/src")
 
 add_executable(carvaIBD main.cpp ${PROJECT_SUPPORT_FILES})
 
@@ -75,6 +79,7 @@ target_link_libraries(carvaIBD ${LAPACK_LIBRARIES})
 target_link_libraries(carvaIBD ${BLAS_LIBRARIES})
 target_link_libraries(carvaIBD ${ARMADILLO_LIBRARIES})
 target_link_libraries(carvaIBD ${Boost_LIBRARIES})
+target_link_libraries(carvaIBD ${ZLIB_LIBRARIES})
 if(Gperftools_FOUND)
   target_link_libraries(carvaIBD ${Gperftools_LIBRARIES})
 endif()
