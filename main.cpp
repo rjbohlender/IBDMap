@@ -1,7 +1,7 @@
 #include <iostream>
 #include <optional>
-#include <thread>
 #include <fmt/include/fmt/ostream.h>
+#include <sys/stat.h>
 #include "src/parser.hpp"
 #include "src/parameters.hpp"
 #include "src/reporter.hpp"
@@ -18,32 +18,34 @@ int main(int argc, char *argv[]) {
   Parameters params;
   std::vector<int> tmp_range_vec;
   std::vector<std::string> tmp_sample_vec;
+  std::vector<double> tmp_cm_vec;
+
   CLI::App app{"carvaIBD is an IBD mapping tool for large scale IBD datasets."};
 
   app.add_option("-i,--input",
 				 params.input,
-				 "Unified IBD input file.")->required();
+				 "Unified IBD input file.")->required()->check(CLI::ExistingFile);
   app.add_option("-p,--pheno",
 				 params.pheno,
 				 "Path to file containing sample phenotype pairs. 1 for "
 				 "affected, 0 for unaffected, NA for sample to be skipped. "
 				 "Header line is required.")
-	 ->required();
+	 ->required()->check(CLI::ExistingFile);
   app.add_option("-g,--gmap",
 				 params.gmap,
 				 "Recombination map files. Assumed to be three columns, "
 				 "position, chromosome, cM. Header line is required. "
 	 			 "Expected format is physical_pos\tchromosome\tgenetic_position")
-	 ->required();
+	 ->required()->check(CLI::ExistingFile);
   app.add_option("-c,--cov",
 				 params.cov,
-				 "Path to covariates. Expected format is ID Value1 Value2 ...");
+				 "Path to covariates. Expected format is ID Value1 Value2 ...")->check(CLI::ExistingFile);
   app.add_option("--info",
 				 params.info,
-				 "Path to supporting info file. Expected format is chr segID ...");
+				 "Path to supporting info file. Expected format is chr segID ...")->check(CLI::ExistingFile);
   app.add_option("-t,--threads",
 				 params.nthreads,
-				 "Number of threads used in execution.");
+				 "Number of threads used in execution.")->default_val(std::thread::hardware_concurrency() - 1);
   app.add_option("-n,--permutations",
 				 params.nperms,
 				 "Number of permutations.");
@@ -53,15 +55,15 @@ int main(int argc, char *argv[]) {
 				 "that must be present at breakpoint for it to be included.");
   app.add_option("-m,--min_dist",
 				 params.min_dist,
-				 "Sets the minimum genetic distance between sites. "
+				 "Sets the minimum genetic distance between breakpoints. "
 				 "The parser will automatically skip breakpoints that are "
 				 "closer than the given distance. Default value of 0.0 cM.")
 	 ->default_val(0.0);
   app.add_option("--cm",
-				 params.cM,
+				 tmp_cm_vec,
 				 "Sets the minimum segment length for segments to be included. "
 				 "The parser will automatically skip segments that are smaller "
-				 "than the given length.");
+				 "than the given length.")->delimiter(',');
   app.add_option("--af",
 				 params.AF,
 				 "Sets the maximum allele frequency for segments to be "
@@ -89,7 +91,7 @@ int main(int argc, char *argv[]) {
 				 "equal permutations.");
   app.add_option("-o,--output",
 				 params.output_path,
-				 "Output to a specified file. Default output is stdout.");
+				 "Output to a specified file. Default output is is /output/{date-time}.results.gz.");
   app.add_flag("--swap_pheno",
 			   params.swap,
 			   "Swap case-control status of individuals. Useful for "
@@ -109,12 +111,35 @@ int main(int argc, char *argv[]) {
 
   CLI11_PARSE(app, argc, argv);
 
+  // Default output location
+  if (params.output_path.empty()) {
+    const char* out_dir = "./output";
+    struct stat buffer;
+    if(stat(out_dir, &buffer) != 0) {
+      mkdir(out_dir, 0755);
+	}
+    char cur_time[100];
+    std::time_t t = std::time(nullptr);
+    std::strftime(cur_time, 99, "%F-%T", std::localtime(&t));
+	std::stringstream default_output;
+	default_output << out_dir << "/" << cur_time << ".results.gz";
+	params.output_path = default_output.str();
+  }
+
   // Have to handle this way because optional wrapped vector arguments don't seem to be supported.
   if (tmp_range_vec.size() == 2) {
 	params.range = tmp_range_vec;
   }
   if (!tmp_sample_vec.empty()) {
 	params.sample_list = std::set<std::string>(tmp_sample_vec.begin(), tmp_sample_vec.end());
+  }
+  if (!tmp_cm_vec.empty()) {
+    params.cM = tmp_cm_vec;
+  }
+
+  if (params.info && !params.dash) {
+    fmt::print(std::cerr, "Info files are only supported with the --dash option.");
+    std::exit(-1);
   }
 
   params.print(std::cerr);
@@ -124,9 +149,6 @@ int main(int argc, char *argv[]) {
 	fmt::print(std::cerr, "Constructing parameters.\n");
   }
 
-  if (params.nthreads < 3) {
-	throw (std::runtime_error("ERROR: Need at least 3 threads."));
-  }
   // Initialize reporter
   auto reporter = std::make_shared<Reporter>(params.output_path);
 
@@ -141,52 +163,8 @@ int main(int argc, char *argv[]) {
 				gmap);
 
   // Sort output
+  fmt::print(std::cerr, "Sorting output.\n");
+  reporter->sort();
   reporter.reset();  // Ensure output is complete
-  struct OutContainer {
-	std::string chrom;
-	int pos;
-	std::vector<std::vector<std::string>> data; // Two dimensional to handle multiple phenotypes in a single file
-  };
-  if (!params.output_path.empty()) {
-	std::ifstream reinput(params.output_path);
-
-	std::string line;
-	std::vector<OutContainer> sortable_output;
-	while (std::getline(reinput, line)) {
-	  RJBUtil::Splitter<std::string> splitter(line, " \t");
-	  std::vector<std::string> stats;
-	  if (splitter.size() > 0) {
-		if (sortable_output.empty() || sortable_output.back().pos != std::stoi(splitter[1])) {
-		  for (int i = 2; i < splitter.size(); i++) {
-			stats.push_back(splitter[i]);
-		  }
-		  OutContainer oc{
-			  splitter[0],
-			  std::stoi(splitter[1]),
-			  std::vector<std::vector<std::string>>()
-		  };
-		  oc.data.emplace_back(std::move(stats));
-		  sortable_output.emplace_back(std::move(oc));
-		} else {
-		  // Continuing the output
-		  for (int i = 2; i < splitter.size(); i++) {
-			stats.push_back(splitter[i]);
-		  }
-		  sortable_output.back().data.emplace_back(std::move(stats));
-		}
-	  }
-	}
-	std::sort(sortable_output.begin(),
-			  sortable_output.end(),
-			  [](OutContainer &a, OutContainer &b) { return a.pos < b.pos; });
-	reinput.close();
-	std::ofstream reoutput(params.output_path);
-	for (const auto &v: sortable_output) {
-	  for (const auto &w : v.data) {
-		fmt::print(reoutput, "{}\t{}\t{}\n", v.chrom, v.pos, fmt::join(w.begin(), w.end(), "\t"));
-	  }
-	}
-	reoutput.close();
-  }
   fmt::print(std::cerr, "Total runtime: {}\n", timer.toc());
 }
