@@ -235,10 +235,6 @@ void Parser::update_data(arma::sp_vec &data,
 		  arma::sword row_idx = (*indexer)[0].translate(*it1, *it2);
 
 		  int id_idx = indices["clusterID"];
-		  if (iids.size() / 35647. > *params.AF && row_idx >= 0) {
-		    fmt::print("Found filterable. Segment: {} Frequency: {}\n", vals[id_idx], iids.size() / 35647.);
-		  }
-
 		  auto ids = fmt::format("{},{}", *it1, *it2);
 		  if (row_idx < 0) {
 			continue;
