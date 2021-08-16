@@ -33,6 +33,7 @@ public:
   bool enable_testing = false;
   bool dash = false;
   std::optional<std::vector<int>> range;
+  std::optional<std::vector<std::pair<int, int>>> exclude;
   std::optional<double> cM;
   std::optional<double> AF;
   std::optional<std::set<std::string>> sample_list;

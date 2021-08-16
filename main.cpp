@@ -17,6 +17,7 @@ int main(int argc, char *argv[]) {
 
   Parameters params;
   std::vector<int> tmp_range_vec;
+  std::vector<std::string> tmp_exclude_vec;
   std::vector<std::string> tmp_sample_vec;
   std::vector<double> tmp_cm_vec;
 
@@ -80,6 +81,11 @@ int main(int argc, char *argv[]) {
 				 "will only analyze breakpoints with positions in that range, "
 				 "inclusive of the endpoints.")
 	 ->delimiter(',')->expected(2);
+  app.add_option("--exclude",
+               tmp_exclude_vec,
+               "A series of ranges of the form 123-456,457-900 to exclude from the analyzed chromosome."
+               "All breakpoints within the range (inclusive) will be dropped.")
+        ->delimiter(',');
   app.add_option("--sample_list,-l",
 				 tmp_sample_vec,
 				 "Comma-separated list of samples to include in analysis. All "
@@ -129,6 +135,14 @@ int main(int argc, char *argv[]) {
   // Have to handle this way because optional wrapped vector arguments don't seem to be supported.
   if (tmp_range_vec.size() == 2) {
 	params.range = tmp_range_vec;
+  }
+  if (!tmp_exclude_vec.empty()) {
+      std::vector<std::pair<int, int>> exclude_vec;
+      for (auto &v : tmp_exclude_vec) {
+          RJBUtil::Splitter<std::string> splitter(v, "-");
+          exclude_vec.emplace_back(std::make_pair(std::stoi(splitter[0]), std::stoi(splitter[1])));
+      }
+      params.exclude = exclude_vec;
   }
   if (!tmp_sample_vec.empty()) {
 	params.sample_list = std::set<std::string>(tmp_sample_vec.begin(), tmp_sample_vec.end());

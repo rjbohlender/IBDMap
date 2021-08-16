@@ -11,6 +11,7 @@ import glob
 import argparse as ap
 import sys
 import concurrent.futures
+import gzip
 from typing import Dict, List, Tuple
 from geneticmap import GeneticMap
 from pathlib import Path
@@ -18,7 +19,41 @@ import numpy as np
 import scipy.stats as stats
 
 
-def ibdlen_parse(i: int, gmap: GeneticMap, args: ap.Namespace) -> Dict[int, dict]:
+def is_gzipped(fpath: Path) -> bool:
+    """Check if the provided file is gzipped or not.
+
+    Args:
+        fpath: The path to the file to check.
+
+    Returns:
+        A bool indicating if the file is gzipped (true) or not (false).
+    """
+
+    with fpath.open('rb') as f:
+        magic = f.read(2)
+
+    return magic == b'\x1f\x8b'
+
+
+def check_and_open(fpath: str):
+    """Check if a file is gzipped and return an open file handle.
+
+    Args:
+        fpath: The path to the file.
+    Returns:
+        A file handle pointing to the file.
+    """
+
+    file_ = Path(fpath)
+
+    if is_gzipped(file_):
+        f = gzip.open(str(file_), 'rt')
+    else:
+        f = file_.open('r')
+    return f
+
+
+def ibdlen_parse(i: int, gmap: GeneticMap, args: ap.Namespace) -> Tuple[Dict[int, dict], Dict[int, int]]:
     """First pass of parsing for the distribution of distances between markers and length of the genome.
 
     Args:
@@ -30,37 +65,48 @@ def ibdlen_parse(i: int, gmap: GeneticMap, args: ap.Namespace) -> Dict[int, dict
         A dictionary of genetic distances between markers for each chromosome.
     """
     ibdlen = {i: {}}
+    breakpoints = {i: 0}
     file_ = Path(args.prefix + args.suffix.format(i=i, j=args.at))
 
-    with file_.open('r') as f:
-        predis = 0
-        prechr = 0
-        prepos = 0
-        for lineno, line in enumerate(f):
-            chrom, orig, pos, vals = parse_line(line)
+    if is_gzipped(file_):
+        f = gzip.open(str(file_), 'rt')
+    else:
+        f = file_.open('r')
 
-            if pos in gmap.gmap[chrom]:
-                dis = gmap.gmap[chrom][pos]
-            else:
-                close = gmap.find_nearest(chrom, pos)
-                dis = gmap.gmap[chrom][close[0]] + ((int(pos) - close[0]) / (close[1] - close[0])) * (
-                        gmap.gmap[chrom][close[1]] - gmap.gmap[chrom][close[0]])
-            if chrom == prechr:
-                ibdlen[prechr][prepos] = float(dis) - float(predis)
-            elif prechr != 0:
-                ibdlen[prechr][prepos] = float(predis) + 1  # for final variants
-            prechr = chrom
-            prepos = pos
-            predis = dis
+    predis = 0
+    prechr = 0
+    prepos = 0
+    for lineno, line in enumerate(f):
+        if args.phenotypes > 1:
+            if lineno % args.phenotypes != 0:
+                continue
+        chrom, orig, pos, vals = parse_line(line, args.new)
+        breakpoints[i] += 1
+
+        if pos in gmap.gmap[chrom]:
+            dis = gmap.gmap[chrom][pos]
+        else:
+            close = gmap.find_nearest(chrom, pos)
+            dis = gmap.gmap[chrom][close[0]] + ((int(pos) - close[0]) / (close[1] - close[0])) * (
+                    gmap.gmap[chrom][close[1]] - gmap.gmap[chrom][close[0]])
+        if chrom == prechr:
+            ibdlen[prechr][prepos] = float(dis) - float(predis)
+        elif prechr != 0:
+            ibdlen[prechr][prepos] = float(predis) + 1  # for final variants
+        prechr = chrom
+        prepos = pos
+        predis = dis
     ibdlen[prechr][prepos] = 1  # for final variants
-    return ibdlen
+    return ibdlen, breakpoints
 
 
 def parse_avg(i: int, args: ap.Namespace, ibd_frac: Dict[int, dict]) \
-        -> Tuple[List[Dict[int, dict]], List[Dict[int, np.ndarray]]]:
+        -> Tuple[List[Dict[int, Dict[int, float]]], List[Dict[int, np.ndarray]]]:
     """Second pass of parsing for the genome wide average of the statistic across markers.
 
     The calculation is done for the original statistic and each permutation. Average is calculated across markers.
+
+    Runtime:
 
     Args:
         i: The chromosome number.
@@ -77,43 +123,50 @@ def parse_avg(i: int, args: ap.Namespace, ibd_frac: Dict[int, dict]) \
 
     for j in range(args.at, args.at + args.nruns):
         file_ = Path(args.prefix + args.suffix.format(i=i, j=j))
-        with file_.open('r') as f:
-            for lineno, l in enumerate(f):
-                chrom, orig, pos, vals = parse_line(l)
 
-                if not args.no_avg:
-                    orig *= ibd_frac[chrom][pos]
-                    vals *= ibd_frac[chrom][pos]
+        if is_gzipped(file_):
+            f = gzip.open(str(file_), 'rt')
+        else:
+            f = file_.open('r')
 
-                if np.all(vals == 0):
-                    continue
-                if j == 1:
-                    if args.two_sided:
-                        original[lineno % args.phenotypes][chrom][pos] = np.abs(orig)
-                        permuted[lineno % args.phenotypes][chrom][0:args.nperm] += np.abs(vals)
-                    else:
-                        original[lineno % args.phenotypes][chrom][pos] = orig
-                        permuted[lineno % args.phenotypes][chrom][0:args.nperm] += vals
+        for lineno, l in enumerate(f):
+            chrom, orig, pos, vals = parse_line(l, args.new)
+
+            if not args.no_avg:
+                orig *= ibd_frac[chrom][pos]
+                vals *= ibd_frac[chrom][pos]
+
+            if np.all(vals == 0):
+                continue
+            if j == 1:
+                if args.two_sided:
+                    original[lineno % args.phenotypes][chrom][pos] = np.abs(orig)
+                    permuted[lineno % args.phenotypes][chrom][0:args.nperm] += np.abs(vals)
                 else:
-                    try:
-                        if args.two_sided:
-                            permuted[
-                                lineno % args.phenotypes][chrom][args.nperm * (j - args.at):args.nperm * (j - args.at + 1)] += np.abs(vals)
-                        else:
-                            permuted[lineno % args.phenotypes][chrom][(args.nperm * (j - args.at)):(args.nperm * (j - args.at + 1))] += vals
-                    except ValueError as err:
-                        print(
-                            'permuted: {} vals: {}'.format(permuted[lineno % args.phenotypes][chrom].shape, vals.shape),
-                            file=sys.stderr)
-                        raise err
-                    except KeyError as err:
-                        print(permuted, file=sys.stderr)
-                        print(f'chrom: {chrom} pos: {pos} j: {j}', file=sys.stderr)
-                        raise err
+                    original[lineno % args.phenotypes][chrom][pos] = orig
+                    permuted[lineno % args.phenotypes][chrom][0:args.nperm] += vals
+            else:
+                try:
+                    if args.two_sided:
+                        permuted[
+                            lineno % args.phenotypes][chrom][
+                        args.nperm * (j - args.at):args.nperm * (j - args.at + 1)] += np.abs(vals)
+                    else:
+                        permuted[lineno % args.phenotypes][chrom][
+                        (args.nperm * (j - args.at)):(args.nperm * (j - args.at + 1))] += vals
+                except ValueError as err:
+                    print(
+                        'permuted: {} vals: {}'.format(permuted[lineno % args.phenotypes][chrom].shape, vals.shape),
+                        file=sys.stderr)
+                    raise err
+                except KeyError as err:
+                    print(permuted, file=sys.stderr)
+                    print(f'chrom: {chrom} pos: {pos} j: {j}', file=sys.stderr)
+                    raise err
     return original, permuted
 
 
-def parse_line(line: str) -> Tuple[int, float, int, np.ndarray]:
+def parse_line(line: str, new: bool = False) -> Tuple[int, float, int, np.ndarray]:
     """Line parser.
 
     Example line pair:
@@ -121,19 +174,26 @@ def parse_line(line: str) -> Tuple[int, float, int, np.ndarray]:
 
     Args:
         line: The line to be split and processed.
+        new: Whether we have the new format or not.
 
     Returns:
         Tuple of useful values from the line.
     """
     line = line.strip().split()
     assert len(line) >= 2
+
+    orig_idx = 2
+    line_start = 3
+    if new:
+        orig_idx = 5
+        line_start = 6
     if line[0].startswith('chr'):
         chrom = int(line[0][3:])
     else:
         chrom = int(line[0])
     pos = int(line[1])
-    orig = float(line[2])
-    vals = np.array([float(x) for x in line[3:]])
+    orig = float(line[orig_idx])
+    vals = np.array([float(x) for x in line[line_start:]])
     return chrom, orig, pos, vals
 
 
@@ -150,63 +210,82 @@ def get_pdist(stat_dist: np.ndarray, method: str) -> np.ndarray:
     return stats.rankdata(stat_dist, method=method) / (len(stat_dist) + 1)
 
 
-def parse(i: int, orig_avg: List[float], permuted_avg: List[np.ndarray], args: ap.Namespace) \
-        -> Tuple[List[Dict[int, dict]], List[Dict[int, np.ndarray]]]:
+def parse(i: int, orig_avg: List[float], permuted_avg: List[np.ndarray], breakpoints: Dict[int, int],
+          args: ap.Namespace) \
+        -> Tuple[List[Dict[int, dict]], List[Dict[int, np.ndarray]], List[Dict[int, np.ndarray]]]:
     """Final pass parser for the extreme value distribution.
 
     Args:
         i: The chromosome number.
         orig_avg: The average of the observed statistics.
         permuted_avg: The average of the permuted statistics.
+        breakpoints: The number of breakpoints for each chromosome.
         args: The program arguments.
 
     Returns:
         The original statistics for each marker, converted to empirical p-value, and the extreme value distribution of
-        statistics for the current chromosome.
+        statistics for the current chromosome, as well as the full distribution of resampled statistics if FDR argument
+        is passed..
     """
     original = []
     extreme_val_dist = []
     arr_size = args.nruns * args.nperm
+    fdr = []
     for k in range(args.phenotypes):
         original.append({i: {}})
         extreme_val_dist.append({i: np.zeros(arr_size)})
         extreme_val_dist[k][i].fill(float('Inf'))
+        if args.fdr:
+            # Corresponds to R* in Yekutieli and Benjamini (1999)
+            fdr.append({i: np.zeros((breakpoints[i], arr_size))})
+        else:
+            fdr.append({i: np.array([])})
+
+    orig_buffer = [{i: {}} for _ in range(args.phenotypes)]
 
     files = []
     for j in range(args.at, args.at + args.nruns):
-        files.append(open(args.prefix + args.suffix.format(i=i, j=j), 'r'))
+        files.append(check_and_open(args.prefix + args.suffix.format(i=i, j=j)))
     lineno = -1
+    breakpointno = -1
     evd_buffer = np.zeros(arr_size)
     line = None
     while True:
         lineno += 1
+        if lineno % args.phenotypes == 0:
+            breakpointno += 1
         for j, f in enumerate(files):
             line = f.readline()
             if line == '':
                 continue
-            chrom, orig, pos, vals = parse_line(line)
+            chrom, orig, pos, vals = parse_line(line, args.new)
             if all(vals == 0):
                 continue
             if not args.no_avg:
                 orig -= orig_avg[lineno % args.phenotypes]
                 vals -= permuted_avg[lineno % args.phenotypes][args.nperm * j:args.nperm * (j + 1)]
 
-            succ = np.sum(vals >= orig)
-            try:
-                original[lineno % args.phenotypes][chrom][pos] = ((succ + 1) / (len(vals) + 1), succ)
-            except Exception as e:
-                print(f'i: {i}, chrom: {chrom}, pos: {pos}')
-                raise e
+            if pos not in orig_buffer[lineno % args.phenotypes][chrom]:
+                orig_buffer[lineno % args.phenotypes][chrom][pos] = np.array([0, 0])
+
+            orig_buffer[lineno % args.phenotypes][chrom][pos] += np.array([np.sum(vals >= orig), len(vals)])
             evd_buffer[args.nperm * j:args.nperm * (j + 1)] = vals
+            if args.fdr:
+                fdr[lineno % args.phenotypes][i][breakpointno, args.nperm * j:args.nperm * (j + 1)] = vals
         if line == '':
             break
         evd_buffer = get_pdist(evd_buffer, method=args.method)
         extreme_val_dist[lineno % args.phenotypes][i] = \
             np.minimum(extreme_val_dist[lineno % args.phenotypes][i], evd_buffer)
-    return original, extreme_val_dist
+    for lineno, phen in enumerate(orig_buffer):
+        for chrom, chrom_data in phen.items():
+            for pos, data in chrom_data.items():
+                original[lineno][chrom][pos] = ((data[0] + 1) / (data[1] + 1), data[0])
+    return original, extreme_val_dist, fdr
 
 
-def run_ibdlen(args: ap.Namespace, gmap: GeneticMap) -> Tuple[Dict[int, Dict[int, float]], Dict[int, Dict[int, float]]]:
+def run_ibdlen(args: ap.Namespace, gmap: GeneticMap) -> Tuple[
+        Dict[int, Dict[int, float]], Dict[int, Dict[int, float]], Dict[int, int]]:
     """Encapsulate running of IBD length parsing and calculations.
 
     Args:
@@ -218,9 +297,12 @@ def run_ibdlen(args: ap.Namespace, gmap: GeneticMap) -> Tuple[Dict[int, Dict[int
         distance between variants.
     """
     ibdlen = {}
+    breakpoints = {}
     future = []
     if args.single:
         chroms = [args.single]
+        if args.null:
+            chroms.append(args.null)
     else:
         chroms = list(range(1, 23))
     with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -228,7 +310,8 @@ def run_ibdlen(args: ap.Namespace, gmap: GeneticMap) -> Tuple[Dict[int, Dict[int
             future.append(executor.submit(ibdlen_parse, i, gmap, args))
         for fut in future:
             res = fut.result()
-            ibdlen.update(res)
+            ibdlen.update(res[0])
+            breakpoints.update(res[1])
 
     sum_ibdlen = 0
     for i in chroms:
@@ -241,7 +324,7 @@ def run_ibdlen(args: ap.Namespace, gmap: GeneticMap) -> Tuple[Dict[int, Dict[int
         for k, v in ibdlen[i].items():
             ibd_frac[i][k] = v / sum_ibdlen
 
-    return ibdlen, ibd_frac
+    return ibdlen, ibd_frac, breakpoints
 
 
 def run_avg(args: ap.Namespace, ibd_frac: Dict[int, Dict[int, float]]) \
@@ -263,7 +346,10 @@ def run_avg(args: ap.Namespace, ibd_frac: Dict[int, Dict[int, float]]) \
     permuted_avg = [{} for _ in range(args.phenotypes)]
     original_avg = [{} for _ in range(args.phenotypes)]
     if args.single:
-        chroms = [args.single]
+        if args.null:
+            chroms = [args.null]
+        else:
+            chroms = [args.single]
     else:
         chroms = list(range(1, 23))
 
@@ -285,14 +371,16 @@ def run_avg(args: ap.Namespace, ibd_frac: Dict[int, Dict[int, float]]) \
     return original_avg, p_avg
 
 
-def run_parse(args: ap.Namespace, original_avg: List[Dict[int, Dict[int, float]]], p_avg: List[np.ndarray]) \
-        -> Tuple[List[dict], List[np.ndarray]]:
+def run_parse(args: ap.Namespace, original_avg: List[Dict[int, Dict[int, float]]], p_avg: List[np.ndarray],
+              breakpoints: Dict[int, int]) \
+        -> Tuple[List[dict], List[np.ndarray], List[np.ndarray]]:
     """Encapsulate running of the final parsing pass and calculation of the extreme value distribution.
 
     Args:
         args: The program arguments.
         original_avg: The average of the observed statistics.
         p_avg: The averages of the permuted statistics.
+        breakpoints: The number of breakpoints on each chromosome.
 
     Returns:
         The observed statistics and the extreme value distribution.
@@ -305,27 +393,41 @@ def run_parse(args: ap.Namespace, original_avg: List[Dict[int, Dict[int, float]]
         chroms = [args.single]
     else:
         chroms = list(range(1, 23))
+    fdr = [{i: [] for i in chroms} for _ in range(args.phenotypes)]
+    total_breakpoints = 0
+    for i in chroms:
+        total_breakpoints += breakpoints[i]
     with concurrent.futures.ThreadPoolExecutor() as executor:
         for i in chroms:
-            future.append(executor.submit(parse, i, original_avg, p_avg, args))
-        for fut in future:
+            future.append(executor.submit(parse, i, original_avg, p_avg, breakpoints, args))
+        for i, fut in enumerate(future):
             res = fut.result()
             for j in range(args.phenotypes):
                 original[j].update(res[0][j])
                 extreme_val_dist[j].update(res[1][j])
+                fdr[j].update(res[2][j])
 
     # Flatten dict across chromosomes
     evd = []
+    full_dist = [np.zeros((total_breakpoints, arr_size)) for _ in range(args.phenotypes)]
     for phen in range(args.phenotypes):
+        last = 0
         evd.append(np.zeros(arr_size))
         evd[phen].fill(float('Inf'))
         for chrom, dist in extreme_val_dist[phen].items():
             evd[phen] = np.minimum(dist, evd[phen])
-    return original, evd
+        if args.fdr:
+            for chrom in chroms:
+                dist = fdr[phen][chrom]
+                full_dist[phen][last:(last + dist.shape[0]), :] = dist
+                last += dist.shape[0]
+
+    return original, evd, full_dist
 
 
 def main():
     """Entrypoint."""
+    global args
     parser = ap.ArgumentParser()
     parser.add_argument('prefix', type=str, help="File prefix, to which 'chr{i}.txt.{j}.results' will be appended")
     parser.add_argument('suffix', type=str,
@@ -338,26 +440,39 @@ def main():
         type=str,
         default='average',
         help="Method for calculating p-value. One of {average, min, max}, default is average.")
-    parser.add_argument('--at', default=0, type=int, help="The starting index of the output files. Starting value of j.")
+    parser.add_argument('--at', default=0, type=int,
+                        help="The starting index of the output files. Starting value of j.")
     parser.add_argument('--single', default=None, type=int, help="Run only a single chromosome.")
+    parser.add_argument('--null', default=None, type=int,
+                        help="Run an alternate single chromosome for the null distribution.")
     parser.add_argument('--no_avg', default=False, action='store_true', help="Don't calculate the genomewide average.")
     parser.add_argument('--two_sided', default=False, action='store_true', help="Calculate for a two-sided test.")
     parser.add_argument('--phenotypes', default=1, type=int, help="Number of phenotypes we're parsing.")
     parser.add_argument('--output', required=True, help="Output path. will be appended with number.")
     parser.add_argument('--separation', type=int, help="Amount of space between printed markers. Units are basepairs.")
+    parser.add_argument('--new', default=False, action='store_true',
+                        help="Does the output have the proportion of pairs in 3 columns?")
+    parser.add_argument('--fdr', default=False, action='store_true',
+                        help="Control FDR instead of FWE.")
     args = parser.parse_args()
 
     gmaps = glob.glob(args.gmap + '/*.gmap.gz')
     gmap = GeneticMap(gmaps)
 
-    ibdlen, ibd_frac = run_ibdlen(args, gmap)
-    original_avg, p_avg = run_avg(args, ibd_frac)
-    original, evd = run_parse(args, original_avg, p_avg)
+    ibdlen, ibd_frac, breakpoints = run_ibdlen(args, gmap)  # Runtime J * M
+    original_avg, p_avg = run_avg(args, ibd_frac)  # Runtime J * M * N * (2N + 2) / K
+    original, evd, fdr = run_parse(args, original_avg, p_avg, breakpoints)  # Runtime J * M * N / K * (5N + 5)
 
     if args.single:
         chroms = [args.single]
     else:
         chroms = list(range(1, 23))
+
+    if args.fdr:
+        for phen in range(args.phenotypes):
+            fdr[phen] = stats.rankdata(fdr[phen], method='max')
+            fdr[phen] = np.divide(fdr[phen], args.nruns * args.nperm + 1)
+
     # Collapse averages, need dot(avgs, ibdlen)
     total_perms = args.nperm * args.nruns
     for phen in range(args.phenotypes):
@@ -378,7 +493,17 @@ def main():
                     lower = 0.
 
                 # Adjusted p-value
-                p_adjust = stats.percentileofscore(evd[phen], p, kind='weak') / 100.
+                if args.fdr:
+                    Rstar = np.sum(fdr[phen] <= p, axis=0)
+                    rp = sum(res[0] <= p for _, res in original[phen][i].items())
+                    pm = p * fdr[phen].shape[0]
+                    rb = np.percentile(Rstar, 95)
+                    if rp - rb >= pm:
+                        p_adjust = np.mean(Rstar / (Rstar + rp - pm))
+                    else:
+                        p_adjust = stats.percentileofscore(evd[phen], p, kind='weak') / 100.
+                else:
+                    p_adjust = stats.percentileofscore(evd[phen], p, kind='weak') / 100.
                 print(f"{i}\t{k}\t{ibdlen[i][k]}\t{p}\t{lower}," +
                       f"{upper}\t{p_adjust}\t{p_adjust_cutoff}\t{succ}\t{total_perms}", file=opf)
 

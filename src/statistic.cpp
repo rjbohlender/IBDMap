@@ -21,6 +21,10 @@ Statistic::Statistic(arma::sp_colvec data_,
 	params(std::move(params_)),
 	bp(std::move(bp_)), reporter(std::move(reporter_)), groups(std::move(groups_)), perms(std::move(perms_)),
 	gen(params.seed) {
+    if(params.enable_testing) {
+        test_statistic();
+        test_group_permutation(0ul);
+    }
 }
 
 double

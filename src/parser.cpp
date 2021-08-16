@@ -92,6 +92,16 @@ void Parser::parse_input(std::istream &is) {
 		continue;
 	  }
 	}
+	if (params.exclude) {
+	    bool exclude_region = false;
+	    for (const auto &v : *params.exclude) {
+	        exclude_region |= pos >= v.first && pos <= v.second;
+	    }
+	    if (exclude_region) {
+	        fmt::print(std::cerr, "{}\n", pos);
+	        continue;
+	    }
+	}
 
 	// Initialize breakpoint
 	Breakpoint bp{};
