@@ -461,6 +461,7 @@ def main():
 
     ibdlen, ibd_frac, breakpoints = run_ibdlen(args, gmap)  # Runtime J * M
     original_avg, p_avg = run_avg(args, ibd_frac)  # Runtime J * M * N * (2N + 2) / K
+    print('Observed Genome-Wide Average: {}'.format(original_avg))
     original, evd, fdr = run_parse(args, original_avg, p_avg, breakpoints)  # Runtime J * M * N / K * (5N + 5)
 
     if args.single:

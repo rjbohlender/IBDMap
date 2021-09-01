@@ -128,7 +128,7 @@ void Statistic::run() {
 			   bp.breakpoint.first,
 			   bp.breakpoint.second,
 			   permuted_cscs[0][0],
-			   permuted_cncn[0][0],
+			   permuted_cscn[0][0],
 			   permuted_cncn[0][0]
 	);
   }

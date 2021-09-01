@@ -72,6 +72,7 @@ void Parser::parse_input(std::istream &is) {
 	if (lineno == 0) { // Skip the header
 	  if (indices.find("ID1-ID2") == indices.end()) {
 		indices["ID1-ID2"] = 1;
+		indices["cM"] = 0;
 	  }
 	  continue;
 	}
@@ -273,6 +274,16 @@ void Parser::update_data(arma::sp_vec &data,
 	  if (row_idx < 0) {
 		continue;
 	  } else {
+        if(params.cM) {
+            try {
+                double test_val = std::stod(vals[indices["cM"]]);
+                if (test_val < *params.cM) {
+                    continue;
+                }
+            } catch (std::invalid_argument &e) {
+                throw(std::runtime_error("Attempted to filter on segment length, in data that lacks segment lengths."));
+            }
+	    }
 		if (value > 0) {
 		  try {
 			bp.segment_lengths.push_back(std::stod(vals[indices["cM"]]));
