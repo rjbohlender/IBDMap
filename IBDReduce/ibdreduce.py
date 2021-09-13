@@ -427,9 +427,10 @@ def run_parse(args: ap.Namespace, original_avg: List[Dict[int, Dict[int, float]]
 
 def main():
     """Entrypoint."""
-    global args
     parser = ap.ArgumentParser()
-    parser.add_argument('prefix', type=str, help="File prefix, to which 'chr{i}.txt.{j}.results' will be appended")
+    parser.add_argument('prefix',
+                        type=str,
+                        help="File prefix, to which suffix will be appended to form a complete file name")
     parser.add_argument('suffix', type=str,
                         help="File suffix. Use {i} for the chromosome, {j} for the permutation set.")
     parser.add_argument('nperm', type=int, help="Total number of permutations in each run.")
