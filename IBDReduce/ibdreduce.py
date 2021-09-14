@@ -121,6 +121,7 @@ def parse_avg(i: int, args: ap.Namespace, ibd_frac: Dict[int, dict]) \
     permuted = [{i: np.zeros(arr_size)} for _ in range(args.phenotypes)]
     original = [{i: {}} for _ in range(args.phenotypes)]
 
+    start = min(list(range(args.at, args.at + args.nruns)))
     for j in range(args.at, args.at + args.nruns):
         file_ = Path(args.prefix + args.suffix.format(i=i, j=j))
 
@@ -138,7 +139,7 @@ def parse_avg(i: int, args: ap.Namespace, ibd_frac: Dict[int, dict]) \
 
             if np.all(vals == 0):
                 continue
-            if j == 1:
+            if j == start:
                 if args.two_sided:
                     original[lineno % args.phenotypes][chrom][pos] = np.abs(orig)
                     permuted[lineno % args.phenotypes][chrom][0:args.nperm] += np.abs(vals)
