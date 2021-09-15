@@ -480,6 +480,7 @@ def main():
     total_perms = args.nperm * args.nruns
     for phen in range(args.phenotypes):
         opf = open(f'{args.output}.{phen}', 'w')
+        print('# {}'.format(' '.join(sys.argv)))
         print("CHROM\tPOS\tcM\tPVal\tPValCI\tPAdj\tPAdjCutoff\tSuccess\tPermutation", file=opf)
 
         # Significance level for p-value in permutation correcting for multiple tests
