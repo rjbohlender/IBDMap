@@ -404,7 +404,7 @@ void Parser::parse_pheno(std::istream &is) {
                 auto swap_val = std::find(cov_samples.begin(), cov_samples.end(), v);
                 if (swap_val == cov_samples.end())
                     throw(std::runtime_error("ERROR: Sample not present in covariate file."));
-                int j = std::distance(cov_samples.begin(), swap_val);
+                int j = static_cast<int>(std::distance(cov_samples.begin(), swap_val));
                 idx(i) = j;
                 std::swap(cov_samples[i], cov_samples[j]);
             } else {
