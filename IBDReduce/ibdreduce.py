@@ -213,7 +213,7 @@ def get_pdist(stat_dist: np.ndarray, method: str) -> np.ndarray:
 
 def parse(i: int, orig_avg: List[float], permuted_avg: List[np.ndarray], breakpoints: Dict[int, int],
           args: ap.Namespace) \
-        -> Tuple[List[Dict[int, dict]], List[Dict[int, np.ndarray]], List[Dict[int, np.ndarray]]]:
+        -> Tuple[List[Dict[int, dict]], List[Dict[int, np.ndarray]], List[Dict[int, np.ndarray]], List[Dict[int, Dict[int, float]]]]:
     """Final pass parser for the extreme value distribution.
 
     Args:
@@ -230,12 +230,14 @@ def parse(i: int, orig_avg: List[float], permuted_avg: List[np.ndarray], breakpo
     """
     original = []
     extreme_val_dist = []
+    deltas = []
     arr_size = args.nruns * args.nperm
     fdr = []
     for k in range(args.phenotypes):
         original.append({i: {}})
         extreme_val_dist.append({i: np.zeros(arr_size)})
         extreme_val_dist[k][i].fill(float('Inf'))
+        deltas.append({i: {}})
         if args.fdr:
             # Corresponds to R* in Yekutieli and Benjamini (1999)
             fdr.append({i: np.zeros((breakpoints[i], arr_size))})
@@ -266,6 +268,7 @@ def parse(i: int, orig_avg: List[float], permuted_avg: List[np.ndarray], breakpo
                 orig -= orig_avg[lineno % args.phenotypes]
                 vals -= permuted_avg[lineno % args.phenotypes][args.nperm * j:args.nperm * (j + 1)]
 
+            deltas[lineno % args.phenotypes][chrom][pos] = orig
             if pos not in orig_buffer[lineno % args.phenotypes][chrom]:
                 orig_buffer[lineno % args.phenotypes][chrom][pos] = np.array([0, 0])
 
@@ -282,7 +285,7 @@ def parse(i: int, orig_avg: List[float], permuted_avg: List[np.ndarray], breakpo
         for chrom, chrom_data in phen.items():
             for pos, data in chrom_data.items():
                 original[lineno][chrom][pos] = ((data[0] + 1) / (data[1] + 1), data[0])
-    return original, extreme_val_dist, fdr
+    return original, extreme_val_dist, fdr, deltas
 
 
 def run_ibdlen(args: ap.Namespace, gmap: GeneticMap) -> Tuple[
@@ -374,7 +377,7 @@ def run_avg(args: ap.Namespace, ibd_frac: Dict[int, Dict[int, float]]) \
 
 def run_parse(args: ap.Namespace, original_avg: List[Dict[int, Dict[int, float]]], p_avg: List[np.ndarray],
               breakpoints: Dict[int, int]) \
-        -> Tuple[List[dict], List[np.ndarray], List[np.ndarray]]:
+        -> Tuple[List[dict], List[np.ndarray], List[np.ndarray], List[Dict[int, Dict[int, float]]]]:
     """Encapsulate running of the final parsing pass and calculation of the extreme value distribution.
 
     Args:
@@ -390,6 +393,7 @@ def run_parse(args: ap.Namespace, original_avg: List[Dict[int, Dict[int, float]]
     original = [{} for _ in range(args.phenotypes)]
     extreme_val_dist = [{} for _ in range(args.phenotypes)]
     future = []
+    deltas = [{} for _ in range(args.phenotypes)]
     if args.single:
         chroms = [args.single]
     else:
@@ -407,6 +411,7 @@ def run_parse(args: ap.Namespace, original_avg: List[Dict[int, Dict[int, float]]
                 original[j].update(res[0][j])
                 extreme_val_dist[j].update(res[1][j])
                 fdr[j].update(res[2][j])
+                deltas[j].update(res[3][j])
 
     # Flatten dict across chromosomes
     evd = []
@@ -423,7 +428,7 @@ def run_parse(args: ap.Namespace, original_avg: List[Dict[int, Dict[int, float]]
                 full_dist[phen][last:(last + dist.shape[0]), :] = dist
                 last += dist.shape[0]
 
-    return original, evd, full_dist
+    return original, evd, full_dist, deltas
 
 
 def main():
@@ -464,7 +469,7 @@ def main():
     ibdlen, ibd_frac, breakpoints = run_ibdlen(args, gmap)  # Runtime J * M
     original_avg, p_avg = run_avg(args, ibd_frac)  # Runtime J * M * N * (2N + 2) / K
     print('Observed Genome-Wide Average: {}'.format(original_avg))
-    original, evd, fdr = run_parse(args, original_avg, p_avg, breakpoints)  # Runtime J * M * N / K * (5N + 5)
+    original, evd, fdr, deltas = run_parse(args, original_avg, p_avg, breakpoints)  # Runtime J * M * N / K * (5N + 5)
 
     if args.single:
         chroms = [args.single]
@@ -481,7 +486,7 @@ def main():
     for phen in range(args.phenotypes):
         opf = open(f'{args.output}.{phen}', 'w')
         print('# {}'.format(' '.join(sys.argv)), file=opf)
-        print("CHROM\tPOS\tcM\tPVal\tPValCI\tPAdj\tPAdjCutoff\tSuccess\tPermutation", file=opf)
+        print("CHROM\tPOS\tcM\tPVal\tPValCI\tPAdj\tPAdjCutoff\tSuccess\tPermutation\tDelta", file=opf)
 
         # Significance level for p-value in permutation correcting for multiple tests
         p_adjust_cutoff = np.percentile(evd[phen], 5.)
@@ -489,6 +494,7 @@ def main():
             for k, res in original[phen][i].items():
                 p = res[0]
                 succ = res[1]
+                d = deltas[phen][i][k]
                 # Poisson CI
                 upper = stats.chi2.ppf(0.975, 2 * succ + 2) / 2.
                 if succ > 0:
@@ -509,7 +515,7 @@ def main():
                 else:
                     p_adjust = stats.percentileofscore(evd[phen], p, kind='weak') / 100.
                 print(f"{i}\t{k}\t{ibdlen[i][k]}\t{p}\t{lower}," +
-                      f"{upper}\t{p_adjust}\t{p_adjust_cutoff}\t{succ}\t{total_perms}", file=opf)
+                      f"{upper}\t{p_adjust}\t{p_adjust_cutoff}\t{succ}\t{total_perms}\t{d}", file=opf)
 
 
 if __name__ == "__main__":
