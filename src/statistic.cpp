@@ -205,7 +205,7 @@ void Statistic::joint_permute() {
     }
 }
 
-void Statistic::joint_shuffle(std::vector<std::vector<int>> &phen, std::mt19937 &gen) {
+void Statistic::joint_shuffle(std::vector<std::vector<int>> &phen, std::mt19937_64 &gen) {
     for (size_t i = phen[0].size() - 1; i > 0; i--) {
         std::uniform_int_distribution<> dis(0, i);
         int j = dis(gen);
@@ -403,7 +403,7 @@ void Statistic::test_group_permutation(unsigned int seed) {
         std::cerr << std::endl;
     }
 
-    std::mt19937 tgen(seed);
+    std::mt19937_64 tgen(seed);
     for (const auto &v : *tgroups) {// For each of the set of group indices
         std::vector<std::vector<int>> tphenotypes_tmp;
         group_pack(tphenotypes, tphenotypes_tmp, v);

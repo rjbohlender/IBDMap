@@ -29,12 +29,12 @@ class Statistic {
 
     std::vector<std::pair<arma::sword, arma::sword>> pairs;
 
-    std::mt19937 gen;
+    std::mt19937_64 gen;
 
     static void x1(int y, double &cscs, double &cscn);
     static void x0(int y, double &cscn, double &cncn);
     void initialize();
-    static void joint_shuffle(std::vector<std::vector<int>> &phen, std::mt19937 &gen);
+    static void joint_shuffle(std::vector<std::vector<int>> &phen, std::mt19937_64 &gen);
     void joint_permute();
     static void group_unpack(std::vector<std::vector<int>> &p_original,
                              const std::vector<std::vector<int>> &p_tmp,
