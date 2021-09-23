@@ -5,6 +5,7 @@
 #ifndef CARVAIBD_SRC_BREAKPOINT_HPP
 #define CARVAIBD_SRC_BREAKPOINT_HPP
 
+#include <string>
 #include <utility>
 #include <vector>
 

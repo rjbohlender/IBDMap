@@ -149,12 +149,11 @@ def parse_avg(i: int, args: ap.Namespace, ibd_frac: Dict[int, dict]) \
             else:
                 try:
                     if args.two_sided:
-                        permuted[
-                            lineno % args.phenotypes][chrom][
-                        args.nperm * (j - args.at):args.nperm * (j - args.at + 1)] += np.abs(vals)
+                        permuted[lineno % args.phenotypes][chrom][
+                            args.nperm * (j - args.at):args.nperm * (j - args.at + 1)] += np.abs(vals)
                     else:
                         permuted[lineno % args.phenotypes][chrom][
-                        (args.nperm * (j - args.at)):(args.nperm * (j - args.at + 1))] += vals
+                            (args.nperm * (j - args.at)):(args.nperm * (j - args.at + 1))] += vals
                 except ValueError as err:
                     print(
                         'permuted: {} vals: {}'.format(permuted[lineno % args.phenotypes][chrom].shape, vals.shape),
@@ -213,7 +212,10 @@ def get_pdist(stat_dist: np.ndarray, method: str) -> np.ndarray:
 
 def parse(i: int, orig_avg: List[float], permuted_avg: List[np.ndarray], breakpoints: Dict[int, int],
           args: ap.Namespace) \
-        -> Tuple[List[Dict[int, dict]], List[Dict[int, np.ndarray]], List[Dict[int, np.ndarray]], List[Dict[int, Dict[int, float]]]]:
+        -> Tuple[List[Dict[int, dict]],
+                 List[Dict[int, np.ndarray]],
+                 List[Dict[int, np.ndarray]],
+                 List[Dict[int, Dict[int, float]]]]:
     """Final pass parser for the extreme value distribution.
 
     Args:

@@ -11,6 +11,7 @@
 #include "indexer.hpp"
 #include "parameters.hpp"
 #include "reporter.hpp"
+#include <string>
 #include <armadillo>
 #include <boost/optional.hpp>
 #include <future>

@@ -4,6 +4,7 @@
 
 #include "statistic.hpp"
 #include "split.hpp"
+#include <string>
 #include <SugarPP/include/sugarpp/range/enumerate.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <fmt/include/fmt/ostream.h>
