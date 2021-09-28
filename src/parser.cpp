@@ -8,7 +8,7 @@ void Parser::count_breakpoints(std::istream &is) {
     nbreakpoints = 0;
     std::string line;
     while (std::getline(is, line)) {
-        if (boost::starts_with(line, "#"))
+        if (boost::starts_with(line, "#") || boost::starts_with(line, "chr"))
             continue;
         nbreakpoints++;
     }
