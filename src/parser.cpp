@@ -162,7 +162,6 @@ void Parser::parse_input(std::istream &is) {
         Statistic stat(data,
                        bp,
                        indexer,
-                       phenotypes,
                        reporter,
                        params,
                        groups,
@@ -336,7 +335,7 @@ void Parser::parse_pheno(std::istream &is) {
                 phenotypes[i - 1].push_back(std::stoi(splitter[i]));
                 if (phenotypes[i - 1].back() != 0 && phenotypes[i - 1].back() != 1) {
                     if (params.verbose) {
-                        fmt::print(std::cerr, "{} {}\n", splitter[0], splitter[1]);
+                        fmt::print(std::cerr, "{} {}\n", splitter[0], splitter[i]);
                     }
                 }
                 if (params.swap) {// Swap case-control status
@@ -376,7 +375,7 @@ void Parser::parse_pheno(std::istream &is) {
             }
         }
 
-        indexer->emplace_back(Indexer(case_count, control_count, (*samples), phenotypes.back()));
+        indexer->emplace_back(Indexer(case_count, control_count, (*samples), v));
     }
     if (fill_patterns.size() > 1) {
         groups = std::vector<std::vector<arma::uword>>();

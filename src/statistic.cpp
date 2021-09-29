@@ -10,14 +10,7 @@
 #include <fmt/include/fmt/ostream.h>
 #include <utility>
 
-Statistic::Statistic(arma::sp_colvec data_,
-                     Breakpoint bp_,
-                     std::shared_ptr<std::vector<Indexer>> indexer_,
-                     std::vector<std::vector<int>> phenotypes_,
-                     std::shared_ptr<Reporter> reporter_,
-                     Parameters params_,
-                     std::optional<std::vector<std::vector<arma::uword>>> groups_,
-                     std::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms_) : data(std::move(data_)), indexer(std::move(indexer_)), phenotypes(std::move(phenotypes_)),
+Statistic::Statistic(arma::sp_colvec data_, Breakpoint bp_, std::shared_ptr<std::vector<Indexer>> indexer_, std::shared_ptr<Reporter> reporter_, Parameters params_, std::optional<std::vector<std::vector<arma::uword>>> groups_, std::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms_) : data(std::move(data_)), indexer(std::move(indexer_)),
                                                                                                  params(std::move(params_)),
                                                                                                  bp(std::move(bp_)), reporter(std::move(reporter_)), groups(std::move(groups_)), perms(std::move(perms_)),
                                                                                                  gen(params.seed) {
@@ -104,7 +97,7 @@ void Statistic::run() {
 
     arma::vec odds;
 
-    while (permutations[0] < params.nperms) {
+    while (permutations.back() < params.nperms) {
         if (perms && (*indexer).size() == 1) {
             phenotypes = *(*perms);
         } else {
@@ -225,6 +218,7 @@ void Statistic::initialize() {
                 calculate(idx.phenotypes, idx.case_case, idx.case_cont, idx.cont_cont, i));
         successes.push_back(0);
         permutations.push_back(0);
+        phenotypes.push_back(idx.phenotypes); // Ensure that phenotypes exposed to permutation start at the same place
     }
 }
 

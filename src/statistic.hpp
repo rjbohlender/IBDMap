@@ -61,14 +61,7 @@ public:
     std::vector<std::vector<double>> permuted_cscn;
     std::vector<std::vector<double>> permuted_cncn;
 
-    Statistic(arma::sp_colvec data_,
-              Breakpoint bp_,
-              std::shared_ptr<std::vector<Indexer>> indexer_,
-              std::vector<std::vector<int>> phenotypes_,
-              std::shared_ptr<Reporter> reporter_,
-              Parameters params_,
-              std::optional<std::vector<std::vector<arma::uword>>> groups_,
-              std::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms_);
+    Statistic(arma::sp_colvec data_, Breakpoint bp_, std::shared_ptr<std::vector<Indexer>> indexer_, std::shared_ptr<Reporter> reporter_, Parameters params_, std::optional<std::vector<std::vector<arma::uword>>> groups_, std::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms_);
 
     double calculate(std::vector<int> &phenotypes_, double cscs_count, double cscn_count, double cncn_count, size_t k);
 
