@@ -69,6 +69,7 @@ include_directories(${ARMADILLO_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${LAPACK_INCLUDE_DIRS})
 include_directories(${BLAS_INCLUDE_DIRS})
+include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party/sse2neon")
 include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party/zstr/src")
 
 add_executable(carvaIBD main.cpp ${PROJECT_SUPPORT_FILES})
