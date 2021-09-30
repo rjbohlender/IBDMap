@@ -38,8 +38,7 @@ jobs:
       run: carvaIBD
       
     - name: Upload artifact
-      working-directory: ${{github.workspace}}/build
       uses: actions/upload-artifact@v2.2.4
       with:
-        name: carvaIBD
+        name: ${{github.workspace}}/build/carvaIBD
       
