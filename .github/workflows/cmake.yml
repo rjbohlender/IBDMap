@@ -37,7 +37,7 @@ jobs:
 
     - name: Test
       working-directory: ${{github.workspace}}/build
-      run: carvaIBD
+      run: ./carvaIBD
       
     - name: Upload artifact
       uses: actions/upload-artifact@v2.2.4
