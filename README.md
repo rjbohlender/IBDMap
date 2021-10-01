@@ -99,3 +99,7 @@ Results can be combined using a python package provided along with carvaIBD. The
 python package IBDreduce is designed to use a small amount of memory to collapse
 all the results from across chromosomes, and across permutation sets within a
 chromosome.
+
+## Running a fully static build
+A script exists at `build-scripts/static-build-on-focal.sh` that should be able to prepare
+the environment, and do a statically linked build on Ubuntu 20.04.
