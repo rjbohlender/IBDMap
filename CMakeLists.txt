@@ -15,7 +15,8 @@ find_package(Armadillo REQUIRED)
 find_package(Threads REQUIRED)
 find_package(Boost 1.66.0 COMPONENTS iostreams REQUIRED)
 find_package(Gperftools)
-SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+
+SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a") # Find static ZLIB
 find_package(ZLIB REQUIRED)
 UNSET (CMAKE_FIND_LIBRARY_SUFFIXES)
 
@@ -79,7 +80,7 @@ include_directories(${BLAS_INCLUDE_DIRS})
 
 add_executable(carvaIBD main.cpp ${PROJECT_SUPPORT_FILES})
 
-target_link_libraries(carvaIBD -static)
+#target_link_libraries(carvaIBD -static)
 target_link_libraries(carvaIBD fmt::fmt-header-only)
 target_link_libraries(carvaIBD ${BLAS_LIBRARIES})
 target_link_libraries(carvaIBD ${LAPACK_LIBRARIES})
@@ -89,7 +90,8 @@ target_link_libraries(carvaIBD ${ZLIB_LIBRARIES})
 if(Gperftools_FOUND)
     target_link_libraries(carvaIBD ${Gperftools_LIBRARIES})
 endif()
-target_link_libraries(carvaIBD libpthread.a)
-target_link_libraries(carvaIBD gfortran)
+target_link_libraries(carvaIBD libpthread.a) # Libpthread is still getting dynamically linked too, but I think that's OK
+target_link_libraries(carvaIBD libgfortran.a) # Necessary for static linking BLAS
+target_link_libraries(carvaIBD libquadmath.a) # Libgfortran seems to need this
 
 target_compile_definitions(carvaIBD PRIVATE MAXCOLORS=10000000)
