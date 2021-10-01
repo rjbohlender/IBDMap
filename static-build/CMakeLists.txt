@@ -3,8 +3,8 @@ project(carvaIBD)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_subdirectory(../third_party/SugarPP/)
-add_subdirectory(../third_party/fmt/)
+add_subdirectory(../third_party/SugarPP/ sugarPP)
+add_subdirectory(../third_party/fmt/ fmt)
 
 set(Boost_USE_MULTITHREADED TRUE)
 set(Boost_USE_STATIC_LIBS   ON)
@@ -42,17 +42,17 @@ set(PROJECT_SUPPORT_FILES
         ../src/breakpoint.hpp
         ../src/indexer.hpp
         ../src/glm.hpp
-        ../thirdparty/stocc/stocc.h
-        ../thirdparty/stocc/sfmt.cpp ../thirdparty/stocc/sfmt.h
-        ../thirdparty/stocc/stoc3.cpp
-        ../thirdparty/stocc/fnchyppr.cpp
-        ../thirdparty/stocc/wnchyppr.cpp
-        ../thirdparty/stocc/stoc1.cpp
-        ../thirdparty/stocc/stoc2.cpp
-        ../thirdparty/stocc/randomc.h
-        ../thirdparty/stocc/mersenne.cpp
-        ../thirdparty/stocc/erfres.cpp
-        ../thirdparty/stocc/userintf.cpp
+        ../third_party/stocc/stocc.h
+        ../third_party/stocc/sfmt.cpp ../third_party/stocc/sfmt.h
+        ../third_party/stocc/stoc3.cpp
+        ../third_party/stocc/fnchyppr.cpp
+        ../third_party/stocc/wnchyppr.cpp
+        ../third_party/stocc/stoc1.cpp
+        ../third_party/stocc/stoc2.cpp
+        ../third_party/stocc/randomc.h
+        ../third_party/stocc/mersenne.cpp
+        ../third_party/stocc/erfres.cpp
+        ../third_party/stocc/userintf.cpp
         ../link/binomial.cpp
         ../link/binomial.hpp
         ../link/family.cpp
@@ -77,7 +77,7 @@ include_directories("${CMAKE_CURRENT_LIST_DIR}/../third_party/sse2neon")
 include_directories("${CMAKE_CURRENT_LIST_DIR}/../third_party/zstr/src")
 include_directories(${BLAS_INCLUDE_DIRS})
 
-add_executable(carvaIBD main.cpp ${PROJECT_SUPPORT_FILES})
+add_executable(carvaIBD ../main.cpp ${PROJECT_SUPPORT_FILES})
 
 target_link_libraries(carvaIBD -static) # Fully static build
 target_link_libraries(carvaIBD fmt::fmt-header-only)
