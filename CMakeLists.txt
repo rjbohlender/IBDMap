@@ -16,12 +16,13 @@ find_package(Threads REQUIRED)
 find_package(Boost 1.66.0 COMPONENTS iostreams REQUIRED)
 find_package(Gperftools)
 
-SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a") # Find static ZLIB
+SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a") # Find static ZLIB on Linux
 find_package(ZLIB REQUIRED)
 UNSET (CMAKE_FIND_LIBRARY_SUFFIXES)
 
 if (UNIX)
-    set(BLA_VENDOR OpenBLAS)
+    # If Intel MKL is installed, it will find & prefer it
+    #set(BLA_VENDOR OpenBLAS) # Uncomment to prefer OpenBLAS
     set(BLA_STATIC ON)
     find_package(LAPACK REQUIRED)
     find_package(BLAS REQUIRED)
@@ -80,8 +81,16 @@ include_directories(${BLAS_INCLUDE_DIRS})
 
 add_executable(carvaIBD main.cpp ${PROJECT_SUPPORT_FILES})
 
-#target_link_libraries(carvaIBD -static)
+#target_link_libraries(carvaIBD -static) # We can't get it fully static. Because of the nested cmake builds for third_party and boost?
 target_link_libraries(carvaIBD fmt::fmt-header-only)
+
+IF (UNIX AND NOT APPLE)
+    target_link_libraries(carvaIBD -Wl,--start-group)
+    target_link_libraries(carvaIBD ${BLAS_LIBRARIES})
+    target_link_libraries(carvaIBD ${LAPACK_LIBRARIES})
+    target_link_libraries(carvaIBD -Wl,--end-group)
+ENDIF (UNIX AND NOT APPLE)
+
 target_link_libraries(carvaIBD ${BLAS_LIBRARIES})
 target_link_libraries(carvaIBD ${LAPACK_LIBRARIES})
 target_link_libraries(carvaIBD ${ARMADILLO_LIBRARIES})
@@ -91,7 +100,10 @@ if(Gperftools_FOUND)
     target_link_libraries(carvaIBD ${Gperftools_LIBRARIES})
 endif()
 target_link_libraries(carvaIBD libpthread.a) # Libpthread is still getting dynamically linked too, but I think that's OK
-target_link_libraries(carvaIBD libgfortran.a) # Necessary for static linking BLAS
-target_link_libraries(carvaIBD libquadmath.a) # Libgfortran seems to need this
+
+IF (UNIX AND NOT APPLE) # These are necessary to static link OpenBLAS. Not sure what Intel MKL needs
+    target_link_libraries(carvaIBD libgfortran.a) # Necessary for static linking OpenBLAS
+    target_link_libraries(carvaIBD libquadmath.a) # Libgfortran seems to need this
+ENDIF (UNIX AND NOT APPLE)
 
 target_compile_definitions(carvaIBD PRIVATE MAXCOLORS=10000000)
