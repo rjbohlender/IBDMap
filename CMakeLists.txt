@@ -7,6 +7,7 @@ add_subdirectory(third_party/SugarPP/)
 add_subdirectory(third_party/fmt/)
 
 set(Boost_USE_MULTITHREADED TRUE)
+set(Boost_USE_STATIC_LIBS   ON)
 
 LIST(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/")
 
@@ -14,7 +15,9 @@ find_package(Armadillo REQUIRED)
 find_package(Threads REQUIRED)
 find_package(Boost 1.66.0 COMPONENTS iostreams REQUIRED)
 find_package(Gperftools)
+SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 find_package(ZLIB REQUIRED)
+UNSET (CMAKE_FIND_LIBRARY_SUFFIXES)
 
 if (UNIX)
     set(BLA_VENDOR OpenBLAS)
@@ -67,7 +70,7 @@ set(PROJECT_SUPPORT_FILES
         src/inputvalidator.hpp)
 
 include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party")
-#include_directories(${ARMADILLO_INCLUDE_DIRS})
+include_directories(${ARMADILLO_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${LAPACK_INCLUDE_DIRS})
 include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party/sse2neon")
@@ -76,6 +79,7 @@ include_directories(${BLAS_INCLUDE_DIRS})
 
 add_executable(carvaIBD main.cpp ${PROJECT_SUPPORT_FILES})
 
+target_link_libraries(carvaIBD -static)
 target_link_libraries(carvaIBD fmt::fmt-header-only)
 target_link_libraries(carvaIBD ${BLAS_LIBRARIES})
 target_link_libraries(carvaIBD ${LAPACK_LIBRARIES})
@@ -85,8 +89,7 @@ target_link_libraries(carvaIBD ${ZLIB_LIBRARIES})
 if(Gperftools_FOUND)
     target_link_libraries(carvaIBD ${Gperftools_LIBRARIES})
 endif()
-target_link_libraries(carvaIBD pthread)
+target_link_libraries(carvaIBD libpthread.a)
 target_link_libraries(carvaIBD gfortran)
-target_link_libraries(carvaIBD -static)
 
 target_compile_definitions(carvaIBD PRIVATE MAXCOLORS=10000000)
