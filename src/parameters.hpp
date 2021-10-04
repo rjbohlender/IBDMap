@@ -18,7 +18,6 @@ public:
     std::string input;
     std::string pheno;
     std::string gmap;
-    std::optional<std::string> cov;
     std::optional<std::string> info;
     size_t nperms;
     size_t nthreads;
@@ -37,15 +36,11 @@ public:
     std::optional<double> cM;
     std::optional<double> AF;
     std::optional<std::set<std::string>> sample_list;
-    std::string optimizer = "irls";
 
     void print(std::ostream &os) {
         fmt::print(os, "Input: {}\n", input);
         fmt::print(os, "Pheno: {}\n", pheno);
         fmt::print(os, "Gmap: {}\n", gmap);
-        if (cov) {
-            fmt::print(os, "Cov: {}\n", *cov);
-        }
         if (info) {
             fmt::print(os, "Info: {}\n", *info);
         }

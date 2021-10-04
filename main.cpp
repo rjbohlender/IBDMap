@@ -38,9 +38,6 @@ int main(int argc, char *argv[]) {
 				 "position, chromosome, cM. Header line is required. "
 	 			 "Expected format is physical_pos\tchromosome\tgenetic_position")
 	 ->required()->check(CLI::ExistingFile);
-  app.add_option("-c,--cov",
-				 params.cov,
-				 "Path to covariates. Expected format is ID Value1 Value2 ...")->check(CLI::ExistingFile);
   app.add_option("--info",
 				 params.info,
 				 "Path to supporting info file. Expected format is chr segID ...")->check(CLI::ExistingFile);
@@ -167,11 +164,10 @@ int main(int argc, char *argv[]) {
 	fmt::print(std::cerr, "Running parser.\n");
   }
   Parser parser(params.input,
-				params.pheno,
-				params.cov,
-				params,
-				reporter,
-				gmap);
+                params.pheno,
+                params,
+                reporter,
+                gmap);
 
   // Sort output
   fmt::print(std::cerr, "Sorting output.\n");

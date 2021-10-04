@@ -30,13 +30,6 @@ void Parser::parse_input(std::istream &is) {
     arma::sp_vec last(samples->size() * (samples->size() - 1) / 2.);
     arma::sp_vec data(samples->size() * (samples->size() - 1) / 2.);
 
-    // Generate permutations if we have covariates
-    Permute permute(params.seed);
-    std::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> o_perms;
-    if (covariates && phenotypes.size() == 1) {
-        generate_cov_adj_perms(permute, o_perms);
-    }
-
     arma::wall_clock timer;
     long lineno = -1;
     std::map<std::string, int> indices;
@@ -164,41 +157,13 @@ void Parser::parse_input(std::istream &is) {
                        indexer,
                        reporter,
                        params,
-                       groups,
-                       o_perms);
+                       groups);
         threadpool.submit(std::move(stat));
         submitted++;
     }
     while (threadpool.ntasks > 0) {
         std::this_thread::sleep_for(std::chrono::nanoseconds(100000000));
     }
-}
-
-void Parser::generate_cov_adj_perms(Permute &permute,
-                                    std::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> &o_perms) {
-    auto permutation_ptr = std::make_shared<std::vector<std::vector<int32_t>>>();
-
-    arma::vec Y = arma::conv_to<arma::vec>::from(phenotypes[0]);
-    Binomial link;
-    GLM<Binomial> fit(*covariates, Y, link, params);
-    arma::vec odds = fit.mu_ / (1 - fit.mu_);
-
-    std::string lr_path = params.output_path.empty() ? "lr.txt" : params.output_path + ".lr.txt";
-
-    std::ofstream lr_out(lr_path);
-    lr_out << "Sample\tProb\tOdds" << std::endl;
-    for (int i = 0; i < odds.n_elem; i++) {
-        lr_out << cov_samples[i] << "\t" << fit.mu_(i) << "\t" << odds(i) << std::endl;
-    }
-
-    if (params.verbose) {
-        std::cerr << "LR Output: max pr: " << arma::max(fit.mu_) << " min pr: " << arma::min(fit.mu_) << std::endl;
-        std::cerr << "LR Output: max odds: " << arma::max(odds) << " min odds: " << arma::min(odds) << std::endl;
-    }
-    lr_out.close();
-
-    permute.get_permutations(permutation_ptr, odds, (*indexer)[0].case_count, params.nperms, params.nthreads - 2);
-    o_perms = permutation_ptr;
 }
 
 bool Parser::check_sample_list(const std::string &sample_pair) {
@@ -316,11 +281,6 @@ void Parser::parse_pheno(std::istream &is) {
             notified = true;
         }
 
-        if (!splitter.empty() && skip.find(splitter[0]) != skip.end()) {
-            // Skip samples with missing cov values; don't increment lineno because we're treating them as if they don't exist
-            continue;
-        }
-
         samples->push_back(splitter[iid]);
         std::vector<bool> pattern;
         for (int i = 1; i < splitter.size(); i++) {
@@ -395,143 +355,9 @@ void Parser::parse_pheno(std::istream &is) {
             std::cerr << std::endl;
         }
     }
-    if (covariates) {
-        int i = 0;
-        arma::uvec idx(samples->size());
-        for (const auto &v : (*samples)) {
-            if (cov_samples[i] != v) {
-                auto swap_val = std::find(cov_samples.begin(), cov_samples.end(), v);
-                if (swap_val == cov_samples.end())
-                    throw(std::runtime_error("ERROR: Sample not present in covariate file."));
-                int j = static_cast<int>(std::distance(cov_samples.begin(), swap_val));
-                idx(i) = j;
-                std::swap(cov_samples[i], cov_samples[j]);
-            } else {
-                idx(i) = i;
-            }
-            i++;
-        }
-        covariates = (*covariates).rows(idx);
-    }
 }
 
-void Parser::parse_cov(std::istream &is) {
-    std::string line;
-    unsigned long lineno = 0;
-    unsigned long nfields = 0;
-
-    std::map<std::string, std::vector<double>> data;
-    std::vector<std::vector<std::string>> unconvertible;
-
-    while (std::getline(is, line)) {
-        RJBUtil::Splitter<std::string> splitter(line, " \t");
-        if (lineno == 0) {// Skip the header
-            if (splitter.size() > 0) {
-                nfields = splitter.size() - 1;// Not counting the sample field so we don't have to subtract all the time.
-                unconvertible.resize(nfields);
-                lineno++;
-            } else {
-                throw(std::runtime_error("Header line of covariate file is empty. Please include a header line."));
-            }
-            continue;
-        }
-
-        if (splitter.empty()) {
-            continue;
-        }
-        std::string sampleid = splitter[0];
-        if (splitter.size() < nfields + 1) {// Skip samples where we have a missing column or two
-            skip.emplace(sampleid);
-            continue;
-        }
-
-        cov_samples.push_back(sampleid);
-        data[sampleid] = std::vector<double>(nfields, 0);
-
-        for (int i = 0; i < nfields; i++) {
-            try {
-                data[sampleid][i] = std::stod(splitter[i + 1]);
-            } catch (...) {
-                unconvertible[i].push_back(splitter[i + 1]);
-            }
-        }
-        lineno++;
-    }
-
-    // Handle unconvertible fields by treating them as factors with levels -- convert to dummy variables
-    int fieldno = 0;
-    int offset = 0;
-    for (const auto &field : unconvertible) {
-        if (!field.empty()) {
-            std::set<std::string> unique(field.begin(), field.end());
-            std::map<std::string, int> levels;
-
-            if (params.verbose) {
-                std::cerr << "In reading covariates, could not convert column " << fieldno + 1 << " to double." << std::endl;
-                std::cerr << "Levels: ";
-            }
-
-            for (auto it = unique.begin(); it != unique.end(); it++) {
-                levels.emplace(std::make_pair(*it, std::distance(unique.begin(), it)));
-                if (params.verbose) {
-                    std::cerr << *it << " : " << std::distance(unique.begin(), it) << " ";
-                }
-            }
-            if (params.verbose) {
-                std::cerr << std::endl;
-            }
-
-            int sampleno = 0;
-            int nlevels = levels.size() - 1;
-            for (const auto &v : field) {// Convert to dummy variable
-                for (int j = 0; j < nlevels; j++) {
-                    if (j == 0) {
-                        if (j == levels[v]) {
-                            data[cov_samples[sampleno]][fieldno + offset] = 1.0;
-                        } else {
-                            data[cov_samples[sampleno]][fieldno + offset] = 0.0;
-                        }
-                    } else {
-                        if (j == levels[v]) {
-                            data[cov_samples[sampleno]].insert(data[cov_samples[sampleno]].begin() + fieldno + offset + j, 1.0);
-                        } else {
-                            data[cov_samples[sampleno]].insert(data[cov_samples[sampleno]].begin() + fieldno + offset + j, 0.0);
-                        }
-                    }
-                }
-                sampleno++;
-            }
-            offset += nlevels - 1;
-            nfields += nlevels - 1;
-        }
-        fieldno++;
-    }
-
-    arma::mat design(cov_samples.size(), nfields + 1);
-    if (params.verbose) {
-        std::cerr << "Design.n_rows: " << design.n_rows << std::endl;
-        std::cerr << "Design.n_cols: " << design.n_cols << std::endl;
-    }
-    int i = 0;
-    for (const auto &s : cov_samples) {
-        design(i, 0) = 1;
-        int j = 1;
-        for (const auto &v : data[s]) {
-            design(i, j) = v;
-            j++;
-        }
-        i++;
-    }
-
-    covariates = design;
-}
-
-Parser::Parser(const std::string &input_path,
-               const std::string &pheno_path,
-               std::optional<std::string> cov_path,
-               Parameters params_,
-               std::shared_ptr<Reporter> reporter_,
-               GeneticMap &gmap_)
+Parser::Parser(const std::string &input_path, const std::string &pheno_path, Parameters params_, std::shared_ptr<Reporter> reporter_, GeneticMap &gmap_)
     : nbreakpoints(0), params(std::move(params_)), reporter(std::move(reporter_)), gmap(std::move(gmap_)) {
     // Default construct shared ptrs
     samples = std::make_shared<std::vector<std::string>>();
@@ -554,17 +380,6 @@ Parser::Parser(const std::string &input_path,
 
     Source input_source(input_path);
     std::istream input_s(&(*input_source.streambuf));
-
-    if (cov_path) {
-        if (params.verbose) {
-            std::cerr << "Parsing covariates\n";
-        }
-
-        Source cov_source(*cov_path);
-        std::istream cov_is(&(*cov_source.streambuf));
-
-        parse_cov(cov_is);
-    }
 
     if (params.verbose) {
         std::cerr << "Parsing phenotypes\n";

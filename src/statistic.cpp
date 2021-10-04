@@ -10,9 +10,9 @@
 #include <fmt/include/fmt/ostream.h>
 #include <utility>
 
-Statistic::Statistic(arma::sp_colvec data_, Breakpoint bp_, std::shared_ptr<std::vector<Indexer>> indexer_, std::shared_ptr<Reporter> reporter_, Parameters params_, std::optional<std::vector<std::vector<arma::uword>>> groups_, std::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> perms_) : data(std::move(data_)), indexer(std::move(indexer_)),
+Statistic::Statistic(arma::sp_colvec data_, Breakpoint bp_, std::shared_ptr<std::vector<Indexer>> indexer_, std::shared_ptr<Reporter> reporter_, Parameters params_, std::optional<std::vector<std::vector<arma::uword>>> groups_) : data(std::move(data_)), indexer(std::move(indexer_)),
                                                                                                  params(std::move(params_)),
-                                                                                                 bp(std::move(bp_)), reporter(std::move(reporter_)), groups(std::move(groups_)), perms(std::move(perms_)),
+                                                                                                 bp(std::move(bp_)), reporter(std::move(reporter_)), groups(std::move(groups_)),
                                                                                                  gen(params.seed) {
     if (params.enable_testing) {
         test_statistic();
@@ -98,19 +98,15 @@ void Statistic::run() {
     arma::vec odds;
 
     while (permutations.back() < params.nperms) {
-        if (perms && (*indexer).size() == 1) {
-            phenotypes = *(*perms);
-        } else {
-            if (groups) {
-                for (const auto &groupIndices : *groups) {
-                    std::vector<std::vector<int>> phenotypes_tmp;
-                    group_pack(phenotypes, phenotypes_tmp, groupIndices);
-                    joint_shuffle(phenotypes_tmp, gen);
-                    group_unpack(phenotypes, phenotypes_tmp, groupIndices);
-                }
-            } else {
-                joint_shuffle(phenotypes, gen);
+        if (groups) {
+            for (const auto &groupIndices : *groups) {
+                std::vector<std::vector<int>> phenotypes_tmp;
+                group_pack(phenotypes, phenotypes_tmp, groupIndices);
+                joint_shuffle(phenotypes_tmp, gen);
+                group_unpack(phenotypes, phenotypes_tmp, groupIndices);
             }
+        } else {
+            joint_shuffle(phenotypes, gen);
         }
         joint_permute();
     }
@@ -180,21 +176,12 @@ void Statistic::group_unpack(std::vector<std::vector<int>> &p_original,
 void Statistic::joint_permute() {
     double val;
     for (auto [i, p] : Enumerate(phenotypes)) {
-        if (perms) {
-            val = calculate(p, (*indexer)[0].case_case, (*indexer)[0].case_cont, (*indexer)[0].cont_cont, 0);
-            if (val >= original[0]) {
-                successes[0]++;
-            }
-            permutations[0]++;
-            permuted[0].push_back(val);
-        } else {
-            val = calculate(p, (*indexer)[i].case_case, (*indexer)[i].case_cont, (*indexer)[i].cont_cont, i);
-            if (val >= original[i]) {
-                successes[i]++;
-            }
-            permutations[i]++;
-            permuted[i].push_back(val);
+        val = calculate(p, (*indexer)[i].case_case, (*indexer)[i].case_cont, (*indexer)[i].cont_cont, i);
+        if (val >= original[i]) {
+            successes[i]++;
         }
+        permutations[i]++;
+        permuted[i].push_back(val);
     }
 }
 
