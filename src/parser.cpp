@@ -268,18 +268,12 @@ void Parser::parse_pheno(std::istream &is) {
     arma::uword lineno = 0;
     std::map<std::vector<bool>, std::vector<arma::uword>> fill_patterns;
 
-    bool notified = false;
-
     while (std::getline(is, line)) {
         if (boost::starts_with(line, "#") || lineno == 0) {// Skip the header
             lineno++;
             continue;
         }
         RJBUtil::Splitter<std::string_view> splitter(line, " \t");
-        if (splitter.size() > 2 && !notified) {
-            std::cerr << "Multiple phenotypes provided. Covariates will be ignored." << std::endl;
-            notified = true;
-        }
 
         samples->push_back(splitter[iid]);
         std::vector<bool> pattern;
