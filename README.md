@@ -12,10 +12,15 @@ git submodule init
 git submodule update
 ```
 
-Dependencies:
+Dependencies to build dynamically:
     - C++ compiler supporting C++17
     - Armadillo: version >= 8.6
     - Boost C++ Library
+
+Dependencies to do a mostly static build on Linux:
+    - OpenBLAS or Intel MKL
+    - gfortran if using OpenBLAS
+    - Full build environment for Ubuntu 20.04: `apt install cmake build-essential libarmadillo-dev libboost-iostreams-dev libopenblas-dev gfortran`
     
 Create a build directory and run CMAKE and make from within the build directory:
 
@@ -66,6 +71,13 @@ another, perhaps newer compiler:
 cmake -DCMAKE_CXX_COMPILER=<path_to_executable> ..
 ```
 
+If using OpenBLAS with CMake older than 3.21, it will not be able to 
+find lapack.a for static linking. You can tell cmake where to find it. 
+On Ubuntu 20.04:
+```bash
+cmake -DCMAKE_BUILD_TYPE=Release -DLAPACK_LIBRARIES=/usr/lib/x86_64-linux-gnu/openblas-pthread/liblapack.a ..
+```
+
 ## Map-Reduce
 
 Biobank scale datasets can require substantial computation time to complete
@@ -87,3 +99,7 @@ Results can be combined using a python package provided along with carvaIBD. The
 python package IBDreduce is designed to use a small amount of memory to collapse
 all the results from across chromosomes, and across permutation sets within a
 chromosome.
+
+## Running a fully static build
+A script exists at `build-scripts/static-build-on-focal.sh` that should be able to prepare
+the environment, and do a statically linked build on Ubuntu 20.04.
