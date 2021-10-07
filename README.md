@@ -95,6 +95,11 @@ generator used for permutation. Users should ensure that the seed is specified,
 and different, for each job. Jobs submitted without specifying the seed will
 generate a random seed from std::random_device as necessary.
 
+To be clear regarding the seeds used in jobs, the seed should be specified and different
+for each job on a chromosome. However, the seeds should be identical between chromosomes.
+so if you have five jobs for chromosome one, and your seeds are {1, 2, 3, 4, 5} for
+each job, then they should also be the same for chromosomes 2-22 as well.
+
 Results can be combined using a python package provided along with carvaIBD. The
 python package IBDreduce is designed to use a small amount of memory to collapse
 all the results from across chromosomes, and across permutation sets within a
