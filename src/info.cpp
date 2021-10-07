@@ -46,7 +46,7 @@ double Info::get_field(const std::string &segment, const std::string &field) {
     return data[segment][field_map[field]];
 }
 
-bool Info::filter_segment(const std::string &segment, const Parameters &params, const arma::uword col_num) {
+bool Info::filter_segment(const std::string &segment, const Parameters &params) {
     // If neither filter is used the segment will automatically pass.
     // If only a single is used, passing will depend on the single filter.
     bool AF = true;
@@ -55,7 +55,7 @@ bool Info::filter_segment(const std::string &segment, const Parameters &params, 
         AF = get_field(segment, "freq") < *params.AF;
     }
     if (params.cM) {
-        cM = get_field(segment, "cM") >= (*params.cM)[col_num];
+        cM = get_field(segment, "cM") >= *params.cM;
     }
     return !(AF & cM);// If both filters are used the segment must pass both filters.
                       // We negate because the logic is, true = filter, false = keep
