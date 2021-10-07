@@ -5,19 +5,20 @@
 #ifndef CARVAIBD_INFO_HPP
 #define CARVAIBD_INFO_HPP
 
+#include "parameters.hpp"
+#include <map>
 #include <string>
 #include <vector>
-#include <map>
-#include "parameters.hpp"
 
 class Info {
-  std::map<std::string, std::vector<double>> data;
-  std::map<std::string, int> field_map;
-public:
-  Info(std::istream &ifs, Parameters &params);
+    std::map<std::string, std::vector<double>> data;
+    std::map<std::string, int> field_map;
 
-  double get_field(const std::string &segment, const std::string &field);
-  bool filter_segment(const std::string &segment, const Parameters &params, const arma::uword col_num);
+public:
+    Info(std::istream &ifs, Parameters &params);
+
+    double get_field(const std::string &segment, const std::string &field);
+    bool filter_segment(const std::string &segment, const Parameters &params, const arma::uword col_num);
 };
 
-#endif //CARVAIBD_INFO_HPP
+#endif//CARVAIBD_INFO_HPP

@@ -12,10 +12,15 @@ git submodule init
 git submodule update
 ```
 
-Dependencies:
+Dependencies to build dynamically:
     - C++ compiler supporting C++17
     - Armadillo: version >= 8.6
     - Boost C++ Library
+
+Dependencies to do a mostly static build on Linux:
+    - OpenBLAS or Intel MKL
+    - gfortran if using OpenBLAS
+    - Full build environment for Ubuntu 20.04: `apt install cmake build-essential libarmadillo-dev libboost-iostreams-dev libopenblas-dev gfortran`
     
 Create a build directory and run CMAKE and make from within the build directory:
 
@@ -60,6 +65,13 @@ you need to change the compiler used from the one automatically detected to anot
 cmake -DCMAKE_CXX_COMPILER=<path_to_executable> ..
 ```
 
+If using OpenBLAS with CMake older than 3.21, it will not be able to
+find lapack.a for static linking. You can tell cmake where to find it.
+On Ubuntu 20.04:
+```bash
+cmake -DCMAKE_BUILD_TYPE=Release -DLAPACK_LIBRARIES=/usr/lib/x86_64-linux-gnu/openblas-pthread/liblapack.a ..
+```
+
 ## Program Execution
 
 Our IBD Mapping process requires several input files. Phenotype information should be provided for each sample. If any
@@ -75,23 +87,30 @@ store the permuted test statistics, eventually outputing for all permutations.
 
 ## Map-Reduce
 
-Biobank scale datasets can require substantial computation time to complete enough permutations to reach genome-wide
-significance. For researchers working in a high performance computing environment we recommend a map-reduce strategy to
-enable analysis in reasonable periods of time.
+Biobank scale datasets can require substantial computation time to complete
+enough permutations to reach genome-wide significance. For researchers working
+in a high performance computing environment we recommend a map-reduce strategy
+to enable analysis in reasonable periods of time. 
 
-The genome is conveniently broken into 22 autosomal components. Furthermore, each job can be submitted with a subset of
-the total desired permutations. For example, if the user wishes to conduct a genome-wide analysis with 100,000
-permutations on each breakpoint, then they can submit ten, 10,000 permutation runs for each chromosome. This gives a
-total of 100,000 permutations across all chromosomes. Each job can specify the seed used to initialize the random number
-generator for permutation. Users should ensure that they specify a different seed for each job on the same chromosome.
-In other words, for chromosome 1 we would submit a job starting with seed 1234, then 1235, then 1236 etc. When all
-chromosome 1 jobs have been submitted, we then submit chromosome 2 with seed 1234, the 1235, then 1236 etc. Jobs
-submitted without specifying the seed will generate a random seed from std::random_device as necessary.
+The genome is conveniently broken into 22 autosomal components. Further, each
+job can be submitted with a subset of the total desired permutations. For
+example, if the user wishes to conduct a genome-wide analysis with 100,000
+permutations on each breakpoint, then they can submit ten, 10,000 permutation
+runs for each chromosome, for a total of 100,000 permutations across all
+chromosomes. Each job can specify the seed used to initialize the random number
+generator used for permutation. Users should ensure that the seed is specified,
+and different, for each job. Jobs submitted without specifying the seed will
+generate a random seed from std::random_device as necessary.
 
-Results can be combined using a python program provided along with IBDMap. The python program, IBDreduce, is designed to
-use a small amount of memory to collapse all the results from across chromosomes, and across permutation sets within a
-chromosome. At the cost of additional runtime and memory usage, FDR corrected p-values can also be output, which account
-for the correlation between breakpoints and thus provide a non-conservative p-value estimate.
+To be clear regarding the seeds used in jobs, the seed should be specified and different
+for each job on a chromosome. However, the seeds should be identical between chromosomes.
+so if you have five jobs for chromosome one, and your seeds are {1, 2, 3, 4, 5} for
+each job, then they should also be the same for chromosomes 2-22 as well.
+
+Results can be combined using a python package provided along with carvaIBD. The
+python package IBDreduce is designed to use a small amount of memory to collapse
+all the results from across chromosomes, and across permutation sets within a
+chromosome.
 
 ## Data Formatting
 
@@ -127,3 +146,7 @@ freq cM
 ## Major Changes
 
 3/16/2021: Output files are gzipped by default now.
+
+## Running a fully static build
+A script exists at `build-scripts/static-build-on-focal.sh` that should be able to prepare
+the environment, and do a statically linked build on Ubuntu 20.04.

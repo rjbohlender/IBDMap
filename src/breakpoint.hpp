@@ -5,6 +5,7 @@
 #ifndef CARVAIBD_SRC_BREAKPOINT_HPP
 #define CARVAIBD_SRC_BREAKPOINT_HPP
 
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -12,9 +13,9 @@
  * @brief Basic POD type to hold breakpoint information
  */
 struct Breakpoint {
-  std::pair<std::string, std::string> breakpoint;
-  std::vector<double> segment_lengths;
-  std::vector<std::pair<std::string, std::string>> ibd_pairs;
+    std::pair<std::string, std::string> breakpoint;
+    std::vector<double> segment_lengths;
+    std::vector<std::pair<std::string, std::string>> ibd_pairs;
 };
 
-#endif //CARVAIBD_SRC_BREAKPOINT_HPP
+#endif//CARVAIBD_SRC_BREAKPOINT_HPP

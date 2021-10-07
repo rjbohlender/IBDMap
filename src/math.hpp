@@ -9,4 +9,4 @@
 
 double cor(const arma::sp_vec &X, const arma::sp_vec &Y);
 
-#endif //CARVAIBD_MATH_HPP
+#endif//CARVAIBD_MATH_HPP

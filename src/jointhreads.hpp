@@ -5,21 +5,22 @@
 #ifndef CARVAIBD_JOINTHREADS_HPP
 #define CARVAIBD_JOINTHREADS_HPP
 
-#include <vector>
 #include <thread>
+#include <vector>
 
 class JoinThreads {
-  std::vector<std::thread> &threads;
+    std::vector<std::thread> &threads;
+
 public:
-  JoinThreads(std::vector<std::thread> &threads_)
-	  : threads(threads_) {}
-  ~JoinThreads() {
-	for (unsigned long i = 0; i < threads.size(); ++i) {
-	  if (threads[i].joinable()) {
-		threads[i].join();
-	  }
-	}
-  }
+    JoinThreads(std::vector<std::thread> &threads_)
+        : threads(threads_) {}
+    ~JoinThreads() {
+        for (unsigned long i = 0; i < threads.size(); ++i) {
+            if (threads[i].joinable()) {
+                threads[i].join();
+            }
+        }
+    }
 };
 
-#endif //CARVAIBD_JOINTHREADS_HPP
+#endif//CARVAIBD_JOINTHREADS_HPP

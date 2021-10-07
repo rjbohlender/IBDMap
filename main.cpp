@@ -17,8 +17,8 @@ int main(int argc, char *argv[]) {
 
   Parameters params;
   std::vector<int> tmp_range_vec;
+  std::vector<std::string> tmp_exclude_vec;
   std::vector<std::string> tmp_sample_vec;
-  std::vector<double> tmp_cm_vec;
 
   CLI::App app{"carvaIBD is an IBD mapping tool for large scale IBD datasets."};
 
@@ -37,9 +37,6 @@ int main(int argc, char *argv[]) {
 				 "position, chromosome, cM. Header line is required. "
 	 			 "Expected format is physical_pos\tchromosome\tgenetic_position")
 	 ->required()->check(CLI::ExistingFile);
-  app.add_option("-c,--cov",
-				 params.cov,
-				 "Path to covariates. Expected format is ID Value1 Value2 ...")->check(CLI::ExistingFile);
   app.add_option("--info",
 				 params.info,
 				 "Path to supporting info file. Expected format is chr segID ...")->check(CLI::ExistingFile);
@@ -60,10 +57,10 @@ int main(int argc, char *argv[]) {
 				 "closer than the given distance. Default value of 0.0 cM.")
 	 ->default_val(0.0);
   app.add_option("--cm",
-				 tmp_cm_vec,
+				 params.cM,
 				 "Sets the minimum segment length for segments to be included. "
 				 "The parser will automatically skip segments that are smaller "
-				 "than the given length.")->delimiter(',');
+				 "than the given length.");
   app.add_option("--af",
 				 params.AF,
 				 "Sets the maximum allele frequency for segments to be "
@@ -80,6 +77,11 @@ int main(int argc, char *argv[]) {
 				 "will only analyze breakpoints with positions in that range, "
 				 "inclusive of the endpoints.")
 	 ->delimiter(',')->expected(2);
+  app.add_option("--exclude",
+               tmp_exclude_vec,
+               "A series of ranges of the form 123-456,457-900 to exclude from the analyzed chromosome."
+               "All breakpoints within the range (inclusive) will be dropped.")
+        ->delimiter(',');
   app.add_option("--sample_list,-l",
 				 tmp_sample_vec,
 				 "Comma-separated list of samples to include in analysis. All "
@@ -130,11 +132,21 @@ int main(int argc, char *argv[]) {
   if (tmp_range_vec.size() == 2) {
 	params.range = tmp_range_vec;
   }
+  if (!tmp_exclude_vec.empty()) {
+      std::vector<std::pair<int, int>> exclude_vec;
+      for (auto &v : tmp_exclude_vec) {
+          RJBUtil::Splitter<std::string> splitter(v, "-");
+          exclude_vec.emplace_back(std::make_pair(std::stoi(splitter[0]), std::stoi(splitter[1])));
+      }
+      params.exclude = exclude_vec;
+  }
   if (!tmp_sample_vec.empty()) {
 	params.sample_list = std::set<std::string>(tmp_sample_vec.begin(), tmp_sample_vec.end());
   }
-  if (!tmp_cm_vec.empty()) {
-    params.cM = tmp_cm_vec;
+
+  if (params.info && !params.dash) {
+    fmt::print(std::cerr, "Info files are only supported with the --dash option.");
+    std::exit(-1);
   }
 
   if (params.info && !params.dash) {
@@ -156,11 +168,10 @@ int main(int argc, char *argv[]) {
 	fmt::print(std::cerr, "Running parser.\n");
   }
   Parser parser(params.input,
-				params.pheno,
-				params.cov,
-				params,
-				reporter,
-				gmap);
+                params.pheno,
+                params,
+                reporter,
+                gmap);
 
   // Sort output
   fmt::print(std::cerr, "Sorting output.\n");
