@@ -43,7 +43,7 @@ set(PROJECT_SUPPORT_FILES
     src/source.cpp
     src/source.hpp
     src/inputvalidator.cpp
-    src/inputvalidator.hpp)
+    src/inputvalidator.hpp src/phenotypes.cpp src/phenotypes.hpp)
 
 include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party")
 include_directories(${ARMADILLO_INCLUDE_DIRS})

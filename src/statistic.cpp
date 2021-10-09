@@ -50,7 +50,7 @@ Statistic::calculate(std::vector<int> &phenotypes_, double cscs_count, double cs
             x0(y, cscn, cncn);
         } else if (x == -1) {
         } else {
-            fmt::print(std::cerr, "Phenotype: {} p1: {}\n", x, p1);
+            fmt::print(std::cerr, "Phenotypes: {} p1: {}\n", x, p1);
             throw(std::runtime_error("ERROR: invalid phenotype in calculate."));
         }
     }
@@ -75,7 +75,7 @@ void Statistic::x1(int y, double &cscs, double &cscn) {
         cscn += 1.;
     } else if (y == -1) {
     } else {
-        fmt::print(std::cerr, "Phenotype: {}\n", y);
+        fmt::print(std::cerr, "Phenotypes: {}\n", y);
         throw(std::runtime_error("ERROR: invalid phenotype in calculate."));
     }
 }
@@ -87,7 +87,7 @@ void Statistic::x0(int y, double &cscn, double &cncn) {
         cncn += 1.;
     } else if (y == -1) {
     } else {
-        fmt::print(std::cerr, "Phenotype: {}\n", y);
+        fmt::print(std::cerr, "Phenotypes: {}\n", y);
         throw(std::runtime_error("ERROR: invalid phenotype in calculate."));
     }
 }
@@ -279,7 +279,7 @@ void Statistic::test_statistic() {
             x0(y, cscn, cncn);
         } else if (x == -1) {
         } else {
-            fmt::print(std::cerr, "Phenotype: {} p1: {}\n", x, p1);
+            fmt::print(std::cerr, "Phenotypes: {} p1: {}\n", x, p1);
         }
     }
 

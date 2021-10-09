@@ -74,7 +74,7 @@ cmake -DCMAKE_BUILD_TYPE=Release -DLAPACK_LIBRARIES=/usr/lib/x86_64-linux-gnu/op
 
 ## Program Execution
 
-Our IBD Mapping process requires several input files. Phenotype information should be provided for each sample. If any
+Our IBD Mapping process requires several input files. Phenotypes information should be provided for each sample. If any
 samples lack phenotype information, they are automatically dropped from analysis. IBD segments identified using
 an outside program, e.g., GERMLINE or iLASH, should be processed into our input format. Each breakpoint is a segment
 transition point where we either add new segment carriers or end IBD segments and delete carriers of those segments.

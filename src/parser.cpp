@@ -5,19 +5,6 @@
 #include "parser.hpp"
 #include "inputvalidator.hpp"
 
-void Parser::count_breakpoints(std::istream &is) {
-    nbreakpoints = 0;
-    std::string line;
-    while (std::getline(is, line)) {
-        if (boost::starts_with(line, "#") || boost::starts_with(line, "chr"))
-            continue;
-        nbreakpoints++;
-    }
-    if (params.verbose) {
-        std::cerr << "total breakpoints: " << nbreakpoints << std::endl;
-    }
-}
-
 void Parser::parse_input(std::istream &is) {
     std::string line;
     unsigned long submitted = 0;
@@ -28,13 +15,12 @@ void Parser::parse_input(std::istream &is) {
     ThreadPool<Statistic> threadpool(params);
 
     // Maintain a single vector that we just update with each line
-    arma::sp_vec last(samples->size() * (samples->size() - 1) / 2.);
-    arma::sp_vec data(samples->size() * (samples->size() - 1) / 2.);
+    arma::sp_vec last(pheno.samples->size() * (pheno.samples->size() - 1) / 2.);
+    arma::sp_vec data(pheno.samples->size() * (pheno.samples->size() - 1) / 2.);
 
     arma::wall_clock timer;
     long lineno = -1;
     std::map<std::string, int> indices;
-    long long total_delta = 0;
     while (std::getline(is, line)) {
         if (params.dash && boost::starts_with(line, "##")) {
             // Processing Header
@@ -119,27 +105,19 @@ void Parser::parse_input(std::istream &is) {
         }
 
         if (params.range) {
-            if (pos < (*params.range)[0] || pos > (*params.range)[1]) {
+            if (check_range(pos)) {
                 continue;
             }
         }
         if (params.exclude) {
-            bool exclude_region = false;
-            for (const auto &v : *params.exclude) {
-                exclude_region |= pos >= v.first && pos <= v.second;
-            }
-            if (exclude_region) {
-                fmt::print(std::cerr, "{}\n", pos);
+            if (check_exclude(pos)) {
+                fmt::print(std::cerr, "Excluded breakpoint: {}\n", pos);
                 continue;
             }
         }
 
         if (params.rsquared) {
-            double r2 = cor(data, last);
-            if (params.verbose) {
-                std::cerr << "r2: " << r2 << std::endl;
-            }
-            if (r2 > *params.rsquared) {
+            if(check_r2(data, last)) {
                 continue;
             }
         }
@@ -155,10 +133,10 @@ void Parser::parse_input(std::istream &is) {
 
         Statistic stat(data,
                        bp,
-                       indexer,
+                       pheno.indexer,
                        reporter,
                        params,
-                       groups);
+                       pheno.groups);
         threadpool.submit(std::move(stat));
         submitted++;
     }
@@ -170,6 +148,26 @@ void Parser::parse_input(std::istream &is) {
 bool Parser::check_sample_list(const std::string &sample_pair) {
     RJBUtil::Splitter<std::string_view> vals(sample_pair, ":");
     return params.sample_list->find(vals[0]) == params.sample_list->end() && params.sample_list->find(vals[1]) == params.sample_list->end();
+}
+
+bool Parser::check_range(int pos) {
+    return pos < (*params.range)[0] || pos > (*params.range)[1];
+}
+
+bool Parser::check_exclude(int pos) {
+    bool exclude_region = false;
+    for (const auto &v : *params.exclude) {
+        exclude_region |= pos >= v.first && pos <= v.second;
+    }
+    return exclude_region;
+}
+
+bool Parser::check_r2(const arma::sp_vec &data, const arma::sp_vec &last) {
+    double r2 = cor(data, last);
+    if (params.verbose) {
+        std::cerr << "r2: " << r2 << std::endl;
+    }
+    return r2 > *params.rsquared;
 }
 
 void Parser::update_data(arma::sp_vec &data,
@@ -198,7 +196,6 @@ void Parser::update_data(arma::sp_vec &data,
             }
         }
 
-
         if (params.dash && cluster) {
             RJBUtil::Splitter<std::string> vals(entry, ":");
             RJBUtil::Splitter<std::string> iids(vals[indices[iid_key]], ",");
@@ -207,7 +204,7 @@ void Parser::update_data(arma::sp_vec &data,
 
             for (auto it1 = iids.begin(); it1 != iids.end(); it1++) {
                 for (auto it2 = it1 + 1; it2 != iids.end(); it2++) {
-                    arma::sword row_idx = (*indexer)[0].translate(*it1, *it2);
+                    arma::sword row_idx = (*pheno.indexer)[0].translate(*it1, *it2);
 
                     int id_idx = indices["clusterID"];
                     auto ids = fmt::format("{},{}", *it1, *it2);
@@ -232,7 +229,7 @@ void Parser::update_data(arma::sp_vec &data,
             RJBUtil::Splitter<std::string> pairs(vals[indices[iid_key]], "-");
 
             std::sort(pairs.begin(), pairs.end());
-            arma::sword row_idx = (*indexer)[0].translate(pairs[0], pairs[1]);
+            arma::sword row_idx = (*pheno.indexer)[0].translate(pairs[0], pairs[1]);
 
             auto ids = fmt::format("{},{}", pairs[0], pairs[1]);
             if (row_idx < 0) {
@@ -262,130 +259,18 @@ void Parser::update_data(arma::sp_vec &data,
     }
 }
 
-void Parser::parse_pheno(std::istream &is) {
-    int iid = 0;
-    int phe = 1;
-    std::string line;
-    arma::uword lineno = 0;
-    std::map<std::vector<bool>, std::vector<arma::uword>> fill_patterns;
 
-    while (std::getline(is, line)) {
-        if (boost::starts_with(line, "#") || lineno == 0) {// Skip the header
-            lineno++;
-            continue;
-        }
-        RJBUtil::Splitter<std::string_view> splitter(line, " \t");
-
-        samples->push_back(splitter[iid]);
-        std::vector<bool> pattern;
-        for (int i = 1; i < splitter.size(); i++) {
-            if (phenotypes.size() < i) {
-                phenotypes.emplace_back();
-            }
-            if (splitter[i] == "NA") {
-                pattern.push_back(false);
-                phenotypes[i - 1].push_back(-1);
-            } else {
-                pattern.push_back(true);
-                phenotypes[i - 1].push_back(std::stoi(splitter[i]));
-                if (phenotypes[i - 1].back() != 0 && phenotypes[i - 1].back() != 1) {
-                    if (params.verbose) {
-                        fmt::print(std::cerr, "{} {}\n", splitter[0], splitter[i]);
-                    }
-                }
-                if (params.swap) {// Swap case-control status
-                    switch (phenotypes[i - 1].back()) {
-                        case 1:
-                            phenotypes[i - 1].back() = 0;
-                            break;
-                        case 0:
-                            phenotypes[i - 1].back() = 1;
-                            break;
-                        default:
-                            break;
-                    }
-                }
-            }
-        }
-        if (fill_patterns.count(pattern) == 0) {
-            fill_patterns.emplace(std::make_pair(pattern, std::vector<arma::uword>({lineno - 1})));
-        } else {
-            fill_patterns[pattern].push_back(lineno - 1);
-        }
-        lineno++;
-    }
-    for (const auto &v : phenotypes) {
-        int case_count = 0;
-        int control_count = 0;
-        for (const auto &p : v) {
-            switch (p) {
-                case 1:
-                    case_count++;
-                    break;
-                case 0:
-                    control_count++;
-                    break;
-                default:
-                    break;
-            }
-        }
-
-        indexer->emplace_back(Indexer(case_count, control_count, (*samples), v));
-    }
-    if (fill_patterns.size() > 1) {
-        groups = std::vector<std::vector<arma::uword>>();
-        for (const auto &v : fill_patterns) {
-            groups->push_back(v.second);
-        }
-        if (params.verbose) {
-            std::cerr << "Groups: " << groups->size() << std::endl;
-            std::cerr << "Group sizes: ";
-        }
-        for (const auto &v : fill_patterns) {
-            if (params.verbose) {
-                std::cerr << v.second.size() << " ";
-            }
-        }
-        if (params.verbose) {
-            std::cerr << std::endl;
-        }
-    }
-}
-
-Parser::Parser(const std::string &input_path, const std::string &pheno_path, Parameters params_, std::shared_ptr<Reporter> reporter_, GeneticMap &gmap_)
-    : nbreakpoints(0), params(std::move(params_)), reporter(std::move(reporter_)), gmap(std::move(gmap_)) {
+Parser::Parser(Parameters params_, std::shared_ptr<Reporter> reporter_, GeneticMap &gmap_, Phenotypes &pheno_)
+    : params(std::move(params_)), reporter(std::move(reporter_)), gmap(std::move(gmap_)), pheno(pheno_) {
     // Default construct shared ptrs
-    samples = std::make_shared<std::vector<std::string>>();
-    phenotypes = std::vector<std::vector<int>>();
-    indexer = std::make_shared<std::vector<Indexer>>();
     if (params.info) {
         Source info_source(*params.info);
         std::istream info_stream(&(*info_source.streambuf));
         info = Info(info_stream, params);
     }
 
-    Source bp_source(input_path);
-    std::istream bp_is(&(*bp_source.streambuf));
-    std::ifstream pheno_ifs(pheno_path);
-
-    if (params.verbose) {
-        std::cerr << "Counting breakpoints\n";
-    }
-    count_breakpoints(bp_is);
-
-    Source input_source(input_path);
+    Source input_source(params.input);
     std::istream input_s(&(*input_source.streambuf));
-
-    if (params.verbose) {
-        std::cerr << "Parsing phenotypes\n";
-    }
-    parse_pheno(pheno_ifs);
-
-    for (const auto &idx : (*indexer)) {
-        if (params.verbose) {
-            std::cerr << "ncases: " << idx.case_count << " ncontrols: " << idx.cont_count << std::endl;
-        }
-    }
 
     if (params.verbose) {
         std::cerr << "Parsing data\n";

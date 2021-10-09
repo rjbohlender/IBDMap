@@ -22,6 +22,7 @@
 #include "isgzipped.hpp"
 #include "math.hpp"
 #include "parameters.hpp"
+#include "phenotypes.hpp"
 #include "reporter.hpp"
 #include "source.hpp"
 #include "split.hpp"
@@ -84,37 +85,33 @@
  * 	But how do we permute? How do we determine the case-control status of the individuals?
  */
 class Parser {
-    void count_breakpoints(std::istream &is);
     void parse_input(std::istream &is);
     bool check_sample_list(const std::string &sample_pair);
+    bool check_range(int pos);
+    bool check_exclude(int pos);
+    bool check_r2(const arma::sp_vec &data, const arma::sp_vec &last);
     void update_data(arma::sp_vec &data,
                      std::map<std::string, int> &indices,
                      RJBUtil::Splitter<std::string> &changes,
                      Breakpoint &bp,
                      int value,
                      bool cluster);
-    void parse_pheno(std::istream &is);
 
 public:
-    std::shared_ptr<std::vector<std::string>> samples;// Samples in input order
-    std::vector<std::vector<int>> phenotypes;
-    std::shared_ptr<std::vector<Indexer>> indexer;
-    unsigned long nbreakpoints;
     Parameters params;
     std::shared_ptr<Reporter> reporter;
-    std::optional<std::vector<std::vector<arma::uword>>> groups;
     GeneticMap gmap;
+    Phenotypes pheno;
     std::optional<Info> info;
 
     /**
    * @brief Parser and data dispatcher
-   * @param input_path Path to the unified IBD format file
-   * @param pheno_path Path to the phenotype description file
    * @param params_ Parameter injection for program options
    * @param reporter_ Global reporter
    * @param gmap_ Genetic map file for calculation of distances between breakpoints
+   * @param pheno_ Phenotype parsing class instance
    */
-    Parser(const std::string &input_path, const std::string &pheno_path, Parameters params_, std::shared_ptr<Reporter> reporter_, GeneticMap &gmap_);
+    Parser(Parameters params_, std::shared_ptr<Reporter> reporter_, GeneticMap &gmap_, Phenotypes &pheno_);
 };
 
 #endif//CARVAIBD_PARSER_HPP

@@ -1,12 +1,13 @@
+#include "CLI11.hpp"
+#include "src/geneticmap.hpp"
+#include "src/parameters.hpp"
+#include "src/parser.hpp"
+#include "src/phenotypes.hpp"
+#include "src/reporter.hpp"
+#include <fmt/include/fmt/ostream.h>
 #include <iostream>
 #include <optional>
-#include <fmt/include/fmt/ostream.h>
 #include <sys/stat.h>
-#include "src/parser.hpp"
-#include "src/parameters.hpp"
-#include "src/reporter.hpp"
-#include "src/geneticmap.hpp"
-#include "CLI11.hpp"
 
 int main(int argc, char *argv[]) {
   // C++ IO only
@@ -167,11 +168,12 @@ int main(int argc, char *argv[]) {
   if (params.verbose) {
 	fmt::print(std::cerr, "Running parser.\n");
   }
-  Parser parser(params.input,
-                params.pheno,
-                params,
-                reporter,
-                gmap);
+  Phenotypes pheno(params);
+  Parser parser(
+          params,
+          reporter,
+          gmap,
+          pheno);
 
   // Sort output
   fmt::print(std::cerr, "Sorting output.\n");

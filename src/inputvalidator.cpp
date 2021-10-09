@@ -58,13 +58,13 @@ void InputValidator::check_pheno(const std::string &line, size_t line_no) {
     RJBUtil::Splitter<std::string> splitter(line, " \t");
     if (line_no == 0) {
         if (splitter.size() < 2) {
-            fmt::print(std::cerr, "Phenotype file must have at least 2 columns. The sampleid and the phenotype.");
+            fmt::print(std::cerr, "Phenotypes file must have at least 2 columns. The sampleid and the phenotype.");
             std::exit(-1);
         }
         pheno_column_count = splitter.size();
     }
     if (splitter.size() != pheno_column_count) {
-        fmt::print(std::cerr, "Phenotype file has an incorrect number of columns at line {}.", line_no);
+        fmt::print(std::cerr, "Phenotypes file has an incorrect number of columns at line {}.", line_no);
         std::exit(-1);
     }
 }
