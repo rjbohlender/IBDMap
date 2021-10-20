@@ -86,7 +86,7 @@ void Phenotypes::create_indexers() {
             }
         }
         if (params.verbose) {
-            fmt::print(std::cerr, "Phenotype {}, cases: {}, controls: {}, excluded: {}", i, case_count, control_count, excluded);
+            fmt::print(std::cerr, "Phenotype {}, cases: {}, controls: {}, excluded: {}\n", i, case_count, control_count, excluded);
         }
         indexer->emplace_back(Indexer(case_count, control_count, (*samples), p));
     }
