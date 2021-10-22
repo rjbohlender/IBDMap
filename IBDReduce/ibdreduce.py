@@ -485,6 +485,9 @@ def main():
 
     # Collapse averages, need dot(avgs, ibdlen)
     total_perms = args.nperm * args.nruns
+    opath = Path('/'.join(args.output.split('/')[0:len(args.output.split('/')) - 1]))
+    opath.mkdir(parents=True, exist_ok=True)
+
     for phen in range(args.phenotypes):
         opf = open(f'{args.output}.{phen}', 'w')
         print('# {}'.format(' '.join(sys.argv)), file=opf)
