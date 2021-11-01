@@ -43,5 +43,6 @@ jobs:
       uses: actions/upload-artifact@v2.2.4
       with:
         name: carvaIBD
-        path: ${{github.workspace}}/build/carvaIBD
-      
+        path: |
+          ${{github.workspace}}/build/carvaIBD
+          ${{github.workspace}}/build/carvaIBD.static
