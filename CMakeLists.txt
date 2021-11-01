@@ -67,13 +67,17 @@ if(Gperftools_FOUND)
 endif()
 
 if(UNIX AND NOT APPLE)
+    set(Boost_USE_STATIC_LIBS   ON)
+    find_package(Boost 1.66.0 COMPONENTS iostreams REQUIRED)
+
     add_executable(carvaIBD.static ../main.cpp ${PROJECT_SUPPORT_FILES})
-    target_link_libraries(carvaIBD fmt::fmt-header-only)
-    target_link_libraries(carvaIBD -Wl,--start-group)
-    target_link_libraries(carvaIBD -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lm -ldl)
-    target_link_libraries(carvaIBD -Wl,--end-group)
-    target_link_libraries(carvaIBD ${Boost_LIBRARIES})
-    target_link_libraries(carvaIBD z)
+    target_link_libraries(carvaIBD.static -static) # Fully static build
+    target_link_libraries(carvaIBD.static fmt::fmt-header-only)
+    target_link_libraries(carvaIBD.static -Wl,--start-group)
+    target_link_libraries(carvaIBD.static -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lm -ldl)
+    target_link_libraries(carvaIBD.static -Wl,--end-group)
+    target_link_libraries(carvaIBD.static ${Boost_LIBRARIES})
+    target_link_libraries(carvaIBD.static z)
 endif()
 
 target_compile_definitions(carvaIBD PRIVATE MAXCOLORS=10000000)
