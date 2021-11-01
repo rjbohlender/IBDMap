@@ -7,29 +7,27 @@
 
 #define ARMA_DONT_USE_WRAPPER
 
-#include <string>
 #include <armadillo>
-#include <utility>
-#include <unordered_map>
 #include <optional>
 #include <set>
+#include <string>
+#include <unordered_map>
+#include <utility>
 
-#include "split.hpp"
-#include "isgzipped.hpp"
-#include "indexsort.hpp"
-#include "parameters.hpp"
-#include "reporter.hpp"
-#include "threadpool.hpp"
-#include "statistic.hpp"
 #include "breakpoint.hpp"
-#include "indexer.hpp"
-#include "permutation.hpp"
-#include "../link/binomial.hpp"
-#include "glm.hpp"
 #include "geneticmap.hpp"
+#include "indexer.hpp"
+#include "indexsort.hpp"
 #include "info.hpp"
+#include "isgzipped.hpp"
 #include "math.hpp"
+#include "parameters.hpp"
+#include "phenotypes.hpp"
+#include "reporter.hpp"
 #include "source.hpp"
+#include "split.hpp"
+#include "statistic.hpp"
+#include "threadpool.hpp"
 #include <boost/algorithm/string/predicate.hpp>
 
 /**
@@ -87,49 +85,33 @@
  * 	But how do we permute? How do we determine the case-control status of the individuals?
  */
 class Parser {
-  void count_breakpoints(std::istream &is);
-  void parse_input(std::istream &is);
-  void generate_cov_adj_perms(Permute &permute,
-							  std::optional<std::shared_ptr<std::vector<std::vector<int32_t>>>> &o_perms);
-  bool check_sample_list(const std::string &sample_pair);
-  void update_data(arma::sp_mat &data,
-				   std::map<std::string, int> &indices,
-				   RJBUtil::Splitter<std::string> &changes,
-				   Breakpoint &bp,
-				   int value,
-				   bool cluster);
-  void parse_pheno(std::istream &is);
-  void parse_cov(std::istream &is);
+    void parse_input(std::istream &is);
+    bool check_sample_list(const std::string &sample_pair);
+    bool check_range(int pos);
+    bool check_exclude(int pos);
+    bool check_r2(const arma::sp_vec &data, const arma::sp_vec &last);
+    void update_data(arma::sp_vec &data,
+                     std::map<std::string, int> &indices,
+                     RJBUtil::Splitter<std::string> &changes,
+                     Breakpoint &bp,
+                     int value,
+                     bool cluster);
 
 public:
-  std::shared_ptr<std::vector<std::string>> samples; // Samples in input order
-  std::vector<std::string> cov_samples; // Samples in covariate order
-  std::set<std::string> skip; // Skip samples with missing cov values
-  std::vector<std::vector<int>> phenotypes;
-  std::shared_ptr<std::vector<Indexer>> indexer;
-  unsigned long nbreakpoints;
-  Parameters params;
-  std::shared_ptr<Reporter> reporter;
-  std::optional<std::vector<std::vector<arma::uword>>> groups;
-  std::optional<arma::mat> covariates;
-  GeneticMap gmap;
-  std::optional<Info> info;
+    Parameters params;
+    std::shared_ptr<Reporter> reporter;
+    GeneticMap gmap;
+    Phenotypes pheno;
+    std::optional<Info> info;
 
-  /**
+    /**
    * @brief Parser and data dispatcher
-   * @param input_path Path to the unified IBD format file
-   * @param pheno_path Path to the phenotype description file
-   * @param cov_path Path to the covariates -- for covariate adjusted permutation
    * @param params_ Parameter injection for program options
    * @param reporter_ Global reporter
    * @param gmap_ Genetic map file for calculation of distances between breakpoints
+   * @param pheno_ Phenotype parsing class instance
    */
-  Parser(const std::string& input_path,
-		 const std::string& pheno_path,
-		 std::optional<std::string> cov_path,
-		 Parameters params_,
-		 std::shared_ptr<Reporter> reporter_,
-		 GeneticMap &gmap_);
+    Parser(Parameters params_, std::shared_ptr<Reporter> reporter_, GeneticMap &gmap_, Phenotypes &pheno_);
 };
 
-#endif //CARVAIBD_PARSER_HPP
+#endif//CARVAIBD_PARSER_HPP

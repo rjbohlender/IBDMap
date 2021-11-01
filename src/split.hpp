@@ -7,120 +7,120 @@
 #ifndef PGEN_SPLIT_HPP
 #define PGEN_SPLIT_HPP 1
 
+#include <algorithm>
 #include <string>
 #include <vector>
-#include <algorithm>
 
 namespace RJBUtil {
-/**
+    /**
  * @class Splitter split.hpp "src/util/split.hpp"
  * @brief A utility for quickly splitting strings into readable substring segments.
  *
  * @remark  Removed string_view, as string_views can't be built from iterators.
  */
-template<typename String_t>
-class Splitter {
-public:
-  /** Aliases */
-  using string_type = String_t;
-  using const_iter = typename string_type::const_iterator;
-  using size_type = typename String_t::size_type;
+    template<typename String_t>
+    class Splitter {
+    public:
+        /** Aliases */
+        using string_type = String_t;
+        using const_iter = typename string_type::const_iterator;
+        using size_type = typename String_t::size_type;
 
-  /** Constructors */
-  Splitter() = default;
-  Splitter(const string_type &str, const string_type &delim, bool allow_adjacent = false)
-	  : data_(str), delim_(delim), allow_adjacent_(allow_adjacent) {
-	split();
-  }
+        /** Constructors */
+        Splitter() = default;
+        Splitter(const string_type &str, const string_type &delim, bool allow_adjacent = false)
+            : data_(str), delim_(delim), allow_adjacent_(allow_adjacent) {
+            split();
+        }
 
-  Splitter(const string_type &&str, const string_type &&delim, bool allow_adjacent = false)
-	  : data_(str), delim_(delim), allow_adjacent_(allow_adjacent) {
-	split();
-  }
+        Splitter(const string_type &&str, const string_type &&delim, bool allow_adjacent = false)
+            : data_(str), delim_(delim), allow_adjacent_(allow_adjacent) {
+            split();
+        }
 
-  Splitter(const string_type &str, const string_type &&delim, bool allow_adjacent = false)
-	  : data_(str), delim_(delim), allow_adjacent_(allow_adjacent) {
-	split();
-  }
+        Splitter(const string_type &str, const string_type &&delim, bool allow_adjacent = false)
+            : data_(str), delim_(delim), allow_adjacent_(allow_adjacent) {
+            split();
+        }
 
-  Splitter(const string_type &&str, const string_type &delim, bool allow_adjacent = false)
-	  : data_(str), delim_(delim), allow_adjacent_(allow_adjacent) {
-	split();
-  }
+        Splitter(const string_type &&str, const string_type &delim, bool allow_adjacent = false)
+            : data_(str), delim_(delim), allow_adjacent_(allow_adjacent) {
+            split();
+        }
 
-  Splitter &operator=(const Splitter &rhs) {
-	data_ = rhs.data_;
-	delim_ = rhs.delim_;
-	tokens_ = rhs.tokens_;
-	allow_adjacent_ = rhs.allow_adjacent_;
+        Splitter &operator=(const Splitter &rhs) {
+            data_ = rhs.data_;
+            delim_ = rhs.delim_;
+            tokens_ = rhs.tokens_;
+            allow_adjacent_ = rhs.allow_adjacent_;
 
-	return *this;
-  }
+            return *this;
+        }
 
-  Splitter &operator=(Splitter &&rhs) noexcept {
-	data_ = std::move(rhs.data_);
-	delim_ = std::move(rhs.delim_);
-	tokens_ = std::move(rhs.tokens_);
-	allow_adjacent_ = std::move(rhs.allow_adjacent_);
+        Splitter &operator=(Splitter &&rhs) noexcept {
+            data_ = std::move(rhs.data_);
+            delim_ = std::move(rhs.delim_);
+            tokens_ = std::move(rhs.tokens_);
+            allow_adjacent_ = std::move(rhs.allow_adjacent_);
 
-	return *this;
-  }
+            return *this;
+        }
 
-  auto begin() {
-	return tokens_.begin();
-  }
+        auto begin() {
+            return tokens_.begin();
+        }
 
-  auto cbegin() {
-	return tokens_.cbegin();
-  }
+        auto cbegin() {
+            return tokens_.cbegin();
+        }
 
-  auto end() {
-	return tokens_.end();
-  }
+        auto end() {
+            return tokens_.end();
+        }
 
-  auto cend() {
-	return tokens_.cend();
-  }
+        auto cend() {
+            return tokens_.cend();
+        }
 
-  auto size() {
-	return tokens_.size();
-  }
+        auto size() {
+            return tokens_.size();
+        }
 
-  auto empty() {
-	return tokens_.empty();
-  }
+        auto empty() {
+            return tokens_.empty();
+        }
 
-  auto erase(std::vector<std::string>::iterator &pos) {
-	tokens_.erase(pos);
-  }
+        auto erase(std::vector<std::string>::iterator &pos) {
+            tokens_.erase(pos);
+        }
 
-  auto erase(std::vector<std::string>::const_iterator &pos) {
-	tokens_.erase(pos);
-  }
+        auto erase(std::vector<std::string>::const_iterator &pos) {
+            tokens_.erase(pos);
+        }
 
-  auto front() {
-	return tokens_.front();
-  }
+        auto front() {
+            return tokens_.front();
+        }
 
-  auto back() {
-	return tokens_.back();
-  }
+        auto back() {
+            return tokens_.back();
+        }
 
-  template<typename _Integer>
-  auto operator[](_Integer i) {
-	return tokens_[i];
-  }
+        template<typename _Integer>
+        auto operator[](_Integer i) {
+            return tokens_[i];
+        }
 
-  template<typename _Integer>
-  auto at(_Integer i) {
-	return tokens_.at(i);
-  }
+        template<typename _Integer>
+        auto at(_Integer i) {
+            return tokens_.at(i);
+        }
 
-private:
-  /**
+    private:
+        /**
    * @brief A split member function to simplify multiple constructors should we need them.
    */
-  void split() {
+        void split() {
 #if 0
 	const_iter cit = data_.cbegin();
 	size_type cur = 0;
@@ -149,22 +149,22 @@ private:
 
 	}
 #else
-	// Faster version described at: https://www.bfilipek.com/2018/07/string-view-perf-followup.html
-	for (auto first = data_.data(), second = data_.data(), last = first + data_.size(); second != last && first != last;
-		 first = second + 1) {
-	  second = std::find_first_of(first, last, std::cbegin(delim_), std::cend(delim_));
+            // Faster version described at: https://www.bfilipek.com/2018/07/string-view-perf-followup.html
+            for (auto first = data_.data(), second = data_.data(), last = first + data_.size(); second != last && first != last;
+                 first = second + 1) {
+                second = std::find_first_of(first, last, std::cbegin(delim_), std::cend(delim_));
 
-	  if (first != second || allow_adjacent_)
-		tokens_.emplace_back(first, second - first);
-	}
+                if (first != second || allow_adjacent_)
+                    tokens_.emplace_back(first, second - first);
+            }
 #endif
-  }
+        }
 
-  /** Private members */
-  string_type data_;
-  string_type delim_;
-  std::vector<std::string> tokens_;
-  bool allow_adjacent_ = false;
-};
-}
-#endif // PGEN_SPLIT_HPP
+        /** Private members */
+        string_type data_;
+        string_type delim_;
+        std::vector<std::string> tokens_;
+        bool allow_adjacent_ = false;
+    };
+}// namespace RJBUtil
+#endif// PGEN_SPLIT_HPP

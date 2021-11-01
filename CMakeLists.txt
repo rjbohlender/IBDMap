@@ -26,7 +26,6 @@ set(PROJECT_SUPPORT_FILES
     src/parser.hpp
     src/split.hpp
     src/isgzipped.hpp
-    src/permutation.cpp src/permutation.hpp
     src/statistic.cpp src/statistic.hpp
     src/threadpool.hpp
     src/parameters.hpp
@@ -36,24 +35,6 @@ set(PROJECT_SUPPORT_FILES
     src/indexsort.hpp
     src/breakpoint.hpp
     src/indexer.hpp
-    src/glm.hpp
-    third_party/stocc/stocc.h
-    third_party/stocc/sfmt.cpp third_party/stocc/sfmt.h
-    third_party/stocc/stoc3.cpp
-    third_party/stocc/fnchyppr.cpp
-    third_party/stocc/wnchyppr.cpp
-    third_party/stocc/stoc1.cpp
-    third_party/stocc/stoc2.cpp
-    third_party/stocc/randomc.h
-    third_party/stocc/mersenne.cpp
-    third_party/stocc/erfres.cpp
-    third_party/stocc/userintf.cpp
-    link/binomial.cpp
-    link/binomial.hpp
-    link/family.cpp
-    link/family.hpp
-    link/gaussian.cpp
-    link/gaussian.hpp
     src/info.cpp
     src/info.hpp
     src/math.hpp
@@ -62,7 +43,7 @@ set(PROJECT_SUPPORT_FILES
     src/source.cpp
     src/source.hpp
     src/inputvalidator.cpp
-    src/inputvalidator.hpp)
+    src/inputvalidator.hpp src/phenotypes.cpp src/phenotypes.hpp)
 
 include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party")
 include_directories(${ARMADILLO_INCLUDE_DIRS})
@@ -83,6 +64,20 @@ target_link_libraries(carvaIBD ${Boost_LIBRARIES})
 target_link_libraries(carvaIBD ${ZLIB_LIBRARIES})
 if(Gperftools_FOUND)
   target_link_libraries(carvaIBD ${Gperftools_LIBRARIES})
+endif()
+
+if(UNIX AND NOT APPLE)
+    set(Boost_USE_STATIC_LIBS   ON)
+    find_package(Boost 1.66.0 COMPONENTS iostreams REQUIRED)
+
+    add_executable(carvaIBD.static ../main.cpp ${PROJECT_SUPPORT_FILES})
+    target_link_libraries(carvaIBD.static -static) # Fully static build
+    target_link_libraries(carvaIBD.static fmt::fmt-header-only)
+    target_link_libraries(carvaIBD.static -Wl,--start-group)
+    target_link_libraries(carvaIBD.static -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lm -ldl)
+    target_link_libraries(carvaIBD.static -Wl,--end-group)
+    target_link_libraries(carvaIBD.static boost_iostreams)
+    target_link_libraries(carvaIBD.static z)
 endif()
 
 target_compile_definitions(carvaIBD PRIVATE MAXCOLORS=10000000)

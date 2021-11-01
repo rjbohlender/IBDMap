@@ -309,9 +309,10 @@ dkms.conf
 .nfs*
 
 # Added
-.idea/
-test/
-cmake-build*/
-BioVU/
-log/
-output/
+/.idea/
+/test/
+/cmake-build*/
+/BioVU/
+/log/
+/IBDReduce/.idea/
+/output/

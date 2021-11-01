@@ -6,4 +6,4 @@
 	url = https://github.com/HO-COOH/SugarPP
 [submodule "third_party/sse2neon"]
 	path = third_party/sse2neon
-	url = git@github.com:DLTcollab/sse2neon.git
+	url = https://github.com/DLTcollab/sse2neon
