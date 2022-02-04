@@ -16,6 +16,7 @@ find_package(Threads REQUIRED)
 find_package(Boost 1.66.0 COMPONENTS iostreams python numpy REQUIRED)
 find_package(Gperftools)
 find_package(ZLIB REQUIRED)
+find_package(EXPAT)
 
 set(CMAKE_SHARED_MODULE_PREFIX "")
 
@@ -109,6 +110,7 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(carvaIBD.static boost_iostreams)
     target_link_libraries(carvaIBD.static boost_python${Python3_VERSION_MAJOR}${Python3_VERSION_MINOR})
     target_link_libraries(carvaIBD.static Python3::Python)
+    target_link_libraries(carvaIBD.static EXPAT::EXPAT)
     target_link_libraries(carvaIBD.static z)
 
 endif()
