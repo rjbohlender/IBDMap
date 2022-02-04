@@ -104,6 +104,7 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(carvaIBD.static -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lm -ldl)
     target_link_libraries(carvaIBD.static -Wl,--end-group)
     target_link_libraries(carvaIBD.static boost_iostreams)
+    target_link_libraries(carvaIBD.static boost_python)
     target_link_libraries(carvaIBD.static z)
 
 endif()
