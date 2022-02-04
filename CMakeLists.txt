@@ -60,7 +60,7 @@ set(IBDLIB_SOURCE_FILES
 
 include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party")
 include_directories(${ARMADILLO_INCLUDE_DIRS})
-include_directories(${PYTHON_INCLUDE_DIRS})
+include_directories(${Python3_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${LAPACK_INCLUDE_DIRS})
 include_directories(${BLAS_INCLUDE_DIRS})
@@ -68,7 +68,7 @@ include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party/sse2neon")
 include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party/zstr/src")
 
 add_library(ibdlib MODULE ${IBDLIB_SOURCE_FILES})
-target_link_libraries(ibdlib ${PYTHON_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} fmt::fmt-header-only ${ARMADILLO_LIBRARIES})
+target_link_libraries(ibdlib ${Python3_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} fmt::fmt-header-only ${ARMADILLO_LIBRARIES})
 
 add_executable(carvaIBD main.cpp ${PROJECT_SUPPORT_FILES})
 
@@ -77,7 +77,7 @@ target_link_libraries(carvaIBD pthread)
 target_link_libraries(carvaIBD ${LAPACK_LIBRARIES})
 target_link_libraries(carvaIBD ${BLAS_LIBRARIES})
 target_link_libraries(carvaIBD ${ARMADILLO_LIBRARIES})
-target_link_libraries(carvaIBD ${PYTHON_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(carvaIBD ${Python3_LIBRARIES} ${Boost_LIBRARIES})
 target_link_libraries(carvaIBD ${ZLIB_LIBRARIES})
 if(Gperftools_FOUND)
   target_link_libraries(carvaIBD ${Gperftools_LIBRARIES})
