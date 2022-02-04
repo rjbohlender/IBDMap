@@ -434,6 +434,7 @@ def run_parse(args: ap.Namespace, original_avg: List[Dict[int, Dict[int, float]]
 
     return original, evd, full_dist, deltas
 
+
 def main():
     """Entrypoint."""
     global args
