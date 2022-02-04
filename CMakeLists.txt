@@ -16,7 +16,6 @@ find_package(Threads REQUIRED)
 find_package(Boost 1.66.0 COMPONENTS iostreams python numpy REQUIRED)
 find_package(Gperftools)
 find_package(ZLIB REQUIRED)
-find_package(EXPAT)
 
 set(CMAKE_SHARED_MODULE_PREFIX "")
 
@@ -97,6 +96,8 @@ if(UNIX AND NOT APPLE)
     set(Boost_USE_STATIC_LIBS   ON)
     set(Python3_USE_STATIC_LIBS ON)
     add_definitions(-DBOOST_PYTHON_STATIC_LIB)
+    set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_STATIC_LIBRARY_SUFFIX})
+    find_package(EXPAT)
 
     find_package(Boost 1.66.0 COMPONENTS iostreams python numpy REQUIRED)
     find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
