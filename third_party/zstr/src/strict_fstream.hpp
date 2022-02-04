@@ -6,6 +6,10 @@
 #include <string>
 #include <vector>
 
+#ifdef __APPLE__
+#undef _GNU_SOURCE
+#define GNU_REENABLE
+#endif
 /**
  * This namespace defines wrappers for std::ifstream, std::ofstream, and
  * std::fstream objects. The wrappers perform the following steps:
@@ -235,3 +239,6 @@ public:
 
 } // namespace strict_fstream
 
+#ifdef GNU_REENABLE
+#define _GNU_SOURCE = 1
+#endif

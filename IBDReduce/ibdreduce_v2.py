@@ -13,12 +13,11 @@ import sys
 import concurrent.futures
 import gzip
 from typing import Dict, List, Tuple
-from geneticmap import GeneticMap
 from pathlib import Path
-from datetime import datetime
 import numpy as np
 import scipy.stats as stats
-
+import ibdlib
+from datetime import datetime
 
 def is_gzipped(fpath: Path) -> bool:
     """Check if the provided file is gzipped or not.
@@ -54,53 +53,6 @@ def check_and_open(fpath: str):
     return f
 
 
-def ibdlen_parse(i: int, gmap: GeneticMap, args: ap.Namespace) -> Tuple[Dict[int, dict], Dict[int, int]]:
-    """First pass of parsing for the distribution of distances between markers and length of the genome.
-
-    Args:
-        i: The chromosome number.
-        gmap: The genetic map used to calculate distances.
-        args: The program arguments.
-
-    Returns:
-        A dictionary of genetic distances between markers for each chromosome.
-    """
-    ibdlen = {i: {}}
-    breakpoints = {i: 0}
-    file_ = Path(args.prefix + args.suffix.format(i=i, j=args.at))
-
-    if is_gzipped(file_):
-        f = gzip.open(str(file_), 'rt')
-    else:
-        f = file_.open('r')
-
-    predis = 0
-    prechr = 0
-    prepos = 0
-    for lineno, line in enumerate(f):
-        if args.phenotypes > 1:
-            if lineno % args.phenotypes != 0:
-                continue
-        chrom, orig, pos, vals = parse_line(line, args.new)
-        breakpoints[i] += 1
-
-        if pos in gmap.gmap[chrom]:
-            dis = gmap.gmap[chrom][pos]
-        else:
-            close = gmap.find_nearest(chrom, pos)
-            dis = gmap.gmap[chrom][close[0]] + ((int(pos) - close[0]) / (close[1] - close[0])) * (
-                    gmap.gmap[chrom][close[1]] - gmap.gmap[chrom][close[0]])
-        if chrom == prechr:
-            ibdlen[prechr][prepos] = float(dis) - float(predis)
-        elif prechr != 0:
-            ibdlen[prechr][prepos] = float(predis) + 1  # for final variants
-        prechr = chrom
-        prepos = pos
-        predis = dis
-    ibdlen[prechr][prepos] = 1  # for final variants
-    return ibdlen, breakpoints
-
-
 def parse_avg(i: int, args: ap.Namespace, ibd_frac: Dict[int, dict]) \
         -> Tuple[List[Dict[int, Dict[int, float]]], List[Dict[int, np.ndarray]]]:
     """Second pass of parsing for the genome wide average of the statistic across markers.
@@ -122,7 +74,9 @@ def parse_avg(i: int, args: ap.Namespace, ibd_frac: Dict[int, dict]) \
     permuted = [{i: np.zeros(arr_size)} for _ in range(args.phenotypes)]
     original = [{i: {}} for _ in range(args.phenotypes)]
 
-    start = min(list(range(args.at, args.at + args.nruns)))
+
+    #    start = min(list(range(args.at, args.at + args.nruns)))
+    start = args.at
     for j in range(args.at, args.at + args.nruns):
         file_ = Path(args.prefix + args.suffix.format(i=i, j=j))
 
@@ -140,7 +94,7 @@ def parse_avg(i: int, args: ap.Namespace, ibd_frac: Dict[int, dict]) \
 
             if np.all(vals == 0):
                 continue
-            if j == start:
+            if j == args.at:
                 if args.two_sided:
                     original[lineno % args.phenotypes][chrom][pos] = np.abs(orig)
                     permuted[lineno % args.phenotypes][chrom][0:args.nperm] += np.abs(vals)
@@ -151,10 +105,10 @@ def parse_avg(i: int, args: ap.Namespace, ibd_frac: Dict[int, dict]) \
                 try:
                     if args.two_sided:
                         permuted[lineno % args.phenotypes][chrom][
-                            args.nperm * (j - args.at):args.nperm * (j - args.at + 1)] += np.abs(vals)
+                        args.nperm * (j - args.at):args.nperm * (j - args.at + 1)] += np.abs(vals)
                     else:
                         permuted[lineno % args.phenotypes][chrom][
-                            (args.nperm * (j - args.at)):(args.nperm * (j - args.at + 1))] += vals
+                        (args.nperm * (j - args.at)):(args.nperm * (j - args.at + 1))] += vals
                 except ValueError as err:
                     print(
                         'permuted: {} vals: {}'.format(permuted[lineno % args.phenotypes][chrom].shape, vals.shape),
@@ -291,52 +245,8 @@ def parse(i: int, orig_avg: List[float], permuted_avg: List[np.ndarray], breakpo
     return original, extreme_val_dist, fdr, deltas
 
 
-def run_ibdlen(args: ap.Namespace, gmap: GeneticMap) -> Tuple[
-        Dict[int, Dict[int, float]], Dict[int, Dict[int, float]], Dict[int, int]]:
-    """Encapsulate running of IBD length parsing and calculations.
-
-    Args:
-        args: Program arguments.
-        gmap: The recombination map.
-
-    Returns:
-        Mapping of chromosomes and positions against genetic distances between positions, and fractions of total
-        distance between variants.
-    """
-    ibdlen = {}
-    breakpoints = {}
-    future = []
-    if args.single:
-        chroms = [args.single]
-        if args.null:
-            chroms.append(args.null)
-    else:
-        chroms = list(range(1, 23))
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        for i in chroms:
-            future.append(executor.submit(ibdlen_parse, i, gmap, args))
-        for fut in future:
-            res = fut.result()
-            ibdlen.update(res[0])
-            breakpoints.update(res[1])
-
-    sum_ibdlen = 0
-    for i in chroms:
-        for _, v in ibdlen[i].items():
-            sum_ibdlen += v
-
-    print("sum_ibdlen: {}".format(sum_ibdlen), file=sys.stderr)
-    ibd_frac = {}
-    for i in chroms:
-        ibd_frac[i] = {}
-        for k, v in ibdlen[i].items():
-            ibd_frac[i][k] = v / sum_ibdlen
-
-    return ibdlen, ibd_frac, breakpoints
-
-
 def run_avg(args: ap.Namespace, ibd_frac: Dict[int, Dict[int, float]]) \
-        -> Tuple[List[Dict[int, Dict[int, float]]], List[np.ndarray]]:
+        -> Tuple[List[float], List[np.ndarray]]:
     """Encapsulate running of the averaging process.
 
     Observed and permuted statistics are averaged along columns, with each variant weighted by the fraction of total
@@ -467,26 +377,37 @@ def main():
                         help="Control FDR instead of FWE.")
     args = parser.parse_args()
 
-    ttotal1 = datetime.now()
-    t1 = datetime.now()
-    gmaps = glob.glob(args.gmap + '/*.gmap.gz')
-    gmap = GeneticMap(gmaps)
-    t2 = datetime.now()
-    print("GMAP time v1: {}".format(t2 - t1), file=sys.stderr)
+    cppargs = ibdlib.IBDRArgs()
+    cppargs.at = args.at
+    cppargs.phenotypes = args.phenotypes
+    cppargs.nperm = args.nperm
+    cppargs.nruns = args.nruns
+    cppargs.new_ = args.new
+    cppargs.fdr = args.fdr
+    cppargs.prefix = args.prefix
+    cppargs.suffix = args.suffix
+    if args.single is not None:
+        cppargs.is_single = True
+        cppargs.single = args.single
+    else:
+        cppargs.is_single = False
+    if args.null is not None:
+        cppargs.is_null = True
+        cppargs.null = args.null
+    else:
+        cppargs.is_null = False
 
     t1 = datetime.now()
-    ibdlen, ibd_frac, breakpoints = run_ibdlen(args, gmap)  # Runtime J * M
+    gmaps = glob.glob(args.gmap + '/*.gmap.gz')
+    gmap = ibdlib.GeneticMap(gmaps)
     t2 = datetime.now()
-    print("IBDLen time: {}".format(t2 - t1), file=sys.stderr)
+    print("GMAP time v2: {}".format(t2 - t1), file=sys.stderr)
+
     t1 = datetime.now()
-    original_avg, p_avg = run_avg(args, ibd_frac)  # Runtime J * M * N * (2N + 2) / K
+    original, evd, deltas, ibdlen, fdr = ibdlib.run_stages(cppargs, gmap)  # Runtime J * M * N / K * (5N + 5)
+    # ibdlib.run_stages(cppargs, gmap)  # Runtime J * M * N / K * (5N + 5)
     t2 = datetime.now()
-    print("IBD Avg time: {}".format(t2 - t1), file=sys.stderr)
-    print('Observed Genome-Wide Average: {}'.format(original_avg))
-    t1 = datetime.now()
-    original, evd, fdr, deltas = run_parse(args, original_avg, p_avg, breakpoints)  # Runtime J * M * N / K * (5N + 5)
-    t2 = datetime.now()
-    print("run_parse time: {}".format(t2 - t1), file=sys.stderr)
+    print("run_stages time v2: {}".format(t2 - t1), file=sys.stderr)
 
     if args.single:
         chroms = [args.single]
@@ -510,7 +431,7 @@ def main():
 
         # Significance level for p-value in permutation correcting for multiple tests
         p_adjust_cutoff = np.percentile(evd[phen], 5.)
-        memoize = {}
+        memoize = {}  # See if we can save time by memoizing all our Rstar lookups
         for i in chroms:
             for k, res in original[phen][i].items():
                 p = res[0]
@@ -530,20 +451,17 @@ def main():
                     else:
                         Rstar = np.sum(fdr[phen] <= p, axis=1)
                         memoize[p] = Rstar
-                    rp = sum(res[0] <= p for j in chroms for _, res in original[phen][j].items())
+                    rp = sum(res[0] <= p for _, res in original[phen][i].items())
                     pm = p * fdr[phen].shape[0]
                     rb = np.percentile(Rstar, 95)
                     if rp - rb >= pm:
                         p_adjust = np.mean(Rstar / (Rstar + rp - pm))
                     else:
-                        p_adjust = sum(Rstar >= 1) / len(Rstar)
-                        # p_adjust = stats.percentileofscore(evd[phen], p, kind='weak') / 100.
+                        p_adjust = stats.percentileofscore(evd[phen], p, kind='weak') / 100.
                 else:
                     p_adjust = stats.percentileofscore(evd[phen], p, kind='weak') / 100.
                 print(f"{i}\t{k}\t{ibdlen[i][k]}\t{p}\t{lower}," +
                       f"{upper}\t{p_adjust}\t{p_adjust_cutoff}\t{succ}\t{total_perms}\t{d}", file=opf)
-    ttotal2 = datetime.now()
-    print('Total runtime: {}'.format(ttotal2 - ttotal1))
 
 
 if __name__ == "__main__":

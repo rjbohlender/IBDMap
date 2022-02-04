@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <string>
 #include <vector>
+#include <sstream>
 
 namespace RJBUtil {
     /**
@@ -64,6 +65,15 @@ namespace RJBUtil {
             allow_adjacent_ = std::move(rhs.allow_adjacent_);
 
             return *this;
+        }
+
+        auto join(const string_type &delim) {
+            std::stringstream os;
+            os << tokens_[0];
+            for (int i = 1; i < tokens_.size(); i++) {
+                os << delim << tokens_[i];
+            }
+            return os.str();
         }
 
         auto begin() {

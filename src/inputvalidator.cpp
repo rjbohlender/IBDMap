@@ -6,7 +6,7 @@
 #include "split.hpp"
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/trim.hpp>
-#include <fmt/include/fmt/ostream.h>
+#include <fmt/ostream.h>
 #include <iostream>
 #include <sys/stat.h>
 
@@ -40,7 +40,7 @@ void InputValidator::check_gmap(const std::string &line, size_t line_no) {
         }
     } else {
         try {
-            std::stoi(splitter[1]);
+            std::stoi(splitter[0]);
         } catch (std::exception &e) {
             fmt::print(std::cerr, "Failed to parse position at line {} in GMAP input.", line_no);
             std::exit(-1);
@@ -162,7 +162,7 @@ void InputValidator::check_info(const std::string &line, size_t line_no, const b
             }
         }
 
-        if (missing.size() > 0) {
+        if (!missing.empty()) {
             fmt::print(std::cerr,
                        "Info input header not properly formatted. Missing columns: {}",
                        fmt::join(missing.begin(), missing.end(), ", "));

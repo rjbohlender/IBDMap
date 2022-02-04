@@ -316,3 +316,6 @@ dkms.conf
 /log/
 /IBDReduce/.idea/
 /output/
+/gmap/
+/data/
+/genetic_maps.b37/
