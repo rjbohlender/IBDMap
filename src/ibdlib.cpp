@@ -4,6 +4,7 @@
 #include <fmt/format.h>
 #include <future>
 #include <iostream>
+#include <iomanip>
 #include <zstr.hpp>
 
 #define MULTI 1
