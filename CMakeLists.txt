@@ -97,6 +97,10 @@ if(UNIX AND NOT APPLE)
     add_definitions(-DBOOST_PYTHON_STATIC_LIB)
     find_package(Boost 1.66.0 COMPONENTS iostreams python numpy REQUIRED)
 
+    string(REPLACE "." ";" VERSION_LIST ${PYTHONLIBS_VERSION_STRING})
+    list(GET VERSION_LIST 0 PYTHONLIBS_VERSION_MAJOR)
+    list(GET VERSION_LIST 1 PYTHONLIBS_VERSION_MINOR)
+
     add_executable(carvaIBD.static ../main.cpp ${PROJECT_SUPPORT_FILES})
     target_link_libraries(carvaIBD.static -static) # Fully static build
     target_link_libraries(carvaIBD.static fmt::fmt-header-only)
@@ -104,7 +108,7 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(carvaIBD.static -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lm -ldl)
     target_link_libraries(carvaIBD.static -Wl,--end-group)
     target_link_libraries(carvaIBD.static boost_iostreams)
-    target_link_libraries(carvaIBD.static boost_python)
+    target_link_libraries(carvaIBD.static boost_python${PYTHONLIBS_VERSION_MAJOR}${PYTHONLIBS_VERSION_MINOR})
     target_link_libraries(carvaIBD.static z)
 
 endif()
