@@ -94,7 +94,7 @@ endif()
 # target_link_libraries(test ${ZLIB_LIBRARIES})
 if(UNIX AND NOT APPLE)
     set(Boost_USE_STATIC_LIBS   ON)
-    find_package(Boost 1.66.0 COMPONENTS iostreams REQUIRED)
+    find_package(Boost 1.66.0 COMPONENTS iostreams python numpy REQUIRED)
 
     add_executable(carvaIBD.static ../main.cpp ${PROJECT_SUPPORT_FILES})
     target_link_libraries(carvaIBD.static -static) # Fully static build
