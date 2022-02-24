@@ -512,6 +512,7 @@ def main():
         # Significance level for p-value in permutation correcting for multiple tests
         p_adjust_cutoff = np.percentile(evd[phen], 5.)
         memoize = {}
+
         for i in chroms:
             for k, res in original[phen][i].items():
                 p = res[0]
@@ -529,7 +530,7 @@ def main():
                     if p in memoize:
                         Rstar = memoize[p]
                     else:
-                        Rstar = np.sum(fdr[phen] <= p, axis=1)
+                        Rstar = np.sum(fdr[phen] <= p, axis=0)
                         memoize[p] = Rstar
                     rp = sum(res[0] <= p for j in chroms for _, res in original[phen][j].items())
                     pm = p * fdr[phen].shape[0]
@@ -539,6 +540,18 @@ def main():
                     else:
                         p_adjust = sum(Rstar >= 1) / len(Rstar)
                         # p_adjust = stats.percentileofscore(evd[phen], p, kind='weak') / 100.
+                    # Try the formula in Millstein and Volfson 2013
+                    # if p in memoize:
+                    #     Sstar = memoize[p]
+                    # else:
+                    #     Sstar = np.sum(fdr[phen] <= p, axis=0)
+                    #     memoize[p] = Sstar
+                    # m = fdr[phen].shape[0]
+                    # Sbar = np.mean(Sstar)
+                    # S = sum(res[0] <= p for j in chroms for _, res in original[phen][j].items())
+                    # p_adjust = Sbar / S * (1. - S / m) / (1. - Sbar / m)
+                    # if p_adjust > 1:
+                    #     p_adjust = 1
                 else:
                     p_adjust = stats.percentileofscore(evd[phen], p, kind='weak') / 100.
                 print(f"{i}\t{k}\t{ibdlen[i][k]}\t{p}\t{lower}," +
