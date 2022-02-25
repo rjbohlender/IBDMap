@@ -47,10 +47,6 @@ void Parser::parse_input(std::istream &is) {
             continue;
         }
 
-        if (line == "chr\tpos\tsegments\tpairs\tadd\tdel") {
-            continue;
-        }
-
         // Legacy format handling
         lineno++;
         if (lineno == 0) {// Skip the header
