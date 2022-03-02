@@ -23,10 +23,11 @@ RUN git submodule update --init
 RUN mkdir build
 WORKDIR /app/build
 RUN cmake -DCMAKE_BUILD_TYPE=Release ..
+# It'd be smart to detect system threads, but alas
 RUN make -j8
 
 # Make a leaner run container without build dependencies
-# How much leaner is it? Not sure.
+# How much leaner is it? It's about 2.3GB. Most of this size is Intel MKL
 FROM ubuntu:20.04 as run-container
 
 RUN apt-get update &&  \
