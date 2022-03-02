@@ -11,6 +11,7 @@ RUN apt-get update &&  \
     intel-mkl \
     libarmadillo-dev \
     libboost-iostreams-dev \
+    libboost-numpy-dev \
     libboost-python-dev \
     python3.8-dev
 
@@ -30,6 +31,7 @@ RUN make -j8
 # How much leaner is it? It's about 2.3GB. Most of this size is Intel MKL
 FROM ubuntu:20.04 as run-container
 
+# We seem to not need libboost-numpy at runtime?!
 RUN apt-get update &&  \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
     intel-mkl \
