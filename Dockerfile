@@ -2,18 +2,27 @@
 FROM ubuntu:20.04 AS build-container
 
 # libboost-python on Ubuntu 20.04 is python 3.8
-
+# liboost-python-dev includes python3.8-dev with it
 RUN apt-get update &&  \
+    apt-get dist-upgrade -y && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
     build-essential \
-    cmake \
     git \
     intel-mkl \
     libarmadillo-dev \
     libboost-iostreams-dev \
     libboost-numpy-dev \
     libboost-python-dev \
-    python3.8-dev
+    software-properties-common \
+    wget
+
+# Add Kitware Cmake repository to get a newer cmake version
+RUN wget -v -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
+RUN apt-add-repository "deb https://apt.kitware.com/ubuntu/ focal main"
+RUN apt-get update && \
+    apt-get install -y kitware-archive-keyring && \
+    rm /etc/apt/trusted.gpg.d/kitware.gpg && \
+    apt-get install -y cmake
 
 
 WORKDIR /app
@@ -32,14 +41,16 @@ RUN make -j8
 FROM ubuntu:20.04 as run-container
 
 # We seem to not need libboost-numpy at runtime?!
+# Maybe it's opened with dlopen and this won't work
+# Even weirder, we seem not to need intel mkl. wtf is going on.
 RUN apt-get update &&  \
+    apt-get -y dist-upgrade && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    intel-mkl \
     libboost-iostreams-dev \
-    libboost-python-dev \
-    python3.8-dev
+    libboost-python-dev
 
 WORKDIR /app
 COPY --from=build-container /app/build/carvaIBD carvaIBD
+COPY --from=build-container /app/build/ibdlib.so ibdlib.so
 
 ENTRYPOINT ["./carvaIBD"]

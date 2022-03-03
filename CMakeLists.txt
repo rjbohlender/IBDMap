@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.0) # A newer version of cmake will let us statically link MKL
 project(carvaIBD)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -24,6 +24,9 @@ set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--no-undefined" 
 if (UNIX)
     find_package(LAPACK REQUIRED)
     find_package(BLAS REQUIRED)
+    if (NOT APPLE)
+        set(BLA_STATIC ON)
+    endif()
 endif()
 
 set(PROJECT_SUPPORT_FILES
