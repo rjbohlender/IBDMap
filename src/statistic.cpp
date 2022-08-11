@@ -44,15 +44,11 @@ Statistic::calculate(std::vector<int> &phenotypes_, double cscs_count, double cs
         auto &[p1, p2] = p;
         int x = phenotypes_[p1];
         int y = phenotypes_[p2];
-        if (x == 1) {
-            x1(y, cscs, cscn);
-        } else if (x == 0) {
-            x0(y, cscn, cncn);
-        } else if (x == -1) {
-        } else {
-            fmt::print(std::cerr, "Phenotypes: {} p1: {}\n", x, p1);
-            throw(std::runtime_error("ERROR: invalid phenotype in calculate."));
-        }
+
+        cscs += ((x == 1) && (y == 1));
+        cscn += ((x == 1) && (y == 0));
+        cscn += ((x == 0) && (y == 1));
+        cncn += ((x == 0) && (y == 0));
     }
 
     permuted_cscs[k].push_back(cscs);
