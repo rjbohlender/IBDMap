@@ -45,6 +45,11 @@ Statistic::calculate(std::vector<int> &phenotypes_, double cscs_count, double cs
         int x = phenotypes_[p1];
         int y = phenotypes_[p2];
 
+        if (x < -1 || x > 1 || y < -1 || y > 1) {
+            fmt::print(std::cerr, "Phenotypes: {},{} p1: {} p2: {}\n", x, y, p1, p2);
+            throw(std::runtime_error("ERROR: invalid phenotype in calculate."));
+        }
+
         cscs += ((x == 1) && (y == 1));
         cscn += ((x == 1) && (y == 0));
         cscn += ((x == 0) && (y == 1));
