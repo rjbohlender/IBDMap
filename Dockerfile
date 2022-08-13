@@ -1,5 +1,5 @@
 # This build container image ends up about 3GB
-FROM ubuntu:20.04 AS build-container
+FROM ubuntu:22.04 AS build-container
 
 # libboost-python on Ubuntu 20.04 is python 3.8
 # liboost-python-dev includes python3.8-dev with it
@@ -40,18 +40,15 @@ RUN make -j4
 
 # Make a leaner run container without build dependencies
 # How much leaner is it? It's about 170MB
-FROM ubuntu:20.04 as run-container
+FROM ubuntu:22.04 as run-container
 
 # We seem to not need libboost-numpy at runtime?!
-# Maybe it's opened with dlopen and this won't work
-# Even weirder, we seem not to need intel mkl. wtf is going on.
 RUN apt-get update &&  \
     apt-get -y dist-upgrade && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    libboost-iostreams1.71.0 \
-    libboost-numpy1.71.0 \
-    libboost-python1.71.0 \
-    libpython3.8
+    libboost-iostreams1.74.0 \
+    libboost-numpy1.74.0 \
+    libboost-python1.74.0
 
 WORKDIR /app
 COPY --from=build-container /app/build/carvaIBD carvaIBD
