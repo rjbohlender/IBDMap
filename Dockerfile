@@ -1,36 +1,23 @@
 # This build container image ends up about 3GB
 FROM ubuntu:22.04 AS build-container
 
-# libboost-python on Ubuntu 20.04 is python 3.8
-# liboost-python-dev includes python3.8-dev with it
-# We don't need intel-mkl because carvaIBD only uses Armadillo headers
+# libboost-python on Ubuntu 22.04 is python 3.10
+# liboost-python-dev includes python3.10-dev with it
+# We don't need intel-mkl or any other specific BLAS lib because carvaIBD only uses Armadillo headers
 # No actual BLAS functions are called
 RUN apt-get update &&  \
     apt-get dist-upgrade -y && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
     build-essential \
     cmake \
-    git \
     libarmadillo-dev \
     libboost-iostreams-dev \
     libboost-numpy-dev \
     libboost-python-dev
 
-## Add Kitware Cmake repository to get a newer cmake version
-#RUN apt-get install -y \
-#    software-properties-common \
-#    wget
-#RUN wget -v -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
-#RUN apt-add-repository "deb https://apt.kitware.com/ubuntu/ focal main"
-#RUN apt-get install -y kitware-archive-keyring && \
-#    rm /etc/apt/trusted.gpg.d/kitware.gpg && \
-#    apt-get install -y cmake
-
-
 WORKDIR /app
 COPY . .
 RUN rm -rf build
-# RUN git submodule update --init
 
 RUN mkdir build
 WORKDIR /app/build
@@ -48,18 +35,11 @@ RUN apt-get update &&  \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
     libboost-iostreams1.74.0 \
     libboost-numpy1.74.0 \
-    libboost-python1.74.0
+    libboost-python1.74.0 \
+    libpython3.10
 
 WORKDIR /app
 COPY --from=build-container /app/build/carvaIBD carvaIBD
 COPY --from=build-container /app/build/*.so .
-
-## Section to build a tar of executable, library, and all libs they need
-#RUN mkdir libs
-#RUN ldd carvaIBD | grep "=> /" | awk '{print $3}' | xargs -I '{}' cp -nv '{}' libs
-#RUN ldd ibdlib.so | grep "=> /" | awk '{print $3}' | xargs -I '{}' cp -nv '{}' libs
-#
-#WORKDIR /
-#RUN tar -czf ibdmap.tar.gz app/
 
 ENTRYPOINT ["./carvaIBD"]
