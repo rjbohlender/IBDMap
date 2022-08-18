@@ -57,39 +57,54 @@ void Parser::parse_input(std::istream &is) {
             continue;
         }
 
+        boost::char_separator<char> sep{"\t"};
+        boost::tokenizer<boost::char_separator<char>> tok{line, sep};
+        auto tok_it = tok.begin();
 
-        RJBUtil::Splitter<std::string_view> splitter(line, "\t", true);
+        std::string chrom = *(tok_it);
+        tok_it++;
 
-        std::string chrom;
-
-        if (!boost::starts_with(splitter[0], "chr")) {
-            std::stringstream chrss;
-            chrss << "chr" << splitter[0];
-            chrom = chrss.str();
+        if (!boost::starts_with(chrom, "chr")) {
+            chrom = std::string("chr") + chrom;
         }
 
-        int pos = std::stoi(splitter[1]);
+        int pos = std::stoi(*tok_it);
 
         // Initialize breakpoint
         Breakpoint bp{};
-        bp.breakpoint = std::make_pair(chrom, splitter[1]);
+        bp.breakpoint = std::make_pair(chrom, *tok_it);
+        tok_it++;
 
         if (params.dash) {
             // chr pos n.cluster n.cluster.haplotype n.cluster.pair n.singleton.pair cluster.add cluster.del singleton.add singleton.del
-            RJBUtil::Splitter<std::string> cluster_add(splitter[splitter.size() - 4], " ");
-            RJBUtil::Splitter<std::string> cluster_del(splitter[splitter.size() - 3], " ");
-            RJBUtil::Splitter<std::string> singleton_add(splitter[splitter.size() - 2], " ");
-            RJBUtil::Splitter<std::string> singleton_del(splitter[splitter.size() - 1], " ");
+            for (int i = 0; i < 4; i++) {
+                tok_it++;
+            }
+            boost::char_separator<char> inner_sep {" ", ":-"};
+            boost::tokenizer<boost::char_separator<char>> cluster_add{*tok_it, inner_sep};
+            tok_it++;
+            boost::tokenizer<boost::char_separator<char>> cluster_del{*tok_it, inner_sep};
+            tok_it++;
+            boost::tokenizer<boost::char_separator<char>> singleton_add{*tok_it, inner_sep};
+            tok_it++;
+            boost::tokenizer<boost::char_separator<char>> singleton_del{*tok_it, inner_sep};
 
             update_data(data, indices, cluster_del, bp, -1, true);
             update_data(data, indices, singleton_del, bp, -1, false);
             update_data(data, indices, cluster_add, bp, 1, true);
             update_data(data, indices, singleton_add, bp, 1, false);
         } else {
-            RJBUtil::Splitter<std::string> additions(splitter[splitter.size() - 2], " ");
-            RJBUtil::Splitter<std::string> deletions(splitter[splitter.size() - 1], " ");
-
+            // chr     pos  npairs  nsegments   add     del
+            if (params.oldformat) {
+                tok_it++;
+                tok_it++;
+            }
+            // chr     pos     add     del
+            boost::char_separator<char> inner_sep {" "};
+            boost::tokenizer<boost::char_separator<char>> additions {*tok_it, inner_sep};
             update_data(data, indices, additions, bp, 1, false);
+            tok_it++;
+            boost::tokenizer<boost::char_separator<char>> deletions {*tok_it, inner_sep};
             update_data(data, indices, deletions, bp, -1, false);
         }
 
@@ -173,7 +188,7 @@ bool Parser::check_r2(const arma::sp_vec &data, const arma::sp_vec &last) {
 
 void Parser::update_data(arma::sp_vec &data,
                          std::map<std::string, int> &indices,
-                         RJBUtil::Splitter<std::string> &changes,
+                         boost::tokenizer<boost::char_separator<char>> &changes,
                          Breakpoint &bp,
                          int value,
                          bool cluster) {
@@ -224,7 +239,6 @@ void Parser::update_data(arma::sp_vec &data,
                     data(row_idx) += value;
                 }
             }
-
         } else {
             RJBUtil::Splitter<std::string_view> vals(entry, ":");
             RJBUtil::Splitter<std::string> pairs(vals[indices[iid_key]], "-");

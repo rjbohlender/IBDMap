@@ -111,6 +111,9 @@ int main(int argc, char *argv[]) {
   app.add_flag("--dash",
 			   params.dash,
 			   "Expect input to be formatted by DASH.");
+app.add_flag("--old",
+             params.oldformat,
+             "Expect input to include the npairs and nsegments columns.");
 
   CLI11_PARSE(app, argc, argv);
 
