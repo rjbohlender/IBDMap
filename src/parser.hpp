@@ -29,6 +29,7 @@
 #include "statistic.hpp"
 #include "threadpool.hpp"
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/tokenizer.hpp>
 
 /**
  * @brief Unified IBD data format parser
@@ -92,7 +93,7 @@ class Parser {
     bool check_r2(const arma::sp_vec &data, const arma::sp_vec &last);
     void update_data(arma::sp_vec &data,
                      std::map<std::string, int> &indices,
-                     RJBUtil::Splitter<std::string> &changes,
+                     boost::tokenizer<boost::char_separator<char>> &changes,
                      Breakpoint &bp,
                      int value,
                      bool cluster);

@@ -54,7 +54,7 @@ auto run_ibdlen(const IBDRArgs &args, GeneticMap &gmap) {
 
         futures.reserve(chroms.size());
         for (auto chrom : chroms) {
-#if 1
+#if MULTI
             futures.push_back(std::async(std::launch::async, parse_ibdlen, args, gmap, std::reference_wrapper(ibdlen), std::reference_wrapper(breakpoints), chrom));
 #else
             parse_ibdlen(args, gmap, std::reference_wrapper(ibdlen), std::reference_wrapper(breakpoints), chrom);
@@ -188,7 +188,7 @@ auto run_parse(const IBDRArgs &args, const std::vector<double> &orig_avg, const 
 
     futures.reserve(chroms.size());
     for (auto chrom : chroms) {
-#if 0
+#if MULTI
         futures.push_back(std::async(std::launch::async, parse, args, chrom, orig_avg, std::reference_wrapper(original), perm_avg, std::reference_wrapper(evd), std::reference_wrapper(deltas), std::reference_wrapper(fdr), std::reference_wrapper(breakpoints)));
 #else
         parse(args, chrom, orig_avg, std::reference_wrapper(original), perm_avg, std::reference_wrapper(evd), std::reference_wrapper(deltas), std::reference_wrapper(fdr), std::reference_wrapper(breakpoints));

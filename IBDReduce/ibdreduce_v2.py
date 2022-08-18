@@ -18,6 +18,7 @@ import numpy as np
 import scipy.stats as stats
 import ibdlib
 from datetime import datetime
+import multiprocessing as mp
 
 def is_gzipped(fpath: Path) -> bool:
     """Check if the provided file is gzipped or not.
@@ -376,6 +377,7 @@ def main():
     parser.add_argument('--fdr', default=False, action='store_true',
                         help="Control FDR instead of FWE.")
     args = parser.parse_args()
+    pool = mp.Pool(mp.cpu_count())
 
     cppargs = ibdlib.IBDRArgs()
     cppargs.at = args.at
@@ -424,6 +426,7 @@ def main():
     opath = Path('/'.join(args.output.split('/')[0:len(args.output.split('/')) - 1]))
     opath.mkdir(parents=True, exist_ok=True)
 
+    t1 = datetime.now()
     for phen in range(args.phenotypes):
         opf = open(f'{args.output}.{phen}', 'w')
         print('# {}'.format(' '.join(sys.argv)), file=opf)
@@ -462,6 +465,8 @@ def main():
                     p_adjust = stats.percentileofscore(evd[phen], p, kind='weak') / 100.
                 print(f"{i}\t{k}\t{ibdlen[i][k]}\t{p}\t{lower}," +
                       f"{upper}\t{p_adjust}\t{p_adjust_cutoff}\t{succ}\t{total_perms}\t{d}", file=opf)
+    t2 = datetime.now()
+    print("output time v2: {}".format(t2 - t1), file=sys.stderr)
 
 
 if __name__ == "__main__":

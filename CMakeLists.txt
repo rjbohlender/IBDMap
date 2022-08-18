@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.0) # A newer version of cmake will let us statically link MKL
 project(carvaIBD)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -24,6 +24,9 @@ set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--no-undefined" 
 if (UNIX)
     find_package(LAPACK REQUIRED)
     find_package(BLAS REQUIRED)
+    if (NOT APPLE)
+        set(BLA_STATIC ON)
+    endif()
 endif()
 
 set(PROJECT_SUPPORT_FILES
@@ -81,39 +84,6 @@ target_link_libraries(carvaIBD ${Python3_LIBRARIES} ${Boost_LIBRARIES})
 target_link_libraries(carvaIBD ${ZLIB_LIBRARIES})
 if(Gperftools_FOUND)
   target_link_libraries(carvaIBD ${Gperftools_LIBRARIES})
-endif()
-
-# add_executable(test test.cpp ${PROJECT_SUPPORT_FILES} ${IBDLIB_SOURCE_FILES})
-#
-# target_link_libraries(test fmt::fmt-header-only)
-# target_link_libraries(test pthread)
-# target_link_libraries(test ${LAPACK_LIBRARIES})
-# target_link_libraries(test ${BLAS_LIBRARIES})
-# target_link_libraries(test ${ARMADILLO_LIBRARIES})
-# target_link_libraries(test ${PYTHON_LIBRARIES} ${Boost_LIBRARIES})
-# target_link_libraries(test ${ZLIB_LIBRARIES})
-if(UNIX AND NOT APPLE)
-    set(Boost_USE_STATIC_LIBS   ON)
-    set(Python3_USE_STATIC_LIBS ON)
-    add_definitions(-DBOOST_PYTHON_STATIC_LIB)
-    set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_STATIC_LIBRARY_SUFFIX})
-    find_package(EXPAT)
-
-    find_package(Boost 1.66.0 COMPONENTS iostreams python numpy REQUIRED)
-    find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
-
-    add_executable(carvaIBD.static ../main.cpp ${PROJECT_SUPPORT_FILES})
-    target_link_libraries(carvaIBD.static -static) # Fully static build
-    target_link_libraries(carvaIBD.static fmt::fmt-header-only)
-    target_link_libraries(carvaIBD.static -Wl,--start-group)
-    target_link_libraries(carvaIBD.static -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lm -ldl)
-    target_link_libraries(carvaIBD.static -Wl,--end-group)
-    target_link_libraries(carvaIBD.static boost_iostreams)
-    target_link_libraries(carvaIBD.static boost_python${Python3_VERSION_MAJOR}${Python3_VERSION_MINOR})
-    target_link_libraries(carvaIBD.static Python3::Python)
-    target_link_libraries(carvaIBD.static EXPAT::EXPAT)
-    target_link_libraries(carvaIBD.static z)
-
 endif()
 
 target_compile_definitions(carvaIBD PRIVATE MAXCOLORS=10000000)
