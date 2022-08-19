@@ -19,14 +19,18 @@ find_package(ZLIB REQUIRED)
 
 set(CMAKE_SHARED_MODULE_PREFIX "")
 
+include(CheckCXXCompilerFlag)
+CHECK_CXX_COMPILER_FLAG("-march=native" COMPILER_SUPPORTS_MARCH_NATIVE)
+if(COMPILER_SUPPORTS_MARCH_NATIVE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+endif()
+
 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--no-undefined" )
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -g -DNDEBUG -fno-omit-frame-pointer")
 
 if (UNIX)
     find_package(LAPACK REQUIRED)
     find_package(BLAS REQUIRED)
-    if (NOT APPLE)
-        set(BLA_STATIC ON)
-    endif()
 endif()
 
 set(PROJECT_SUPPORT_FILES
@@ -77,8 +81,6 @@ add_executable(carvaIBD main.cpp ${PROJECT_SUPPORT_FILES})
 
 target_link_libraries(carvaIBD fmt::fmt-header-only)
 target_link_libraries(carvaIBD pthread)
-target_link_libraries(carvaIBD ${LAPACK_LIBRARIES})
-target_link_libraries(carvaIBD ${BLAS_LIBRARIES})
 target_link_libraries(carvaIBD ${ARMADILLO_LIBRARIES})
 target_link_libraries(carvaIBD ${Python3_LIBRARIES} ${Boost_LIBRARIES})
 target_link_libraries(carvaIBD ${ZLIB_LIBRARIES})
