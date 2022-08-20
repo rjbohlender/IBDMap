@@ -31,7 +31,8 @@ template<typename Stat>
 class ThreadPool {
     std::atomic<int> nsubmitted;
     mutable std::mutex mut;
-    std::condition_variable cv;
+    std::condition_variable not_empty;
+    std::condition_variable not_full;
     std::queue<Stat> work_queue;
     std::vector<std::thread> threads;
     JoinThreads joiner;
@@ -39,13 +40,14 @@ class ThreadPool {
     void worker_thread() {
         std::unique_lock<std::mutex> lk(mut);
         while (!done || ntasks > 0) {
-            cv.wait_for(lk, std::chrono::seconds(1), [this] { return !work_queue.empty() || done; });
+            not_empty.wait_for(lk, std::chrono::seconds(1), [this] { return !work_queue.empty() || done; });
             if (!work_queue.empty()) {
                 Stat task = std::move(work_queue.front());
                 work_queue.pop();
 
                 // Done with queue; unlock
                 lk.unlock();
+                not_full.notify_one();
                 task.run();
                 ntasks--;
 
@@ -71,7 +73,7 @@ public:
     }
     ~ThreadPool() {
         done = true;
-        cv.notify_all();
+        not_empty.notify_all();
         while (!work_queue.empty() || ntasks > 0) {
             std::this_thread::sleep_for(std::chrono::nanoseconds(100000000));
         }
@@ -79,14 +81,12 @@ public:
 
     void submit(Stat &&f) {
         std::unique_lock lk(mut);
-        while (ntasks > params.nthreads + 5) {
-            std::this_thread::sleep_for(std::chrono::nanoseconds(100000000));
-        }
+        not_full.wait(lk, [this]() { return ntasks < params.nthreads + 5; });
         work_queue.push(std::move(f));
         ntasks++;
         nsubmitted++;
         lk.unlock();
-        cv.notify_all();
+        not_empty.notify_one();
     }
 };
 
