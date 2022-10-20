@@ -65,6 +65,10 @@ void Phenotypes::parse(std::istream &is) {
     }
     create_indexers();
     build_groups(fill_patterns);
+    if (phenotypes.empty()) {
+        std::cerr << "Failed to read phenotypes. Phenotype file may be empty." << std::endl;
+        std::exit(-1);
+    }
 }
 
 void Phenotypes::create_indexers() {
