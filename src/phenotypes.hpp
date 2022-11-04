@@ -19,7 +19,7 @@ class Phenotypes {
     void build_groups(const std::map<std::vector<bool>, std::vector<arma::uword>> &fill_patterns);
 public:
     std::shared_ptr<std::vector<std::string>> samples;
-    std::vector<std::vector<int>> phenotypes;
+    std::vector<pheno_vector> phenotypes;
     std::shared_ptr<std::vector<Indexer>> indexer;
     std::optional<std::vector<std::vector<arma::uword>>> groups;
 

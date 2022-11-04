@@ -7,6 +7,7 @@
 
 #define ARMA_DONT_USE_WRAPPER
 
+#include "types.hpp"
 #include "breakpoint.hpp"
 #include "indexer.hpp"
 #include "parameters.hpp"
@@ -22,7 +23,7 @@
 class Statistic {
     arma::sp_colvec data;
     std::shared_ptr<std::vector<Indexer>> indexer;
-    std::vector<std::vector<int>> phenotypes;
+    std::vector<pheno_vector> phenotypes;
     Parameters params;
 
     std::shared_ptr<Reporter> reporter;
@@ -34,13 +35,13 @@ class Statistic {
     static void x1(int y, double &cscs, double &cscn);
     static void x0(int y, double &cscn, double &cncn);
     void initialize();
-    static void joint_shuffle(std::vector<std::vector<int>> &phen, std::mt19937_64 &gen);
+    static void joint_shuffle(std::vector<pheno_vector> &phen, std::mt19937_64 &gen);
     void joint_permute();
-    static void group_unpack(std::vector<std::vector<int>> &p_original,
-                             const std::vector<std::vector<int>> &p_tmp,
+    static void group_unpack(std::vector<pheno_vector> &p_original,
+                             const std::vector<pheno_vector> &p_tmp,
                              const std::vector<arma::uword> &group_indices);
-    static void group_pack(const std::vector<std::vector<int>> &p_original,
-                           std::vector<std::vector<int>> &p_tmp,
+    static void group_pack(const std::vector<pheno_vector> &p_original,
+                           std::vector<pheno_vector> &p_tmp,
                            const std::vector<arma::uword> &groupIndices);
     void build_output(std::stringstream &ss);
 
@@ -62,7 +63,7 @@ public:
 
     Statistic(arma::sp_colvec data_, Breakpoint bp_, std::shared_ptr<std::vector<Indexer>> indexer_, std::shared_ptr<Reporter> reporter_, Parameters params_, std::optional<std::vector<std::vector<arma::uword>>> groups_);
 
-    double calculate(std::vector<int> &phenotypes_, double cscs_count, double cscn_count, double cncn_count, size_t k);
+    double calculate(pheno_vector &phenotypes_, double cscs_count, double cscn_count, double cncn_count, size_t k);
 
     void run();
     void cleanup();
