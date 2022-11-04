@@ -24,9 +24,9 @@ double
 Statistic::calculate(pheno_vector &phenotypes_, double cscs_count, double cscn_count, double cncn_count, size_t k) {
     double statistic;
 
-    double cscs = 0;
-    double cscn = 0;
-    double cncn = 0;
+    int64_t cscs = 0;
+    int64_t cscn = 0;
+    int64_t cncn = 0;
 
     if (pairs.empty()) {
         for (auto it = data.begin(); it != data.end(); ++it) {
@@ -61,9 +61,9 @@ Statistic::calculate(pheno_vector &phenotypes_, double cscs_count, double cscn_c
     permuted_cncn[k].push_back(cncn);
 
     if (params.contcont) {
-        statistic = cscs / cscs_count - cscn / cscn_count - cncn / cncn_count;
+        statistic = static_cast<double>(cscs) / cscs_count - static_cast<double>(cscn) / cscn_count - static_cast<double>(cncn) / cncn_count;
     } else {
-        statistic = cscs / cscs_count - cscn / cscn_count;
+        statistic = static_cast<double>(cscs) / cscs_count - static_cast<double>(cscn) / cscn_count;
     }
 
     return statistic;
