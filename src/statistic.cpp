@@ -21,7 +21,7 @@ Statistic::Statistic(arma::sp_colvec data_, Breakpoint bp_, std::shared_ptr<std:
 }
 
 double
-Statistic::calculate(std::vector<int> &phenotypes_, double cscs_count, double cscn_count, double cncn_count, size_t k) {
+Statistic::calculate(pheno_vector &phenotypes_, double cscs_count, double cscn_count, double cncn_count, size_t k) {
     double statistic;
 
     double cscs = 0;
@@ -101,7 +101,7 @@ void Statistic::run() {
     while (permutations.back() < params.nperms) {
         if (groups) {
             for (const auto &groupIndices : *groups) {
-                std::vector<std::vector<int>> phenotypes_tmp;
+                std::vector<pheno_vector> phenotypes_tmp;
                 group_pack(phenotypes, phenotypes_tmp, groupIndices);
                 joint_shuffle(phenotypes_tmp, gen);
                 group_unpack(phenotypes, phenotypes_tmp, groupIndices);
@@ -145,12 +145,12 @@ void Statistic::build_output(std::stringstream &ss) {
     }
 }
 
-void Statistic::group_pack(const std::vector<std::vector<int>> &p_original,
-                           std::vector<std::vector<int>> &p_tmp,
+void Statistic::group_pack(const std::vector<pheno_vector> &p_original,
+                           std::vector<pheno_vector> &p_tmp,
                            const std::vector<arma::uword> &groupIndices) {
     for (auto [i, p] : Enumerate(p_original)) {
         try {
-            p_tmp.emplace_back(std::vector<int>(groupIndices.size(), 0));
+            p_tmp.emplace_back(pheno_vector(groupIndices.size(), 0));
         } catch (std::length_error &e) {
             fmt::print(std::cerr, "Failed to emplace at line {}.", __LINE__);
         }
@@ -162,8 +162,8 @@ void Statistic::group_pack(const std::vector<std::vector<int>> &p_original,
     }
 }
 
-void Statistic::group_unpack(std::vector<std::vector<int>> &p_original,
-                             const std::vector<std::vector<int>> &p_tmp,
+void Statistic::group_unpack(std::vector<pheno_vector> &p_original,
+                             const std::vector<pheno_vector> &p_tmp,
                              const std::vector<arma::uword> &group_indices) {
     for (auto [i, p] : Enumerate(p_tmp)) {
         int x = 0;
@@ -186,7 +186,7 @@ void Statistic::joint_permute() {
     }
 }
 
-void Statistic::joint_shuffle(std::vector<std::vector<int>> &phen, std::mt19937_64 &gen) {
+void Statistic::joint_shuffle(std::vector<pheno_vector> &phen, std::mt19937_64 &gen) {
     for (size_t i = phen[0].size() - 1; i > 0; i--) {
         std::uniform_int_distribution<> dis(0, i);
         int j = dis(gen);
@@ -229,7 +229,7 @@ void Statistic::test_statistic() {
             "case6", "case7", "case8", "case9", "case10",
             "control1", "control2", "control3", "control4", "control5",
             "control6", "control7", "control8", "control9", "control10"};
-    std::vector<int> tphenotypes_{
+    pheno_vector tphenotypes_{
             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     Indexer tindexer(10, 10, tsamples, tphenotypes_);
 
@@ -313,7 +313,7 @@ void Statistic::test_group_permutation(unsigned int seed) {
     std::string line;
     arma::uword lineno = 0;
 
-    std::vector<std::vector<int>> tphenotypes;
+    std::vector<pheno_vector> tphenotypes;
 
     while (std::getline(test_data, line)) {
         if (boost::starts_with(line, "#") || lineno == 0) {// Skip the header
@@ -387,7 +387,7 @@ void Statistic::test_group_permutation(unsigned int seed) {
 
     std::mt19937_64 tgen(seed);
     for (const auto &v : *tgroups) {// For each of the set of group indices
-        std::vector<std::vector<int>> tphenotypes_tmp;
+        std::vector<pheno_vector> tphenotypes_tmp;
         group_pack(tphenotypes, tphenotypes_tmp, v);
         joint_shuffle(tphenotypes_tmp, tgen);
         group_unpack(tphenotypes, tphenotypes_tmp, v);

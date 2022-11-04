@@ -7,6 +7,7 @@
 
 #define ARMA_DONT_USE_WRAPPER
 
+#include "types.hpp"
 #include "indexsort.hpp"
 #include <armadillo>
 #include <unordered_map>
@@ -27,7 +28,7 @@ struct Indexer {
     arma::uword cont_count;
     arma::uword sz;
     std::vector<std::string> samples;
-    std::vector<int> phenotypes;
+    pheno_vector phenotypes;
     std::vector<arma::sword> transitions;// Transition points between pairing sets
     std::unordered_map<std::string, int> ordered_positions;
     std::unordered_map<std::string, int> ordered_cc_positions;
@@ -42,7 +43,7 @@ struct Indexer {
     Indexer(arma::uword case_count_,
             arma::uword cont_count_,
             std::vector<std::string> samples_,
-            std::vector<int> phenotypes_)
+            pheno_vector phenotypes_)
         : case_count(case_count_), cont_count(cont_count_), sz(samples_.size()), phenotypes(std::move(phenotypes_)),
           samples(std::move(samples_)), case_case(0), case_cont(0), cont_cont(0) {
         setup(case_count_, cont_count_);
