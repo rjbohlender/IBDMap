@@ -32,6 +32,7 @@ public:
     bool enable_testing = false;
     bool dash = false;
     bool oldformat = false;
+    int pheno_col;
     std::optional<std::vector<int>> range;
     std::optional<std::vector<std::pair<int, int>>> exclude;
     std::optional<double> cM;

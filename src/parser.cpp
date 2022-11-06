@@ -152,7 +152,7 @@ void Parser::parse_input(std::istream &is) {
                        pheno.indexer,
                        reporter,
                        params,
-                       pheno.groups);
+                       pheno.phenotypes);
         threadpool.submit(std::move(stat));
         submitted++;
     }
@@ -220,7 +220,7 @@ void Parser::update_data(arma::sp_vec &data,
 
             for (auto it1 = iids.begin(); it1 != iids.end(); it1++) {
                 for (auto it2 = it1 + 1; it2 != iids.end(); it2++) {
-                    arma::sword row_idx = (*pheno.indexer)[0].translate(*it1, *it2);
+                    arma::sword row_idx = (*pheno.indexer).translate(*it1, *it2);
 
                     int id_idx = indices["clusterID"];
                     auto ids = fmt::format("{},{}", *it1, *it2);
@@ -244,7 +244,7 @@ void Parser::update_data(arma::sp_vec &data,
             RJBUtil::Splitter<std::string> pairs(vals[indices[iid_key]], "-");
 
             std::sort(pairs.begin(), pairs.end());
-            arma::sword row_idx = (*pheno.indexer)[0].translate(pairs[0], pairs[1]);
+            arma::sword row_idx = (*pheno.indexer).translate(pairs[0], pairs[1]);
 
             auto ids = fmt::format("{},{}", pairs[0], pairs[1]);
             if (row_idx < 0) {

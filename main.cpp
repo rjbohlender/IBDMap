@@ -21,7 +21,7 @@ int main(int argc, char *argv[]) {
   std::vector<std::string> tmp_exclude_vec;
   std::vector<std::string> tmp_sample_vec;
 
-  CLI::App app{"carvaIBD is an IBD mapping tool for large scale IBD datasets."};
+  CLI::App app{"IBDMap is an IBD mapping tool for large scale IBD datasets."};
 
   app.add_option("-i,--input",
 				 params.input,
@@ -95,6 +95,9 @@ int main(int argc, char *argv[]) {
   app.add_option("-o,--output",
 				 params.output_path,
 				 "Output to a specified file. Default output is is /output/{date-time}.results.gz.");
+  app.add_option("--pheno_col",
+                 params.pheno_col,
+                 "The column to read from the phenotype file. Column 0 should be sample ID and column 1+ should be 0, 1, NA.")->default_val(1);
   app.add_flag("--swap_pheno",
 			   params.swap,
 			   "Swap case-control status of individuals. Useful for "
@@ -111,9 +114,9 @@ int main(int argc, char *argv[]) {
   app.add_flag("--dash",
 			   params.dash,
 			   "Expect input to be formatted by DASH.");
-app.add_flag("--old",
-             params.oldformat,
-             "Expect input to include the npairs and nsegments columns.");
+  app.add_flag("--old",
+               params.oldformat,
+               "Expect input to include the npairs and nsegments columns.");
 
   CLI11_PARSE(app, argc, argv);
 
