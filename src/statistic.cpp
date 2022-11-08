@@ -9,6 +9,15 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <fmt/include/fmt/ostream.h>
 #include <utility>
+#include <valarray>
+
+#include <immintrin.h>
+
+// Maybe I could use c++20's std::popcount instead??
+static inline int32_t popcnt128(__m128i n) {
+    const __m128i n_hi = _mm_unpackhi_epi64(n, n);
+    return __builtin_popcountll(_mm_cvtsi128_si64(n)) + __builtin_popcountll(_mm_cvtsi128_si64(n_hi));
+}
 
 Statistic::Statistic(arma::sp_colvec data_, Breakpoint bp_, std::shared_ptr<std::vector<Indexer>> indexer_, std::shared_ptr<Reporter> reporter_, Parameters params_, std::optional<std::vector<std::vector<arma::uword>>> groups_) : data(std::move(data_)), indexer(std::move(indexer_)),
                                                                                                  params(std::move(params_)),
@@ -28,11 +37,12 @@ Statistic::calculate(pheno_vector &phenotypes_, double cscs_count, double cscn_c
     int64_t cscn = 0;
     int64_t cncn = 0;
 
-    if (pairs.empty()) {
+    if (pairs.first.empty()) {
         for (auto it = data.begin(); it != data.end(); ++it) {
-            auto p = (*indexer)[k].back_translate(it.row());
+            auto [left, right] = (*indexer)[k].back_translate(it.row());
             try {
-                pairs.emplace_back(p);
+                pairs.first.emplace_back(left);
+                pairs.second.emplace_back(right);
             } catch (std::length_error &e) {
                 fmt::print(std::cerr, "Failed to emplace or push at line {}.", __LINE__);
                 throw(e);
@@ -40,21 +50,36 @@ Statistic::calculate(pheno_vector &phenotypes_, double cscs_count, double cscn_c
         }
     }
 
-    for (auto &p : pairs) {
-        auto &[p1, p2] = p;
-        int x = phenotypes_[p1];
-        int y = phenotypes_[p2];
+    size_t i = 0;
 
-        if (x < -1 || x > 1 || y < -1 || y > 1) {
-            fmt::print(std::cerr, "Phenotypes: {},{} p1: {} p2: {}\n", x, y, p1, p2);
-            throw(std::runtime_error("ERROR: invalid phenotype in calculate."));
-        }
+#ifdef __AVX512F__
+    for (; i < pairs.first.size() - 15; i+= 16) {
+        auto left_addresses = _mm512_loadu_si512(&pairs.first[i]);
+        auto right_addresses = _mm512_loadu_si512(&pairs.second[i]);
 
-        cscs += ((x == 1) && (y == 1));
-        cscn += ((x == 1) && (y == 0));
-        cscn += ((x == 0) && (y == 1));
-        cncn += ((x == 0) && (y == 0));
+        auto lefts = _mm512_i32gather_epi32(left_addresses, phenotypes_.data(), 1);
+        auto rights = _mm512_i32gather_epi32(right_addresses, phenotypes_.data(), 1);
+        
+        auto left_packed = _mm512_cvtepi32_epi8(lefts);
+        auto right_packed = _mm512_cvtepi32_epi8(rights);
+
+        auto cscs_batch = _mm_and_si128(left_packed, right_packed);
+        auto cscn_batch = _mm_xor_si128(left_packed, right_packed);
+
+        cscs += popcnt128(cscs_batch);
+        cscn += popcnt128(cscn_batch);
     }
+#endif
+
+    for (; i < pairs.first.size(); ++i) {
+        const auto x = phenotypes_[pairs.first[i]];
+        const auto y = phenotypes_[pairs.second[i]];
+
+        cscs += x & y;
+        cscn += x ^ y;
+    }
+
+    cncn = pairs.first.size() - cscs - cscn;
 
     permuted_cscs[k].push_back(cscs);
     permuted_cscn[k].push_back(cscn);

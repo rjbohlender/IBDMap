@@ -4,10 +4,12 @@
 #include <valarray>
 #include <array>
 
+#include <immintrin.h>
+
 #include <benchmark/benchmark.h>
 
 static const auto NUM_PHENOS = 500000;
-static const auto NUM_PAIRS = 200;
+static const auto NUM_PAIRS = 256;
 
 static std::vector<int8_t> make_random_bools(size_t n = NUM_PHENOS)
 {
@@ -50,6 +52,40 @@ static std::vector<std::pair<T, T>> make_pairs(size_t n_phenos = NUM_PHENOS, siz
     std::sort(pairs.begin(), pairs.end());
 
     return pairs;
+}
+
+template<typename T = size_t>
+static std::pair<std::vector<T>, std::vector<T>> make_pairs_struct_of_arrays(size_t n_phenos = NUM_PHENOS, size_t n_pairs = NUM_PAIRS) {
+    auto seed = std::random_device{}();
+    std::mt19937 rng(seed);
+    std::uniform_int_distribution<T> dis(0, n_phenos - 1);
+    std::vector<std::pair<T, T>> pairs;
+    pairs.reserve(n_pairs);
+
+    for (size_t i = 0; i < n_pairs; i++) {
+        pairs.emplace_back(std::make_pair(dis(rng), dis(rng)));
+    }
+
+    std::sort(pairs.begin(), pairs.end());
+
+    std::vector<T> left_members;
+    std::vector<T> right_members;
+
+    left_members.reserve(n_pairs);
+    right_members.reserve(n_pairs);
+
+    for (const auto [a,b] : pairs) {
+        left_members.emplace_back(a);
+        right_members.emplace_back(b);
+    }
+
+    return std::make_pair(left_members, right_members);
+}
+
+// Maybe I could use c++20's std::popcount instead??
+static inline int32_t popcnt128(__m128i n) {
+    const __m128i n_hi = _mm_unpackhi_epi64(n, n);
+    return __builtin_popcountll(_mm_cvtsi128_si64(n)) + __builtin_popcountll(_mm_cvtsi128_si64(n_hi));
 }
 
 static void BM_fp(benchmark::State &state) {
@@ -335,5 +371,66 @@ static void BM_access_only(benchmark::State &state) {
 }
 
 BENCHMARK(BM_access_only);
+
+static void BM_vectorized_access_only(benchmark::State &state) {
+    auto [left_members, right_members] = make_pairs_struct_of_arrays<int32_t>();
+    std::vector<int8_t> phenotypes_ = make_random_bools();
+
+    int64_t cscs = 0;
+    int64_t cscn = 0;
+
+    for (auto _ : state) {
+        
+        for (size_t i = 0; i < left_members.size() - 15; i+= 16) {
+            auto left_addresses = _mm512_loadu_si512(&left_members[i]);
+            auto right_addresses = _mm512_loadu_si512(&right_members[i]);
+
+            auto lefts = _mm512_i32gather_epi32(left_addresses, phenotypes_.data(), 1);
+            auto rights = _mm512_i32gather_epi32(right_addresses, phenotypes_.data(), 1);
+            
+            auto left_packed = _mm512_cvtepi32_epi8(lefts);
+            auto right_packed = _mm512_cvtepi32_epi8(rights);
+
+            benchmark::DoNotOptimize(left_packed);
+            benchmark::DoNotOptimize(right_packed);
+        }
+    }
+}
+
+BENCHMARK(BM_vectorized_access_only);
+
+static void BM_vectorized(benchmark::State &state) {
+    auto [left_members, right_members] = make_pairs_struct_of_arrays<int32_t>();
+    std::vector<int8_t> phenotypes_ = make_random_bools();
+
+    int64_t cscs = 0;
+    int64_t cscn = 0;
+
+    for (auto _ : state) {
+        for (size_t i = 0; i < left_members.size() - 15; i+= 16) {
+            auto left_addresses = _mm512_loadu_si512(&left_members[i]);
+            auto right_addresses = _mm512_loadu_si512(&right_members[i]);
+
+            auto lefts = _mm512_i32gather_epi32(left_addresses, phenotypes_.data(), 1);
+            auto rights = _mm512_i32gather_epi32(right_addresses, phenotypes_.data(), 1);
+            
+            auto left_packed = _mm512_cvtepi32_epi8(lefts);
+            auto right_packed = _mm512_cvtepi32_epi8(rights);
+
+            auto cscs_batch = _mm_and_si128(left_packed, right_packed);
+            auto cscn_batch = _mm_xor_si128(left_packed, right_packed);
+
+            cscs += popcnt128(cscs_batch);
+            cscn += popcnt128(cscn_batch);
+        }
+    }
+
+    benchmark::DoNotOptimize(cscs);
+    benchmark::DoNotOptimize(cscn);
+}
+
+BENCHMARK(BM_vectorized);
+
+// This could still be made faster by doing aligned loads rather than unaligned
 
 BENCHMARK_MAIN();

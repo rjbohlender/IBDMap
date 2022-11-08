@@ -28,7 +28,7 @@ class Statistic {
 
     std::shared_ptr<Reporter> reporter;
 
-    std::vector<std::pair<arma::sword, arma::sword>> pairs;
+    std::pair<std::vector<int32_t>, std::vector<int32_t>> pairs;
 
     std::mt19937_64 gen;
 
