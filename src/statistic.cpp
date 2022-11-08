@@ -53,7 +53,11 @@ Statistic::calculate(pheno_vector &phenotypes_, double cscs_count, double cscn_c
     size_t i = 0;
 
 #ifdef __AVX512F__
-    for (; i < pairs.first.size() - 15; i+= 16) {
+    if  (phenotypes_.capacity() < phenotypes_.size() + 3) {
+        phenotypes_.resize(phenotypes_.size() + 3);
+    }
+
+    for (; i + 15 < pairs.first.size(); i+= 16) {
         auto left_addresses = _mm512_loadu_si512(&pairs.first[i]);
         auto right_addresses = _mm512_loadu_si512(&pairs.second[i]);
 

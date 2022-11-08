@@ -94,7 +94,7 @@ endif()
 target_compile_definitions(carvaIBD PRIVATE MAXCOLORS=10000000)
 
 if(benchmark_FOUND)
-    add_executable(ibdBench EXCLUDE_FROM_ALL bench_main.cpp ${PROJECT_SUPPORT_FILES})
+    add_executable(ibdBench bench_main.cpp ${PROJECT_SUPPORT_FILES})
     target_link_libraries(ibdBench benchmark)
     target_link_libraries(ibdBench fmt::fmt-header-only)
     target_link_libraries(ibdBench pthread)
