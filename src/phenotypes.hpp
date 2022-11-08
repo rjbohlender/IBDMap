@@ -14,14 +14,15 @@
 class Phenotypes {
     Parameters params;
 
+    std::mt19937_64 gen;
+
     void parse(std::istream &is);
     void create_indexers();
-    void build_groups(const std::map<std::vector<bool>, std::vector<arma::uword>> &fill_patterns);
+    void shuffle();
 public:
     std::shared_ptr<std::vector<std::string>> samples;
-    std::vector<pheno_vector> phenotypes;
-    std::shared_ptr<std::vector<Indexer>> indexer;
-    std::optional<std::vector<std::vector<arma::uword>>> groups;
+    std::shared_ptr<std::vector<pheno_vector>> phenotypes;
+    std::shared_ptr<Indexer> indexer;
 
     explicit Phenotypes(Parameters params_);
 };

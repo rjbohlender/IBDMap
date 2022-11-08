@@ -11,10 +11,12 @@
 
 void Phenotypes::parse(std::istream &is) {
     int iid = 0;
-    int phe = 1;
+    int phe = params.pheno_col;
     std::string line;
     arma::uword lineno = 0;
-    std::map<std::vector<bool>, std::vector<arma::uword>> fill_patterns;
+
+    // column 0 is the original (*phenotypes)
+    (*phenotypes).resize(params.nperms + 1);
 
     while (std::getline(is, line)) {
         if (boost::starts_with(line, "#") || lineno == 0) {// Skip the header
@@ -24,102 +26,74 @@ void Phenotypes::parse(std::istream &is) {
         RJBUtil::Splitter<std::string_view> splitter(line, " \t");
 
         samples->push_back(splitter[iid]);
-        std::vector<bool> pattern;
-        for (int i = phe; i < splitter.size(); i++) {
-            if (phenotypes.size() < i) {
-                phenotypes.emplace_back();
-            }
-            if (splitter[i] == "NA") {
-                pattern.push_back(false);
-                phenotypes[i - 1].push_back(-1);
+            if (splitter[phe] == "NA") {
+                (*phenotypes)[0].push_back(-1);
             } else {
-                pattern.push_back(true);
-                phenotypes[i - 1].push_back(std::stoi(splitter[i]));
-                // Checking for erroneous phenotypes
-                if (phenotypes[i - 1].back() < 0 || phenotypes[i - 1].back() > 1) {
+                (*phenotypes)[0].push_back(static_cast<int8_t>(std::stoi(splitter[phe])));
+                // Checking for erroneous (*phenotypes)
+                if ((*phenotypes)[0].back() < 0 || (*phenotypes)[0].back() > 1) {
                     if (params.verbose) {
-                        fmt::print(std::cerr, "{} {}\n", splitter[0], splitter[i]);
+                        fmt::print(std::cerr, "{} {}\n", splitter[0], splitter[phe]);
                     }
                     throw(std::runtime_error(fmt::format("Incorrect phenotype value at lineno: {}", lineno)));
                 }
                 if (params.swap) {// Swap case-control status
-                    switch (phenotypes[i - 1].back()) {
+                    switch ((*phenotypes)[0].back()) {
                         case 1:
-                            phenotypes[i - 1].back() = 0;
+                            (*phenotypes)[0].back() = 0;
                             break;
                         case 0:
-                            phenotypes[i - 1].back() = 1;
+                            (*phenotypes)[0].back() = 1;
                             break;
                         default:
                             break;
                     }
                 }
             }
-        }
-        if (fill_patterns.count(pattern) == 0) {
-            fill_patterns.emplace(std::make_pair(pattern, std::vector<arma::uword>({lineno - 1})));
-        } else {
-            fill_patterns[pattern].push_back(lineno - 1);
-        }
         lineno++;
     }
     create_indexers();
-    build_groups(fill_patterns);
-    if (phenotypes.empty()) {
-        std::cerr << "Failed to read phenotypes. Phenotype file may be empty." << std::endl;
-        std::exit(-1);
-    }
+    arma::wall_clock timer;
+    timer.tic();
+    shuffle();
+    fmt::print(std::cerr, "Time spent generating permutations: {}\n", timer.toc());
 }
 
 void Phenotypes::create_indexers() {
-    for (auto [i, p] : Enumerate(phenotypes)) {
-        int case_count = 0;
-        int control_count = 0;
-        int excluded = 0;
-        for (const auto &v : p) {
-            switch (v) {
-                case 1:
-                    case_count++;
-                    break;
-                case 0:
-                    control_count++;
-                    break;
-                default:
-                    excluded++;
-                    break;
-            }
+    int case_count = 0;
+    int control_count = 0;
+    int excluded = 0;
+    for (const auto &p : phenotypes->at(0)) {
+        switch (p) {
+            case 1:
+                case_count++;
+                break;
+            case 0:
+                control_count++;
+                break;
+            default:
+                excluded++;
+                break;
         }
-        if (params.verbose) {
-            fmt::print(std::cerr, "Phenotype {}, cases: {}, controls: {}, excluded: {}\n", i, case_count, control_count, excluded);
-        }
-        indexer->emplace_back(Indexer(case_count, control_count, (*samples), p));
     }
+    fmt::print(std::cerr, "Phenotype counts --> cases: {}, controls: {}, excluded: {}\n", case_count, control_count, excluded);
+    indexer = std::make_shared<Indexer>(case_count, control_count, (*samples), (*phenotypes)[0]);
 }
 
-void Phenotypes::build_groups(const std::map<std::vector<bool>, std::vector<arma::uword>> &fill_patterns) {
-    if (fill_patterns.size() > 1) {
-        groups = std::vector<std::vector<arma::uword>>();
-        for (const auto &v : fill_patterns) {
-            groups->push_back(v.second);
-        }
-        if (params.verbose) {
-            std::cerr << "Groups: " << groups->size() << std::endl;
-            std::cerr << "Group sizes: ";
-        }
-        for (const auto &v : fill_patterns) {
-            if (params.verbose) {
-                std::cerr << v.second.size() << " ";
-            }
-        }
-        if (params.verbose) {
-            std::cerr << std::endl;
+void Phenotypes::shuffle() {
+    for (int i = 1; i < params.nperms + 1; i++) {
+        (*phenotypes)[i] = (*phenotypes)[0];
+        for (int j = (*phenotypes)[0].size() - 1; j > 0; j--) {
+            std::uniform_int_distribution<> dis(0, j);
+            int k = dis(gen);
+            std::swap((*phenotypes)[i][j], (*phenotypes)[i][k]);
         }
     }
 }
 
-Phenotypes::Phenotypes(Parameters params_) : params(std::move(params_)) {
+Phenotypes::Phenotypes(Parameters params_) : params(std::move(params_)), gen(params.seed) {
     samples = std::make_shared<std::vector<std::string>>();
-    indexer = std::make_shared<std::vector<Indexer>>();
+    phenotypes = std::make_shared<std::vector<pheno_vector>>();
     std::ifstream ifs(params.pheno);
     parse(ifs);
 }
