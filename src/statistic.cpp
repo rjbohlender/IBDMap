@@ -10,6 +10,7 @@
 #include <string>
 #include <utility>
 #include <valarray>
+#include <bit>
 
 #ifdef __AVX512F__
 #include <immintrin.h>
@@ -43,65 +44,65 @@ Statistic::calculate(pheno_vector &phenotypes_, bool original_) noexcept {
     int64_t cscn = 0;
     int64_t cncn = 0;
 
-    int64_t cscs2 = 0;
-    int64_t cscn2 = 0;
-
     if (pairs.first.empty()) {
         for (auto it = data.begin(); it != data.end(); ++it) {
             auto [left, right] = (*indexer).back_translate(it.row());
-            try {
-                pairs.first.emplace_back(left);
-                pairs.second.emplace_back(right);
-            } catch (std::length_error &e) {
-                fmt::print(std::cerr, "Failed to emplace or push at line {}.", __LINE__);
-                throw(e);
-            }
+            pairs.first.emplace_back(left);
+            pairs.second.emplace_back(right);
         }
     }
 
     size_t i = 0;
 
-    /**
-#ifdef __AVX512F__
-    // As much as I want to use this, it's much faster for this specific method, but slows the whole application by a hair
-    // On Ice Lake or newer, this is probably the winner!
-    if  (phenotypes_.capacity() < phenotypes_.size() + 3) {
-        phenotypes_.resize(phenotypes_.size() + 3);
-    }
+// #ifdef __AVX512F__
+//     // This is incrementally faster on Skylake, and probably much faster on Ice Lake and newer
 
-    for (; i + 15 < pairs.first.size(); i+= 16) {
-        auto left_addresses = _mm512_loadu_si512(&pairs.first[i]);
-        auto right_addresses = _mm512_loadu_si512(&pairs.second[i]);
+//     for (; i + 7 < pairs.first.size(); i+= 8) {
+//         auto left_addresses = _mm256_lddqu_si256((const __m256i*)&pairs.first[i]);
+//         auto right_addresses = _mm256_lddqu_si256((const __m256i*)&pairs.second[i]);
 
-        auto lefts = _mm512_i32gather_epi32(left_addresses, phenotypes_.data(), 1);
-        auto rights = _mm512_i32gather_epi32(right_addresses, phenotypes_.data(), 1);
+//         auto lefts = _mm256_i32gather_epi32((const int*)phenotypes_.data(), left_addresses, 1);
+//         auto rights = _mm256_i32gather_epi32((const int*)phenotypes_.data(), right_addresses, 1);
         
-        auto left_packed = _mm512_cvtepi32_epi8(lefts);
-        auto right_packed = _mm512_cvtepi32_epi8(rights);
+//         auto left_packed = _mm256_cvtepi32_epi8(lefts);
+//         auto right_packed = _mm256_cvtepi32_epi8(rights);
 
-        auto cscs_batch = _mm_and_si128(left_packed, right_packed);
-        auto cscn_batch = _mm_xor_si128(left_packed, right_packed);
+//         auto cscs_batch = _mm_and_si128(left_packed, right_packed);
+//         auto cscn_batch = _mm_xor_si128(left_packed, right_packed);
 
-        cscs += popcnt128(cscs_batch);
-        cscn += popcnt128(cscn_batch);
+//         cscs += popcnt128(cscs_batch);
+//         cscn += popcnt128(cscn_batch);
+//     }
+// #endif
+
+#if defined __AVX2__
+    // AVX2 has less friendly instructions for sure. I wonder if I can clean up all these nasty casts.
+    // We could avoid 2 expensive instructions if we stored phenotypes as 0xFF (or honestly just the most signifcant byte)
+
+    for (; i + 7 < pairs.first.size(); i+= 8) {
+        auto left_addresses = _mm256_lddqu_si256((const __m256i*)&pairs.first[i]);
+        auto right_addresses = _mm256_lddqu_si256((const __m256i*)&pairs.second[i]);
+
+        auto lefts = _mm256_i32gather_epi32((const int*)phenotypes_.data(), left_addresses, 1);
+        auto rights = _mm256_i32gather_epi32((const int*)phenotypes_.data(), right_addresses, 1);
+
+        auto addition_vector = _mm256_setr_epi8(127, 0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 
+        127, 0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0);
+
+        // Set the high bit on each byte only if there was a 1 there before!      
+        auto left_masked = _mm256_add_epi8(lefts, addition_vector);
+        auto right_masked = _mm256_add_epi8(rights, addition_vector);
+
+        auto left_packed = _mm256_movemask_epi8(left_masked);
+        auto right_packed = _mm256_movemask_epi8(right_masked);        
+
+        auto cscs_batch = left_packed & right_packed;
+        auto cscn_batch = left_packed ^ right_packed;
+
+        cscs += std::popcount(static_cast<uint32_t>(cscs_batch));
+        cscn += std::popcount(static_cast<uint32_t>(cscn_batch));
     }
 #endif
-     */
-
-    for (; i + 1 < pairs.first.size(); i += 2) {
-
-        const auto x1 = phenotypes_[pairs.first[i]];
-        const auto y1 = phenotypes_[pairs.second[i]];
-
-        cscs += x1 & y1;
-        cscn += x1 ^ y1;
-
-        auto x2 = phenotypes_[pairs.first[i + 1]];
-        auto y2 = phenotypes_[pairs.second[i + 1]];
-
-        cscs2 += x2 & y2;
-        cscn2 += x2 ^ y2;
-    }
 
     for (; i < pairs.first.size(); ++i) {
         const auto x = phenotypes_[pairs.first[i]];
@@ -110,9 +111,6 @@ Statistic::calculate(pheno_vector &phenotypes_, bool original_) noexcept {
         cscs += x & y;
         cscn += x ^ y;
     }
-
-    cscs += cscs2;
-    cscn += cscn2;
 
     cncn = pairs.first.size() - cscs - cscn;
 

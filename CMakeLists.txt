@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.0) # A newer version of cmake will let us stati
 set(CMAKE_OSX_DEPLOYMENT_TARGET 12.3) # Otherwise it will pull an older SDK, which breaks linking against homebrew packages
 project(carvaIBD)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 add_subdirectory(third_party/SugarPP/)
 add_subdirectory(third_party/fmt/ EXCLUDE_FROM_ALL)
