@@ -4,7 +4,9 @@
 #include <valarray>
 #include <array>
 
+#ifdef __AVX512F__
 #include <immintrin.h>
+#endif
 
 #include <benchmark/benchmark.h>
 
@@ -82,11 +84,13 @@ static std::pair<std::vector<T>, std::vector<T>> make_pairs_struct_of_arrays(siz
     return std::make_pair(left_members, right_members);
 }
 
+#ifdef __AVX512F__
 // Maybe I could use c++20's std::popcount instead??
 static inline int32_t popcnt128(__m128i n) {
     const __m128i n_hi = _mm_unpackhi_epi64(n, n);
     return __builtin_popcountll(_mm_cvtsi128_si64(n)) + __builtin_popcountll(_mm_cvtsi128_si64(n_hi));
 }
+#endif
 
 static void BM_fp(benchmark::State &state) {
     std::vector<std::pair<size_t, size_t>> pairs = make_pairs();
@@ -372,6 +376,8 @@ static void BM_access_only(benchmark::State &state) {
 
 BENCHMARK(BM_access_only);
 
+#ifdef __AVX512F__
+
 static void BM_vectorized_access_only(benchmark::State &state) {
     auto [left_members, right_members] = make_pairs_struct_of_arrays<int32_t>();
     std::vector<int8_t> phenotypes_ = make_random_bools();
@@ -432,5 +438,6 @@ static void BM_vectorized(benchmark::State &state) {
 BENCHMARK(BM_vectorized);
 
 // This could still be made faster by doing aligned loads rather than unaligned
+#endif
 
 BENCHMARK_MAIN();
