@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0) # A newer version of cmake will let us statically link MKL
-set(CMAKE_OSX_DEPLOYMENT_TARGET 12.3)
+set(CMAKE_OSX_DEPLOYMENT_TARGET 12.3) # Otherwise it will pull an older SDK, which breaks linking against homebrew packages
 project(carvaIBD)
 
 set(CMAKE_CXX_STANDARD 17)

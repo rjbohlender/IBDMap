@@ -11,6 +11,7 @@
 #include <utility>
 #include <valarray>
 
+#ifdef __AVX512F__
 #include <immintrin.h>
 
 // Maybe I could use c++20's std::popcount instead??
@@ -18,6 +19,7 @@ static inline int32_t popcnt128(__m128i n) {
     const __m128i n_hi = _mm_unpackhi_epi64(n, n);
     return __builtin_popcountll(_mm_cvtsi128_si64(n)) + __builtin_popcountll(_mm_cvtsi128_si64(n_hi));
 }
+#endif
 
 Statistic::Statistic(arma::sp_colvec data_, Breakpoint bp_, std::shared_ptr<std::vector<Indexer>> indexer_, std::shared_ptr<Reporter> reporter_, Parameters params_, std::optional<std::vector<std::vector<arma::uword>>> groups_) : data(std::move(data_)), indexer(std::move(indexer_)),
                                                                                                  params(std::move(params_)),
@@ -37,6 +39,9 @@ Statistic::calculate(pheno_vector &phenotypes_, double cscs_count, double cscn_c
     int64_t cscn = 0;
     int64_t cncn = 0;
 
+    int64_t cscs2 = 0;
+    int64_t cscn2 = 0;
+
     if (pairs.first.empty()) {
         for (auto it = data.begin(); it != data.end(); ++it) {
             auto [left, right] = (*indexer)[k].back_translate(it.row());
@@ -52,7 +57,10 @@ Statistic::calculate(pheno_vector &phenotypes_, double cscs_count, double cscn_c
 
     size_t i = 0;
 
+    /**
 #ifdef __AVX512F__
+    // As much as I want to use this, it's much faster for this specific method, but slows the whole application by a hair
+    // On Ice Lake or newer, this is probably the winner!
     if  (phenotypes_.capacity() < phenotypes_.size() + 3) {
         phenotypes_.resize(phenotypes_.size() + 3);
     }
@@ -74,6 +82,22 @@ Statistic::calculate(pheno_vector &phenotypes_, double cscs_count, double cscn_c
         cscn += popcnt128(cscn_batch);
     }
 #endif
+     */
+
+    for (; i + 1 < pairs.first.size(); i += 2) {
+
+        const auto x1 = phenotypes_[pairs.first[i]];
+        const auto y1 = phenotypes_[pairs.second[i]];
+
+        cscs += x1 & y1;
+        cscn += x1 ^ y1;
+
+        auto x2 = phenotypes_[pairs.first[i + 1]];
+        auto y2 = phenotypes_[pairs.second[i + 1]];
+
+        cscs2 += x2 & y2;
+        cscn2 += x2 ^ y2;
+    }
 
     for (; i < pairs.first.size(); ++i) {
         const auto x = phenotypes_[pairs.first[i]];
@@ -82,6 +106,9 @@ Statistic::calculate(pheno_vector &phenotypes_, double cscs_count, double cscn_c
         cscs += x & y;
         cscn += x ^ y;
     }
+
+    cscs += cscs2;
+    cscn += cscn2;
 
     cncn = pairs.first.size() - cscs - cscn;
 
