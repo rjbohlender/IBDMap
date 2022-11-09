@@ -14,12 +14,6 @@
 
 #ifdef __AVX2__
 #include <immintrin.h>
-
-// Maybe I could use c++20's std::popcount instead??
-static inline int32_t popcnt128(__m128i n) {
-    const __m128i n_hi = _mm_unpackhi_epi64(n, n);
-    return __builtin_popcountll(_mm_cvtsi128_si64(n)) + __builtin_popcountll(_mm_cvtsi128_si64(n_hi));
-}
 #endif
 
 Statistic::Statistic(arma::sp_colvec data_,
@@ -54,28 +48,7 @@ Statistic::calculate(pheno_vector &phenotypes_, bool original_) noexcept {
 
     size_t i = 0;
 
-#ifdef __AVX512F__
-    // This is incrementally faster on Skylake, and probably much faster on Ice Lake and newer
-
-    for (; i + 15 < pairs.first.size(); i+= 16) {
-        auto left_addresses = _mm512_loadu_si512(&pairs.first[i]);
-        auto right_addresses = _mm512_loadu_si512(&pairs.second[i]);
-
-        auto lefts = _mm512_i32gather_epi32(left_addresses, phenotypes_.data(), 1);
-        auto rights = _mm512_i32gather_epi32(right_addresses, phenotypes_.data(), 1);
-
-        auto left_packed = _mm512_cvtepi32_epi8(lefts);
-        auto right_packed = _mm512_cvtepi32_epi8(rights);
-
-        auto cscs_batch = _mm_and_si128(left_packed, right_packed);
-        auto cscn_batch = _mm_xor_si128(left_packed, right_packed);
-
-        cscs += popcnt128(cscs_batch);
-        cscn += popcnt128(cscn_batch);
-    }
-#endif
-
-#if defined __AVX2__ & !defined __AVX512__
+#if defined __AVX2__
     // AVX2 has less friendly instructions for sure. I wonder if I can clean up all these nasty casts.
     // We could avoid 2 expensive instructions if we stored phenotypes as 0xFF (or honestly just the most significant bit)
     // As is this, helps on Skylake-server but does not help on Desktop Zen 3, until the dataset gets too big for L2, then it helps.
@@ -87,14 +60,14 @@ Statistic::calculate(pheno_vector &phenotypes_, bool original_) noexcept {
         auto lefts = _mm256_i32gather_epi32((const int *) phenotypes_.data(), left_addresses, 1);
         auto rights = _mm256_i32gather_epi32((const int *) phenotypes_.data(), right_addresses, 1);
 
-        const auto addition_vector = _mm256_setr_epi8(0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127,
+        const auto MASK_AND_SET_HIGH_BIT = _mm256_setr_epi8(0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127,
                                                       0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127);
 
-        // Set the high bit on each byte only if there was a 1 there before!
+        // Set the high bit on each byte only if the value was 1
         // We are using this both to mask out only the bytes we care about, as we retrieved 3 bytes of junk for every byte we want
         // And also to set things up for movemask_epi8 to look at only the most significant bit
-        auto left_masked = _mm256_add_epi8(lefts, addition_vector);
-        auto right_masked = _mm256_add_epi8(rights, addition_vector);
+        auto left_masked = _mm256_add_epi8(lefts, MASK_AND_SET_HIGH_BIT);
+        auto right_masked = _mm256_add_epi8(rights, MASK_AND_SET_HIGH_BIT);
 
         auto left_packed = _mm256_movemask_epi8(left_masked);
         auto right_packed = _mm256_movemask_epi8(right_masked);

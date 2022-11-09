@@ -466,6 +466,7 @@ static void BM_AVX2(benchmark::State &state) {
             auto left_masked = _mm256_add_epi8(lefts, addition_vector);
             auto right_masked = _mm256_add_epi8(rights, addition_vector);
 
+            // Pack into an int32. 
             auto left_packed = _mm256_movemask_epi8(left_masked);
             auto right_packed = _mm256_movemask_epi8(right_masked);
 
@@ -482,6 +483,44 @@ static void BM_AVX2(benchmark::State &state) {
 }
 
 BENCHMARK(BM_AVX2);
+
+
+static void BM_AVX2_access_only(benchmark::State &state) {
+    auto pairs = make_pairs_struct_of_arrays<int32_t>();
+    std::vector<int8_t> phenotypes_ = make_random_bools();
+
+    for (auto _ : state) {
+        int64_t cscs = 0;
+        int64_t cscn = 0;
+
+        for (size_t i = 0; i < pairs.first.size(); i += 8) {
+            auto left_addresses = _mm256_loadu_si256(reinterpret_cast<const __m256i_u *>(&pairs.first[i]));
+            auto right_addresses = _mm256_loadu_si256(reinterpret_cast<const __m256i_u *>(&pairs.second[i]));
+
+            auto lefts = _mm256_i32gather_epi32(reinterpret_cast<const int *>(phenotypes_.data()), left_addresses, 1);
+            auto rights = _mm256_i32gather_epi32(reinterpret_cast<const int *>(phenotypes_.data()), right_addresses, 1);
+
+            const auto addition_vector = _mm256_setr_epi8(0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127,
+                                                          0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127);
+
+            // Set the high bit on each byte only if there was a 1 there before!
+            // We are using this both to mask out only the bytes we care about, as we retrieved 3 bytes of junk for every byte we want
+            // And also to set things up for movemask_epi8 to look at only the most significant bit
+            auto left_masked = _mm256_add_epi8(lefts, addition_vector);
+            auto right_masked = _mm256_add_epi8(rights, addition_vector);
+
+            auto left_packed = _mm256_movemask_epi8(left_masked);
+            auto right_packed = _mm256_movemask_epi8(right_masked);
+
+            benchmark::DoNotOptimize(left_packed);
+            benchmark::DoNotOptimize(right_packed);
+        }
+
+
+    }
+}
+
+BENCHMARK(BM_AVX2_access_only);
 
 
 BENCHMARK_MAIN();
