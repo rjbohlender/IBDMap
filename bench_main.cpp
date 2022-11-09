@@ -1,10 +1,10 @@
+#include <array>
 #include <cstdio>
 #include <iostream>
 #include <random>
 #include <valarray>
-#include <array>
 
-#ifdef __AVX512F__
+#if defined __AVX512F__ || defined __AVX2__
 #include <immintrin.h>
 #endif
 
@@ -13,8 +13,7 @@
 static const auto NUM_PHENOS = 500000;
 static const auto NUM_PAIRS = 256;
 
-static std::vector<int8_t> make_random_bools(size_t n = NUM_PHENOS)
-{
+static std::vector<int8_t> make_random_bools(size_t n = NUM_PHENOS) {
     auto seed = std::random_device{}();
     std::mt19937 rng(seed);
     std::uint32_t data;
@@ -23,10 +22,8 @@ static std::vector<int8_t> make_random_bools(size_t n = NUM_PHENOS)
 
     int bit_count = 0;
 
-    for (size_t i = 0 ; i < n ; ++i)
-    {
-        if (bit_count == 0)
-        {
+    for (size_t i = 0; i < n; ++i) {
+        if (bit_count == 0) {
             data = rng();
             bit_count = 32;
         }
@@ -76,7 +73,7 @@ static std::pair<std::vector<T>, std::vector<T>> make_pairs_struct_of_arrays(siz
     left_members.reserve(n_pairs);
     right_members.reserve(n_pairs);
 
-    for (const auto [a,b] : pairs) {
+    for (const auto [a, b] : pairs) {
         left_members.emplace_back(a);
         right_members.emplace_back(b);
     }
@@ -147,7 +144,8 @@ static void BM_nochecks_fp(benchmark::State &state) {
 
     benchmark::DoNotOptimize(cscs);
     benchmark::DoNotOptimize(cscn);
-    benchmark::DoNotOptimize(cncn);}
+    benchmark::DoNotOptimize(cncn);
+}
 
 BENCHMARK(BM_nochecks_fp);
 
@@ -178,7 +176,8 @@ static void BM_int(benchmark::State &state) {
 
     benchmark::DoNotOptimize(cscs);
     benchmark::DoNotOptimize(cscn);
-    benchmark::DoNotOptimize(cncn);}
+    benchmark::DoNotOptimize(cncn);
+}
 
 BENCHMARK(BM_int);
 
@@ -205,7 +204,8 @@ static void BM_nochecks_int(benchmark::State &state) {
 
     benchmark::DoNotOptimize(cscs);
     benchmark::DoNotOptimize(cscn);
-    benchmark::DoNotOptimize(cncn);}
+    benchmark::DoNotOptimize(cncn);
+}
 
 BENCHMARK(BM_nochecks_int);
 
@@ -238,7 +238,8 @@ static void BM_nochecks_bool(benchmark::State &state) {
 
     benchmark::DoNotOptimize(cscs);
     benchmark::DoNotOptimize(cscn);
-    benchmark::DoNotOptimize(cncn);}
+    benchmark::DoNotOptimize(cncn);
+}
 
 BENCHMARK(BM_nochecks_bool);
 
@@ -270,7 +271,8 @@ static void BM_nochecks_valarray_bool(benchmark::State &state) {
 
     benchmark::DoNotOptimize(cscs);
     benchmark::DoNotOptimize(cscn);
-    benchmark::DoNotOptimize(cncn);}
+    benchmark::DoNotOptimize(cncn);
+}
 
 BENCHMARK(BM_nochecks_valarray_bool);
 
@@ -386,14 +388,14 @@ static void BM_vectorized_access_only(benchmark::State &state) {
     int64_t cscn = 0;
 
     for (auto _ : state) {
-        
-        for (size_t i = 0; i < left_members.size() - 15; i+= 16) {
+
+        for (size_t i = 0; i < left_members.size() - 15; i += 16) {
             auto left_addresses = _mm512_loadu_si512(&left_members[i]);
             auto right_addresses = _mm512_loadu_si512(&right_members[i]);
 
             auto lefts = _mm512_i32gather_epi32(left_addresses, phenotypes_.data(), 1);
             auto rights = _mm512_i32gather_epi32(right_addresses, phenotypes_.data(), 1);
-            
+
             auto left_packed = _mm512_cvtepi32_epi8(lefts);
             auto right_packed = _mm512_cvtepi32_epi8(rights);
 
@@ -413,13 +415,13 @@ static void BM_vectorized(benchmark::State &state) {
     int64_t cscn = 0;
 
     for (auto _ : state) {
-        for (size_t i = 0; i < left_members.size() - 15; i+= 16) {
+        for (size_t i = 0; i < left_members.size() - 15; i += 16) {
             auto left_addresses = _mm512_loadu_si512(&left_members[i]);
             auto right_addresses = _mm512_loadu_si512(&right_members[i]);
 
             auto lefts = _mm512_i32gather_epi32(left_addresses, phenotypes_.data(), 1);
             auto rights = _mm512_i32gather_epi32(right_addresses, phenotypes_.data(), 1);
-            
+
             auto left_packed = _mm512_cvtepi32_epi8(lefts);
             auto right_packed = _mm512_cvtepi32_epi8(rights);
 
@@ -439,5 +441,47 @@ BENCHMARK(BM_vectorized);
 
 // This could still be made faster by doing aligned loads rather than unaligned
 #endif
+
+static void BM_AVX2(benchmark::State &state) {
+    auto pairs = make_pairs_struct_of_arrays<int32_t>();
+    std::vector<int8_t> phenotypes_ = make_random_bools();
+
+    for (auto _ : state) {
+        int64_t cscs = 0;
+        int64_t cscn = 0;
+
+        for (size_t i = 0; i < pairs.first.size(); i += 8) {
+            auto left_addresses = _mm256_loadu_si256(reinterpret_cast<const __m256i_u *>(&pairs.first[i]));
+            auto right_addresses = _mm256_loadu_si256(reinterpret_cast<const __m256i_u *>(&pairs.second[i]));
+
+            auto lefts = _mm256_i32gather_epi32(reinterpret_cast<const int *>(phenotypes_.data()), left_addresses, 1);
+            auto rights = _mm256_i32gather_epi32(reinterpret_cast<const int *>(phenotypes_.data()), right_addresses, 1);
+
+            const auto addition_vector = _mm256_setr_epi8(0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127,
+                                                          0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127);
+
+            // Set the high bit on each byte only if there was a 1 there before!
+            // We are using this both to mask out only the bytes we care about, as we retrieved 3 bytes of junk for every byte we want
+            // And also to set things up for movemask_epi8 to look at only the most significant bit
+            auto left_masked = _mm256_add_epi8(lefts, addition_vector);
+            auto right_masked = _mm256_add_epi8(rights, addition_vector);
+
+            auto left_packed = _mm256_movemask_epi8(left_masked);
+            auto right_packed = _mm256_movemask_epi8(right_masked);
+
+            auto cscs_batch = left_packed & right_packed;
+            auto cscn_batch = left_packed ^ right_packed;
+
+            cscs += __builtin_popcount(cscs_batch);
+            cscn += __builtin_popcount(cscn_batch);
+        }
+
+        benchmark::DoNotOptimize(cscs);
+        benchmark::DoNotOptimize(cscn);
+    }
+}
+
+BENCHMARK(BM_AVX2);
+
 
 BENCHMARK_MAIN();
