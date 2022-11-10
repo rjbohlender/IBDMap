@@ -4,21 +4,11 @@
 
 #include "statistic.hpp"
 #include "split.hpp"
-#include <SugarPP/include/sugarpp/range/enumerate.hpp>
-#include <boost/algorithm/string/predicate.hpp>
 #include <fmt/include/fmt/ostream.h>
-#include <string>
 #include <utility>
-#include <valarray>
 
-#ifdef __AVX512F__
+#ifdef __AVX2__
 #include <immintrin.h>
-
-// Maybe I could use c++20's std::popcount instead??
-static inline int32_t popcnt128(__m128i n) {
-    const __m128i n_hi = _mm_unpackhi_epi64(n, n);
-    return __builtin_popcountll(_mm_cvtsi128_si64(n)) + __builtin_popcountll(_mm_cvtsi128_si64(n_hi));
-}
 #endif
 
 Statistic::Statistic(arma::sp_colvec data_,
@@ -43,65 +33,47 @@ Statistic::calculate(pheno_vector &phenotypes_, bool original_) noexcept {
     int64_t cscn = 0;
     int64_t cncn = 0;
 
-    int64_t cscs2 = 0;
-    int64_t cscn2 = 0;
-
     if (pairs.first.empty()) {
         for (auto it = data.begin(); it != data.end(); ++it) {
             auto [left, right] = (*indexer).back_translate(it.row());
-            try {
-                pairs.first.emplace_back(left);
-                pairs.second.emplace_back(right);
-            } catch (std::length_error &e) {
-                fmt::print(std::cerr, "Failed to emplace or push at line {}.", __LINE__);
-                throw(e);
-            }
+            pairs.first.emplace_back(left);
+            pairs.second.emplace_back(right);
         }
     }
 
     size_t i = 0;
 
-    /**
-#ifdef __AVX512F__
-    // As much as I want to use this, it's much faster for this specific method, but slows the whole application by a hair
-    // On Ice Lake or newer, this is probably the winner!
-    if  (phenotypes_.capacity() < phenotypes_.size() + 3) {
-        phenotypes_.resize(phenotypes_.size() + 3);
-    }
+#if defined __AVX2__
+    // AVX2 has less friendly instructions for sure. I wonder if I can clean up all these nasty casts.
+    // We could avoid 2 expensive instructions if we stored phenotypes as 0xFF (or honestly just the most significant bit)
+    // As is this, helps on Skylake-server but does not help on Desktop Zen 3, until the dataset gets too big for L2, then it helps.
 
-    for (; i + 15 < pairs.first.size(); i+= 16) {
-        auto left_addresses = _mm512_loadu_si512(&pairs.first[i]);
-        auto right_addresses = _mm512_loadu_si512(&pairs.second[i]);
+    for (; i + 7 < pairs.first.size(); i += 8) {
+        auto left_addresses = _mm256_loadu_si256((const __m256i *) &pairs.first[i]);
+        auto right_addresses = _mm256_loadu_si256((const __m256i *) &pairs.second[i]);
 
-        auto lefts = _mm512_i32gather_epi32(left_addresses, phenotypes_.data(), 1);
-        auto rights = _mm512_i32gather_epi32(right_addresses, phenotypes_.data(), 1);
-        
-        auto left_packed = _mm512_cvtepi32_epi8(lefts);
-        auto right_packed = _mm512_cvtepi32_epi8(rights);
+        auto lefts = _mm256_i32gather_epi32((const int *) phenotypes_.data(), left_addresses, 1);
+        auto rights = _mm256_i32gather_epi32((const int *) phenotypes_.data(), right_addresses, 1);
 
-        auto cscs_batch = _mm_and_si128(left_packed, right_packed);
-        auto cscn_batch = _mm_xor_si128(left_packed, right_packed);
+        const auto MASK_AND_SET_HIGH_BIT = _mm256_setr_epi8(0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127,
+                                                      0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127);
 
-        cscs += popcnt128(cscs_batch);
-        cscn += popcnt128(cscn_batch);
+        // Set the high bit on each byte only if the value was 1
+        // We are using this both to mask out only the bytes we care about, as we retrieved 3 bytes of junk for every byte we want
+        // And also to set things up for movemask_epi8 to look at only the most significant bit
+        auto left_masked = _mm256_add_epi8(lefts, MASK_AND_SET_HIGH_BIT);
+        auto right_masked = _mm256_add_epi8(rights, MASK_AND_SET_HIGH_BIT);
+
+        auto left_packed = _mm256_movemask_epi8(left_masked);
+        auto right_packed = _mm256_movemask_epi8(right_masked);
+
+        auto cscs_batch = left_packed & right_packed;
+        auto cscn_batch = left_packed ^ right_packed;
+
+        cscs += __builtin_popcount(cscs_batch);
+        cscn += __builtin_popcount(cscn_batch);
     }
 #endif
-     */
-
-    for (; i + 1 < pairs.first.size(); i += 2) {
-
-        const auto x1 = phenotypes_[pairs.first[i]];
-        const auto y1 = phenotypes_[pairs.second[i]];
-
-        cscs += x1 & y1;
-        cscn += x1 ^ y1;
-
-        auto x2 = phenotypes_[pairs.first[i + 1]];
-        auto y2 = phenotypes_[pairs.second[i + 1]];
-
-        cscs2 += x2 & y2;
-        cscn2 += x2 ^ y2;
-    }
 
     for (; i < pairs.first.size(); ++i) {
         const auto x = phenotypes_[pairs.first[i]];
@@ -110,9 +82,6 @@ Statistic::calculate(pheno_vector &phenotypes_, bool original_) noexcept {
         cscs += x & y;
         cscn += x ^ y;
     }
-
-    cscs += cscs2;
-    cscn += cscn2;
 
     cncn = pairs.first.size() - cscs - cscn;
 
