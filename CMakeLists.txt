@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.0) # A newer version of cmake will let us statically link MKL
+set(CMAKE_OSX_DEPLOYMENT_TARGET 12.3) # Otherwise it will pull an older SDK, which breaks linking against homebrew packages
 project(carvaIBD)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -16,6 +17,8 @@ find_package(Threads REQUIRED)
 find_package(Boost 1.66.0 COMPONENTS iostreams python numpy REQUIRED)
 find_package(Gperftools)
 find_package(ZLIB REQUIRED)
+
+find_package(benchmark)
 
 set(CMAKE_SHARED_MODULE_PREFIX "")
 
@@ -89,3 +92,14 @@ if(Gperftools_FOUND)
 endif()
 
 target_compile_definitions(carvaIBD PRIVATE MAXCOLORS=10000000)
+
+if(benchmark_FOUND)
+    add_executable(ibdBench bench_main.cpp ${PROJECT_SUPPORT_FILES})
+    target_link_libraries(ibdBench benchmark)
+    target_link_libraries(ibdBench fmt::fmt-header-only)
+    target_link_libraries(ibdBench pthread)
+    target_link_libraries(ibdBench ${ARMADILLO_LIBRARIES})
+    target_link_libraries(ibdBench ${Python3_LIBRARIES} ${Boost_LIBRARIES})
+    target_link_libraries(ibdBench ${ZLIB_LIBRARIES})
+
+endif()

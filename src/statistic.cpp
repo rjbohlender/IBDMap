@@ -4,11 +4,12 @@
 
 #include "statistic.hpp"
 #include "split.hpp"
-#include <SugarPP/include/sugarpp/range/enumerate.hpp>
-#include <boost/algorithm/string/predicate.hpp>
 #include <fmt/include/fmt/ostream.h>
-#include <string>
 #include <utility>
+
+#ifdef __AVX2__
+#include <immintrin.h>
+#endif
 
 Statistic::Statistic(arma::sp_colvec data_,
                      Breakpoint bp_,
@@ -32,23 +33,57 @@ Statistic::calculate(pheno_vector &phenotypes_, bool original_) noexcept {
     int64_t cscn = 0;
     int64_t cncn = 0;
 
-    if (pairs.empty()) {
+    if (pairs.first.empty()) {
         for (auto it = data.begin(); it != data.end(); ++it) {
-            auto p = (*indexer).back_translate(it.row());
-            pairs.emplace_back(p);
+            auto [left, right] = (*indexer).back_translate(it.row());
+            pairs.first.emplace_back(left);
+            pairs.second.emplace_back(right);
         }
     }
 
-    for (auto &p : pairs) {
-        auto &[p1, p2] = p;
-        int8_t x = phenotypes_[p1];
-        int8_t y = phenotypes_[p2];
+    size_t i = 0;
 
-        cscs += ((x == 1) && (y == 1));
-        cscn += ((x == 1) && (y == 0));
-        cscn += ((x == 0) && (y == 1));
-        cncn += ((x == 0) && (y == 0));
+#if defined __AVX2__
+    // AVX2 has less friendly instructions for sure. I wonder if I can clean up all these nasty casts.
+    // We could avoid 2 expensive instructions if we stored phenotypes as 0xFF (or honestly just the most significant bit)
+    // As is this, helps on Skylake-server but does not help on Desktop Zen 3, until the dataset gets too big for L2, then it helps.
+
+    for (; i + 7 < pairs.first.size(); i += 8) {
+        auto left_addresses = _mm256_loadu_si256((const __m256i *) &pairs.first[i]);
+        auto right_addresses = _mm256_loadu_si256((const __m256i *) &pairs.second[i]);
+
+        auto lefts = _mm256_i32gather_epi32((const int *) phenotypes_.data(), left_addresses, 1);
+        auto rights = _mm256_i32gather_epi32((const int *) phenotypes_.data(), right_addresses, 1);
+
+        const auto MASK_AND_SET_HIGH_BIT = _mm256_setr_epi8(0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127,
+                                                      0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127);
+
+        // Set the high bit on each byte only if the value was 1
+        // We are using this both to mask out only the bytes we care about, as we retrieved 3 bytes of junk for every byte we want
+        // And also to set things up for movemask_epi8 to look at only the most significant bit
+        auto left_masked = _mm256_add_epi8(lefts, MASK_AND_SET_HIGH_BIT);
+        auto right_masked = _mm256_add_epi8(rights, MASK_AND_SET_HIGH_BIT);
+
+        auto left_packed = _mm256_movemask_epi8(left_masked);
+        auto right_packed = _mm256_movemask_epi8(right_masked);
+
+        auto cscs_batch = left_packed & right_packed;
+        auto cscn_batch = left_packed ^ right_packed;
+
+        cscs += __builtin_popcount(cscs_batch);
+        cscn += __builtin_popcount(cscn_batch);
     }
+#endif
+
+    for (; i < pairs.first.size(); ++i) {
+        const auto x = phenotypes_[pairs.first[i]];
+        const auto y = phenotypes_[pairs.second[i]];
+
+        cscs += x & y;
+        cscn += x ^ y;
+    }
+
+    cncn = pairs.first.size() - cscs - cscn;
 
     if (original_) {
         orig_cscs = static_cast<double>(cscs);

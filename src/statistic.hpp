@@ -28,7 +28,7 @@ class Statistic {
     std::shared_ptr<std::vector<pheno_vector>> phenotypes;
 
 
-    std::vector<std::pair<arma::sword, arma::sword>> pairs;
+    std::pair<std::vector<int32_t>, std::vector<int32_t>> pairs;
 
     void initialize();
     void permute();
