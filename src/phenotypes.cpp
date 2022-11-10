@@ -56,7 +56,20 @@ void Phenotypes::parse(std::istream &is) {
     arma::wall_clock timer;
     timer.tic();
     shuffle();
+    pad_phenotypes();
     fmt::print(std::cerr, "Time spent generating permutations: {}\n", timer.toc());
+}
+
+/**
+ * Makes sure that we can do vectorized reads a little bit past the end of phenotypes without a segfault
+ * Necessary for a vectorized gather from phenotypes, in Statistic::calculate
+ */
+void Phenotypes::pad_phenotypes() {
+    for (auto p : *phenotypes) {
+            if (p.capacity() < p.size() + 3) {
+                p.resize(p.size() + 3);
+            }
+        }
 }
 
 void Phenotypes::create_indexers() {

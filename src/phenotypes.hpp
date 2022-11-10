@@ -19,6 +19,7 @@ class Phenotypes {
     void parse(std::istream &is);
     void create_indexers();
     void shuffle();
+    void pad_phenotypes();
 public:
     std::shared_ptr<std::vector<std::string>> samples;
     std::shared_ptr<std::vector<pheno_vector>> phenotypes;
