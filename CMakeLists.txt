@@ -84,6 +84,8 @@ add_executable(carvaIBD main.cpp ${PROJECT_SUPPORT_FILES})
 
 target_link_libraries(carvaIBD fmt::fmt-header-only)
 target_link_libraries(carvaIBD pthread)
+target_link_libraries(carvaIBD ${LAPACK_LIBRARIES})
+target_link_libraries(carvaIBD ${BLAS_LIBRARIES})
 target_link_libraries(carvaIBD ${ARMADILLO_LIBRARIES})
 target_link_libraries(carvaIBD ${Python3_LIBRARIES} ${Boost_LIBRARIES})
 target_link_libraries(carvaIBD ${ZLIB_LIBRARIES})
