@@ -90,8 +90,8 @@ class Parser {
     bool check_sample_list(const std::string &sample_pair);
     bool check_range(int pos);
     bool check_exclude(int pos);
-    bool check_r2(const arma::sp_vec &data, const arma::sp_vec &last);
-    void update_data(arma::sp_vec &data,
+    bool check_r2(const arma::SpCol<int32_t> &data, const arma::SpCol<int32_t> &last);
+    void update_data(arma::SpCol<int32_t> &data,
                      std::map<std::string, int> &indices,
                      boost::tokenizer<boost::char_separator<char>> &changes,
                      Breakpoint &bp,

@@ -116,7 +116,7 @@ struct Indexer {
         return start + j - i - 1;
     }
 
-    std::pair<arma::sword, arma::sword> back_translate(arma::uword row) {
+    std::pair<int32_t, int32_t> back_translate(arma::uword row) {
         arma::sword i = -1;
         arma::sword j = -1;
 

@@ -21,7 +21,7 @@
  * @brief IBD Statistic Calculation Class
  */
 class Statistic {
-    arma::sp_colvec data;
+    arma::SpCol<int32_t> data;
     std::shared_ptr<Indexer> indexer;
     std::shared_ptr<Reporter> reporter;
     Parameters params;
@@ -46,7 +46,7 @@ public:
 
     std::vector<double> permuted;
 
-    Statistic(arma::sp_colvec data_,
+    Statistic(arma::SpCol<int32_t> data_,
               Breakpoint bp_,
               std::shared_ptr<Indexer> indexer_,
               std::shared_ptr<Reporter> reporter_,

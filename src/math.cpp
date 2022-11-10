@@ -4,7 +4,7 @@
 
 #include "math.hpp"
 
-double cor(const arma::sp_vec &X, const arma::sp_vec &Y) {
+double cor(const arma::SpCol<int32_t> &X, const arma::SpCol<int32_t> &Y) {
     auto N = static_cast<double>(X.n_elem);
     double mxy = arma::as_scalar(arma::mean(X % Y));// as_scalar requrired for compatibility with older versions
     double mx = arma::mean(X);

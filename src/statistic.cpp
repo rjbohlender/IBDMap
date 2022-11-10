@@ -11,7 +11,7 @@
 #include <immintrin.h>
 #endif
 
-Statistic::Statistic(arma::sp_colvec data_,
+Statistic::Statistic(arma::SpCol<int32_t> data_,
                      Breakpoint bp_,
                      std::shared_ptr<Indexer> indexer_,
                      std::shared_ptr<Reporter> reporter_,

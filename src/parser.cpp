@@ -15,8 +15,8 @@ void Parser::parse_input(std::istream &is) {
     ThreadPool<Statistic> threadpool(params);
 
     // Maintain a single vector that we just update with each line
-    arma::sp_vec last(pheno.samples->size() * (pheno.samples->size() - 1) / 2.);
-    arma::sp_vec data(pheno.samples->size() * (pheno.samples->size() - 1) / 2.);
+    arma::SpCol<int32_t> last(pheno.samples->size() * (pheno.samples->size() - 1) / 2.);
+    arma::SpCol<int32_t> data(pheno.samples->size() * (pheno.samples->size() - 1) / 2.);
 
     arma::wall_clock timer;
     long lineno = -1;
@@ -178,7 +178,7 @@ bool Parser::check_exclude(int pos) {
     return exclude_region;
 }
 
-bool Parser::check_r2(const arma::sp_vec &data, const arma::sp_vec &last) {
+bool Parser::check_r2(const arma::SpCol<int32_t> &data, const arma::SpCol<int32_t> &last) {
     double r2 = cor(data, last);
     if (params.verbose) {
         std::cerr << "r2: " << r2 << std::endl;
@@ -186,7 +186,7 @@ bool Parser::check_r2(const arma::sp_vec &data, const arma::sp_vec &last) {
     return r2 > *params.rsquared;
 }
 
-void Parser::update_data(arma::sp_vec &data,
+void Parser::update_data(arma::SpCol<int32_t> &data,
                          std::map<std::string, int> &indices,
                          boost::tokenizer<boost::char_separator<char>> &changes,
                          Breakpoint &bp,

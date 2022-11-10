@@ -7,6 +7,6 @@
 
 #include <armadillo>
 
-double cor(const arma::sp_vec &X, const arma::sp_vec &Y);
+double cor(const arma::SpCol<int32_t> &X, const arma::SpCol<int32_t> &Y);
 
 #endif//CARVAIBD_MATH_HPP
