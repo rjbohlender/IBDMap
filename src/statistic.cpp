@@ -140,7 +140,6 @@ void Statistic::permute() {
 }
 
 void Statistic::initialize() {
-    permuted.emplace_back();
     original = calculate(phenotypes->at(0), true);
 }
 
