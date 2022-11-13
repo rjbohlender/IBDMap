@@ -20,7 +20,7 @@ void Parser::parse_input(std::istream &is) {
 
     arma::wall_clock timer;
     long lineno = -1;
-    std::map<std::string, int> indices;
+    std::map<std::string, std::map<std::string, int>> indices;
     while (std::getline(is, line)) {
         if (params.dash && boost::starts_with(line, "##")) {
             // Processing Header
@@ -35,13 +35,13 @@ void Parser::parse_input(std::istream &is) {
             }
             line = line.substr(header_chars, line.size());// Strip the leading header characters.
 
-            RJBUtil::Splitter<std::string> hsplit(line, ":");
+            RJBUtil::Splitter<std::string> hsplit(line, ": ");
 
             // There are two breakpoint classes to handle. cluster and singleton.
             // IDs that are expected to be present:
             // clusterID, IIDs, hapIDs, IID1-IID2, hapID1-hapID2, cM
             for (auto it = hsplit.begin() + 1; it != hsplit.end(); it++) {
-                indices[*it] = std::distance(hsplit.begin() + 1, it);
+                indices[hsplit[0]][*it] = std::distance(hsplit.begin() + 1, it);
             }
 
             continue;
@@ -49,12 +49,23 @@ void Parser::parse_input(std::istream &is) {
 
         // Legacy format handling
         lineno++;
-        if (lineno == 0) {// Skip the header
-            if (indices.find("ID1-ID2") == indices.end()) {
-                indices["ID1-ID2"] = 1;
-                indices["cM"] = 0;
+        if (!params.dash) {
+            if (indices.find("singleton") == indices.end()) {
+                indices["singleton"] = std::map<std::string, int>();
             }
-            continue;
+            if (lineno == 0) {// Skip the header
+                if (indices["singleton"].find("ID1-ID2") == indices["singleton"].end()) {
+                    indices["singleton"]["ID1-ID2"] = 1;
+                }
+                if (indices["singleton"].find("cM") == indices["singleton"].end()) {
+                    indices["singleton"]["cM"] = 0;
+                }
+                continue;
+            }
+        } else {
+            if(lineno == 0) {
+                continue;
+            }
         }
 
         boost::char_separator<char> sep{"\t"};
@@ -80,19 +91,19 @@ void Parser::parse_input(std::istream &is) {
             for (int i = 0; i < 4; i++) {
                 tok_it++;
             }
-            boost::char_separator<char> inner_sep {" ", ":-"};
-            boost::tokenizer<boost::char_separator<char>> cluster_add{*tok_it, inner_sep};
+            boost::char_separator<char> inner_sep {" "};
+            RJBUtil::Splitter<std::string> cluster_add(*tok_it, " ");
             tok_it++;
-            boost::tokenizer<boost::char_separator<char>> cluster_del{*tok_it, inner_sep};
+            RJBUtil::Splitter<std::string> cluster_del(*tok_it, " ");
             tok_it++;
-            boost::tokenizer<boost::char_separator<char>> singleton_add{*tok_it, inner_sep};
+            RJBUtil::Splitter<std::string> singleton_add(*tok_it, " ");
             tok_it++;
-            boost::tokenizer<boost::char_separator<char>> singleton_del{*tok_it, inner_sep};
+            RJBUtil::Splitter<std::string> singleton_del(*tok_it, " ");
 
-            update_data(data, indices, cluster_del, bp, -1, true);
-            update_data(data, indices, singleton_del, bp, -1, false);
-            update_data(data, indices, cluster_add, bp, 1, true);
-            update_data(data, indices, singleton_add, bp, 1, false);
+            update_data(data, indices["cluster"], cluster_del, bp, -1, true);
+            update_data(data, indices["singleton"], singleton_del, bp, -1, false);
+            update_data(data, indices["cluster"], cluster_add, bp, 1, true);
+            update_data(data, indices["singleton"], singleton_add, bp, 1, false);
         } else {
             // chr     pos  npairs  nsegments   add     del
             if (params.oldformat) {
@@ -102,10 +113,10 @@ void Parser::parse_input(std::istream &is) {
             // chr     pos     add     del
             boost::char_separator<char> inner_sep {" "};
             boost::tokenizer<boost::char_separator<char>> additions {*tok_it, inner_sep};
-            update_data(data, indices, additions, bp, 1, false);
+            update_data(data, indices["singleton"], additions, bp, 1, false);
             tok_it++;
             boost::tokenizer<boost::char_separator<char>> deletions {*tok_it, inner_sep};
-            update_data(data, indices, deletions, bp, -1, false);
+            update_data(data, indices["singleton"], deletions, bp, -1, false);
         }
 
         // Must follow data update -- Data format is just change from previous breakpoint so skipping update is impossible
@@ -184,6 +195,94 @@ bool Parser::check_r2(const arma::SpCol<int32_t> &data, const arma::SpCol<int32_
         std::cerr << "r2: " << r2 << std::endl;
     }
     return r2 > *params.rsquared;
+}
+
+void Parser::update_data(arma::SpCol<int32_t> &data,
+                         std::map<std::string, int> &indices,
+                         RJBUtil::Splitter<std::string> &changes,
+                         Breakpoint &bp,
+                         int value,
+                         bool cluster) {
+    std::string iid_key;
+    if (params.dash) {
+        if (cluster) {
+            iid_key = "IIDs";
+        } else {
+            iid_key = "IID1-IID2";
+        }
+    } else {
+        iid_key = "ID1-ID2";
+    }
+    for (auto &entry : changes) {
+        if (entry == "NA") {
+            break;
+        }
+        if (params.sample_list) {
+            if (check_sample_list(entry)) {
+                continue;
+            }
+        }
+
+        if (params.dash && cluster) {
+            RJBUtil::Splitter<std::string> vals(entry, ":");
+            RJBUtil::Splitter<std::string> iids(vals[indices[iid_key]], ",");
+
+            std::sort(iids.begin(), iids.end());
+
+            for (auto it1 = iids.begin(); it1 != iids.end(); it1++) {
+                for (auto it2 = it1 + 1; it2 != iids.end(); it2++) {
+                    arma::sword row_idx = (*pheno.indexer).translate(*it1, *it2);
+
+                    int id_idx = indices["clusterID"];
+                    auto ids = fmt::format("{},{}", *it1, *it2);
+                    if (row_idx < 0) {
+                        continue;
+                    } else {
+                        if (info) {
+                            if ((*info).filter_segment(vals[indices["clusterID"]], params)) {
+                                continue;
+                            }
+                        }
+                        if (value > 0) {
+                            bp.ibd_pairs.emplace_back(std::make_pair(*it1, *it2));
+                        }
+                    }
+                    data(row_idx) += value;
+                }
+            }
+        } else {
+            RJBUtil::Splitter<std::string_view> vals(entry, ":");
+            RJBUtil::Splitter<std::string> pairs(vals[indices[iid_key]], "-");
+
+            std::sort(pairs.begin(), pairs.end());
+            arma::sword row_idx = (*pheno.indexer).translate(pairs[0], pairs[1]);
+
+            auto ids = fmt::format("{},{}", pairs[0], pairs[1]);
+            if (row_idx < 0) {
+                continue;
+            } else {
+                if (params.cM) {
+                    try {
+                        double test_val = std::stod(vals[indices["cM"]]);
+                        if (test_val < *params.cM) {
+                            continue;
+                        }
+                    } catch (std::invalid_argument &e) {
+                        throw(std::runtime_error("Attempted to filter on segment length, in data that lacks segment lengths."));
+                    }
+                }
+                if (value > 0) {
+                    try {
+                        bp.segment_lengths.push_back(std::stod(vals[indices["cM"]]));
+                    } catch (std::invalid_argument &e) {
+                        bp.segment_lengths.push_back(nan("1"));
+                    }
+                    bp.ibd_pairs.emplace_back(std::make_pair(pairs[0], pairs[1]));
+                }
+            }
+            data(row_idx) += value;
+        }
+    }
 }
 
 void Parser::update_data(arma::SpCol<int32_t> &data,

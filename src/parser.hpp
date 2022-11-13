@@ -97,6 +97,12 @@ class Parser {
                      Breakpoint &bp,
                      int value,
                      bool cluster);
+    void update_data(arma::SpCol<int32_t> &data,
+                     std::map<std::string, int> &indices,
+                     RJBUtil::Splitter<std::string> &changes,
+                     Breakpoint &bp,
+                     int value,
+                     bool cluster);
 
 public:
     Parameters params;
