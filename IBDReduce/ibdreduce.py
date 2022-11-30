@@ -151,10 +151,10 @@ def parse_avg(i: int, args: ap.Namespace, ibd_frac: Dict[int, dict]) \
                 try:
                     if args.two_sided:
                         permuted[lineno % args.phenotypes][chrom][
-                            args.nperm * (j - args.at):args.nperm * (j - args.at + 1)] += np.abs(vals)
+                        args.nperm * (j - args.at):args.nperm * (j - args.at + 1)] += np.abs(vals)
                     else:
                         permuted[lineno % args.phenotypes][chrom][
-                            (args.nperm * (j - args.at)):(args.nperm * (j - args.at + 1))] += vals
+                        (args.nperm * (j - args.at)):(args.nperm * (j - args.at + 1))] += vals
                 except ValueError as err:
                     print(
                         'permuted: {} vals: {}'.format(permuted[lineno % args.phenotypes][chrom].shape, vals.shape),
@@ -292,7 +292,7 @@ def parse(i: int, orig_avg: List[float], permuted_avg: List[np.ndarray], breakpo
 
 
 def run_ibdlen(args: ap.Namespace, gmap: GeneticMap) -> Tuple[
-        Dict[int, Dict[int, float]], Dict[int, Dict[int, float]], Dict[int, int]]:
+    Dict[int, Dict[int, float]], Dict[int, Dict[int, float]], Dict[int, int]]:
     """Encapsulate running of IBD length parsing and calculations.
 
     Args:
@@ -312,6 +312,10 @@ def run_ibdlen(args: ap.Namespace, gmap: GeneticMap) -> Tuple[
             chroms.append(args.null)
     else:
         chroms = list(range(1, 23))
+        if args.skip_chromosomes:
+            skips = [int(x) for x in args.skip_chromosomes.split(',')]
+            chroms = list(filter(lambda x: x not in skips, chroms))
+
     with concurrent.futures.ThreadPoolExecutor() as executor:
         for i in chroms:
             future.append(executor.submit(ibdlen_parse, i, gmap, args))
@@ -360,6 +364,10 @@ def run_avg(args: ap.Namespace, ibd_frac: Dict[int, Dict[int, float]]) \
             chroms = [args.single]
     else:
         chroms = list(range(1, 23))
+        if args.skip_chromosomes:
+            skips = [int(x) for x in args.skip_chromosomes.split(',')]
+            chroms = list(filter(lambda x: x not in skips, chroms))
+
 
     future = []
     with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -402,6 +410,10 @@ def run_parse(args: ap.Namespace, original_avg: List[Dict[int, Dict[int, float]]
         chroms = [args.single]
     else:
         chroms = list(range(1, 23))
+        if args.skip_chromosomes:
+            skips = [int(x) for x in args.skip_chromosomes.split(',')]
+            chroms = list(filter(lambda x: x not in skips, chroms))
+
     fdr = [{i: [] for i in chroms} for _ in range(args.phenotypes)]
     total_breakpoints = 0
     for i in chroms:
@@ -457,6 +469,8 @@ def main():
     parser.add_argument('--single', default=None, type=int, help="Run only a single chromosome.")
     parser.add_argument('--null', default=None, type=int,
                         help="Run an alternate single chromosome for the null distribution.")
+    parser.add_argument('--skip_chromosomes', default=None, type=str,
+                        help="A comma separated list of chromosome numbers to skip.")
     parser.add_argument('--no_avg', default=False, action='store_true', help="Don't calculate the genomewide average.")
     parser.add_argument('--two_sided', default=False, action='store_true', help="Calculate for a two-sided test.")
     parser.add_argument('--phenotypes', default=1, type=int, help="Number of phenotypes we're parsing.")
@@ -493,6 +507,9 @@ def main():
         chroms = [args.single]
     else:
         chroms = list(range(1, 23))
+        if args.skip_chromosomes:
+            skips = [int(x) for x in args.skip_chromosomes.split(',')]
+            chroms = list(filter(lambda x: x not in skips, chroms))
 
     if args.fdr:
         for phen in range(args.phenotypes):
