@@ -225,6 +225,12 @@ void Parser::update_data(arma::SpCol<int32_t> &data,
 
         if (params.dash && cluster) {
             RJBUtil::Splitter<std::string> vals(entry, ":");
+            if (info) {
+                if ((*info).filter_segment(vals[indices["clusterID"]], params)) {
+                    continue;
+                }
+            }
+
             RJBUtil::Splitter<std::string> iids(vals[indices[iid_key]], ",");
 
             std::sort(iids.begin(), iids.end());
@@ -238,11 +244,6 @@ void Parser::update_data(arma::SpCol<int32_t> &data,
                     if (row_idx < 0) {
                         continue;
                     } else {
-                        if (info) {
-                            if ((*info).filter_segment(vals[indices["clusterID"]], params)) {
-                                continue;
-                            }
-                        }
                         if (value > 0) {
                             bp.ibd_pairs.emplace_back(std::make_pair(*it1, *it2));
                         }
