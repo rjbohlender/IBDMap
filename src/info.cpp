@@ -13,7 +13,7 @@ Info::Info(std::istream &ifs, Parameters &params) {
     InputValidator iv(true);
     while (std::getline(ifs, line)) {
         lineno++;
-        iv.check_info(line, lineno, bool(params.AF), bool(params.cM));
+        iv.check_info(line, lineno);
         RJBUtil::Splitter<std::string> splitter(line, " \t");
         if (lineno == 0) {// Handle header
             // First two fields should be fixed as chr and segID
@@ -51,12 +51,8 @@ bool Info::filter_segment(const std::string &segment, const Parameters &params) 
     // If only a single is used, passing will depend on the single filter.
     bool AF = true;
     bool cM = true;
-    if (params.AF) {
-        AF = get_field(segment, "freq") < *params.AF;
-    }
-    if (params.cM) {
-        cM = get_field(segment, "cM") >= *params.cM;
-    }
+    AF = get_field(segment, "freq") < params.AF;
+    cM = get_field(segment, "cM") >= params.cM;
     return !(AF & cM);// If both filters are used the segment must pass both filters.
                       // We negate because the logic is, true = filter, false = keep
 }

@@ -35,8 +35,8 @@ public:
     int pheno_col;
     std::optional<std::vector<int>> range;
     std::optional<std::vector<std::pair<int, int>>> exclude;
-    std::optional<double> cM;
-    std::optional<double> AF;
+    double cM;
+    double AF;
     std::optional<std::set<std::string>> sample_list;
 
     void print(std::ostream &os) {
@@ -64,12 +64,8 @@ public:
         if (range) {
             fmt::print(os, "Range: {}\n", fmt::join(*range, "-"));
         }
-        if (cM) {
-            fmt::print(os, "cM: {}\n", *cM);
-        }
-        if (AF) {
-            fmt::print(os, "AF: {}\n", *AF);
-        }
+        fmt::print(os, "cM: {}\n", cM);
+        fmt::print(os, "AF: {}\n", AF);
         if (sample_list) {
             fmt::print(os, "Samples: {}\n", fmt::join(*sample_list, ","));
         }

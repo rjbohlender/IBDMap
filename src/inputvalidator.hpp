@@ -24,7 +24,7 @@ public:
     static void check_gmap(const std::string &line, size_t line_no);
     void check_pheno(const std::string &line, size_t line_no);
     void check_ibd(const std::string &line, size_t line_no);
-    void check_info(const std::string &line, size_t line_no, const bool AF, const bool cM);
+    void check_info(const std::string &line, size_t line_no);
 };
 
 #endif//CARVAIBD_INPUTVALIDATOR_HPP

@@ -262,10 +262,10 @@ void Parser::update_data(arma::SpCol<int32_t> &data,
             if (row_idx < 0) {
                 continue;
             } else {
-                if (params.cM) {
+                if (params.cM > 0) {
                     try {
                         double test_val = std::stod(vals[indices["cM"]]);
-                        if (test_val < *params.cM) {
+                        if (test_val < params.cM) {
                             continue;
                         }
                     } catch (std::invalid_argument &e) {
@@ -353,7 +353,7 @@ void Parser::update_data(arma::SpCol<int32_t> &data,
                 if (params.cM) {
                     try {
                         double test_val = std::stod(vals[indices["cM"]]);
-                        if (test_val < *params.cM) {
+                        if (test_val < params.cM) {
                             continue;
                         }
                     } catch (std::invalid_argument &e) {

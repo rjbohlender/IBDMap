@@ -30,23 +30,21 @@ int main(int argc, char *argv[]) {
 				 params.pheno,
 				 "Path to file containing sample phenotype pairs. 1 for "
 				 "affected, 0 for unaffected, NA for sample to be skipped. "
-				 "Header line is required.")
-	 ->required()->check(CLI::ExistingFile);
+				 "Header line is required.")->required()->check(CLI::ExistingFile);
   app.add_option("-g,--gmap",
 				 params.gmap,
 				 "Recombination map files. Assumed to be three columns, "
 				 "position, chromosome, cM. Header line is required. "
-	 			 "Expected format is physical_pos\tchromosome\tgenetic_position")
-	 ->required()->check(CLI::ExistingFile);
+	 			 "Expected format is physical_pos\tchromosome\tgenetic_position")->required()->check(CLI::ExistingFile);
   app.add_option("--info",
 				 params.info,
 				 "Path to supporting info file. Expected format is chr segID ...")->check(CLI::ExistingFile);
   app.add_option("-t,--threads",
 				 params.nthreads,
-				 "Number of threads used in execution.")->default_val(std::thread::hardware_concurrency() - 1);
+				 "Number of threads used in execution. 2 threads are reserved for parsing and output.")->default_val(std::thread::hardware_concurrency() - 1);
   app.add_option("-n,--permutations",
 				 params.nperms,
-				 "Number of permutations.");
+				 "Number of permutations for each breakpoint.")->default_val(100000);
   app.add_option("--lower_bound",
 				 params.lower_bound,
 				 "If set, establishes a lower bound on the number of pairs "
@@ -55,23 +53,22 @@ int main(int argc, char *argv[]) {
 				 params.min_dist,
 				 "Sets the minimum genetic distance between breakpoints. "
 				 "The parser will automatically skip breakpoints that are "
-				 "closer than the given distance. Default value of 0.0 cM.")
-	 ->default_val(0.0);
+				 "closer than the given distance. Default value of 0.5 cM.")->default_val(0.5);
   app.add_option("--cm",
 				 params.cM,
 				 "Sets the minimum segment length for segments to be included. "
 				 "The parser will automatically skip segments that are smaller "
-				 "than the given length.");
+				 "than the given length. Default value of 3.0.")->default_val(3.0);
   app.add_option("--af",
 				 params.AF,
 				 "Sets the maximum allele frequency for segments to be "
 				 "included. The parser will automatically skip segments that "
-				 "are more frequent than the given cutoff.");
+				 "are more frequent than the given cutoff. Default value of 0.01")->default_val(0.01);
   app.add_option("-r,--rsquared",
 				 params.rsquared,
 				 "Sets the maximum correlation between sites. The parser will "
-				 "automatically skip breakpoints that are closer than the given "
-				 "distance. Default value of 1.0.");
+				 "automatically skip breakpoints that are more correlated than the given "
+				 "threshold.");
   app.add_option("--range",
 				 tmp_range_vec,
 				 "Range of positions, separated by a comma. e.g., 100000,250000 "
@@ -94,7 +91,7 @@ int main(int argc, char *argv[]) {
 				 "equal permutations.");
   app.add_option("-o,--output",
 				 params.output_path,
-				 "Output to a specified file. Default output is is /output/{date-time}.results.gz.");
+				 "Output to a specified file. Default output is is ./output/{date-time}.results.gz.");
   app.add_option("--pheno_col",
                  params.pheno_col,
                  "The column to read from the phenotype file. Column 0 should be sample ID and column 1+ should be 0, 1, NA.")->default_val(1);
@@ -116,7 +113,7 @@ int main(int argc, char *argv[]) {
 			   "Expect input to be formatted by DASH.");
   app.add_flag("--old",
                params.oldformat,
-               "Expect input to include the npairs and nsegments columns.");
+               "Expect non-DASH input to include the npairs and nsegments columns.");
 
   CLI11_PARSE(app, argc, argv);
 
@@ -143,7 +140,7 @@ int main(int argc, char *argv[]) {
       std::vector<std::pair<int, int>> exclude_vec;
       for (auto &v : tmp_exclude_vec) {
           RJBUtil::Splitter<std::string> splitter(v, "-");
-          exclude_vec.emplace_back(std::make_pair(std::stoi(splitter[0]), std::stoi(splitter[1])));
+          exclude_vec.emplace_back(std::stoi(splitter[0]), std::stoi(splitter[1]));
       }
       params.exclude = exclude_vec;
   }

@@ -142,19 +142,13 @@ void InputValidator::check_ibd(const std::string &line, size_t line_no) {
     }
 }
 
-void InputValidator::check_info(const std::string &line, size_t line_no, const bool AF, const bool cM) {
+void InputValidator::check_info(const std::string &line, size_t line_no) {
     std::string line_trim = boost::trim_right_copy(line);
     RJBUtil::Splitter<std::string> splitter(line_trim, " \t");
     if (line_no == 0) {
         // Expected header: chr     clusterID       start   end     cM      count   freq
         std::vector<std::string> columns{
-                "chr", "clusterID", "start", "end", "count"};
-        if (AF) {
-            columns.emplace_back("freq");
-        }
-        if (cM) {
-            columns.emplace_back("cM");
-        }
+                "chr", "clusterID", "start", "end", "count", "freq", "cM"};
         std::vector<std::string> missing;
         for (const auto &s : columns) {
             if (std::find(splitter.begin(), splitter.end(), s) == splitter.end()) {
