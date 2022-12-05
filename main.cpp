@@ -171,12 +171,15 @@ int main(int argc, char *argv[]) {
   if (params.verbose) {
 	fmt::print(std::cerr, "Running parser.\n");
   }
-  Phenotypes pheno(params);
-  Parser parser(
-          params,
-          reporter,
-          gmap,
-          pheno);
+
+  {
+    Phenotypes pheno(params);
+    Parser parser(
+            params,
+            reporter,
+            gmap,
+            pheno);
+  }
 
   // Sort output
   fmt::print(std::cerr, "Sorting output.\n");
