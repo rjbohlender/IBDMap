@@ -251,7 +251,7 @@ void Parser<T>::update_data(arma::SpCol<int32_t> &data,
                         continue;
                     } else {
                         if (value > 0) {
-                            bp.ibd_pairs.emplace_back(std::make_pair(*it1, *it2));
+                            bp.ibd_pairs.emplace_back(*it1, *it2);
                         }
                     }
                     data(row_idx) += value;
@@ -268,10 +268,10 @@ void Parser<T>::update_data(arma::SpCol<int32_t> &data,
             if (row_idx < 0) {
                 continue;
             } else {
-                if (params.cM) {
+                if (params.cM > 0) {
                     try {
                         double test_val = std::stod(vals[indices["cM"]]);
-                        if (test_val < *params.cM) {
+                        if (test_val < params.cM) {
                             continue;
                         }
                     } catch (std::invalid_argument &e) {
@@ -284,7 +284,7 @@ void Parser<T>::update_data(arma::SpCol<int32_t> &data,
                     } catch (std::invalid_argument &e) {
                         bp.segment_lengths.push_back(nan("1"));
                     }
-                    bp.ibd_pairs.emplace_back(std::make_pair(pairs[0], pairs[1]));
+                    bp.ibd_pairs.emplace_back(pairs[0], pairs[1]);
                 }
             }
             data(row_idx) += value;
@@ -360,7 +360,7 @@ void Parser<T>::update_data(arma::SpCol<int32_t> &data,
                 if (params.cM) {
                     try {
                         double test_val = std::stod(vals[indices["cM"]]);
-                        if (test_val < *params.cM) {
+                        if (test_val < params.cM) {
                             continue;
                         }
                     } catch (std::invalid_argument &e) {
@@ -373,7 +373,7 @@ void Parser<T>::update_data(arma::SpCol<int32_t> &data,
                     } catch (std::invalid_argument &e) {
                         bp.segment_lengths.push_back(nan("1"));
                     }
-                    bp.ibd_pairs.emplace_back(std::make_pair(pairs[0], pairs[1]));
+                    bp.ibd_pairs.emplace_back(pairs[0], pairs[1]);
                 }
             }
             data(row_idx) += value;

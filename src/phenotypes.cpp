@@ -92,6 +92,11 @@ void Phenotypes<T>::create_indexers() {
                 break;
         }
     }
+    if (case_count <= 0 || control_count <= 0) {
+        fmt::print(std::cerr, "ERROR: Case or Control count is equal to 0. Check your phenotype file.");
+        std::exit(1);
+    }
+
     fmt::print(std::cerr, "Phenotype counts --> cases: {}, controls: {}, excluded: {}\n", case_count, control_count, excluded);
     indexer = std::make_shared<Indexer<T>>(case_count, control_count, (*samples), (*phenotypes)[0]);
 }

@@ -87,29 +87,23 @@ store the permuted test statistics, eventually outputing for all permutations.
 
 ## Map-Reduce
 
-Biobank scale datasets can require substantial computation time to complete
-enough permutations to reach genome-wide significance. For researchers working
-in a high performance computing environment we recommend a map-reduce strategy
-to enable analysis in reasonable periods of time. 
+Biobank scale datasets can require substantial computation time to complete enough permutations to reach genome-wide
+significance. For researchers working in a high performance computing environment we recommend a map-reduce strategy to
+enable analysis in reasonable periods of time.
 
-The genome is conveniently broken into 22 autosomal components. Further, each
-job can be submitted with a subset of the total desired permutations. For
-example, if the user wishes to conduct a genome-wide analysis with 100,000
-permutations on each breakpoint, then they can submit ten, 10,000 permutation
-runs for each chromosome, for a total of 100,000 permutations across all
-chromosomes. Each job can specify the seed used to initialize the random number
-generator used for permutation. Users should ensure that the seed is specified,
-and different, for each job. Jobs submitted without specifying the seed will
-generate a random seed from std::random_device as necessary.
+The genome is conveniently broken into 22 autosomal components. Further, each job can be submitted with a subset of the
+total desired permutations. For example, if the user wishes to conduct a genome-wide analysis with 100,000 permutations
+on each breakpoint, then they can submit ten, 10,000 permutation runs for each chromosome, for a total of 100,000
+permutations across all chromosomes. Each job can specify the seed used to initialize the random number generator used
+for permutation. Users should ensure that the seed is specified, and different, for each job. Jobs submitted without
+specifying the seed will generate a random seed from std::random_device as necessary.
 
-To be clear regarding the seeds used in jobs, the seed should be specified and different
-for each job on a chromosome. However, the seeds should be identical between chromosomes.
-so if you have five jobs for chromosome one, and your seeds are {1, 2, 3, 4, 5} for
-each job, then they should also be the same for chromosomes 2-22 as well.
+To be clear regarding the seeds used in jobs, the seed should be specified and different for each job on a chromosome.
+However, the seeds should be identical between chromosomes. so if you have five jobs for chromosome one, and your seeds
+are {1, 2, 3, 4, 5} for each job, then they should also be the same for chromosomes 2-22 as well.
 
-Results can be combined using a python package provided along with carvaIBD. The
-python package IBDreduce is designed to use a small amount of memory to collapse
-all the results from across chromosomes, and across permutation sets within a
+Results can be combined using a python package provided along with carvaIBD. The python package IBDreduce is designed to
+use a small amount of memory to collapse all the results from across chromosomes, and across permutation sets within a
 chromosome.
 
 ## Data Formatting
@@ -118,8 +112,11 @@ We support a couple different file formats for IBD data. If the data has been fo
 then we require the following columns:
 
 ```tsv
-chr pos segments pairs add del
+chr pos add del
 ```
+
+The add column represents a list of sample pairs with segments starting at the breakpoint. The del column is a list of
+sample pairs with segments terminating at the breakpoint.
 
 If the data has been passed through DASH then there are two expected files. The data file should have the following
 columns:
@@ -132,16 +129,14 @@ The second file is an info file that contains information about the clusters fou
 columns:
 
 ```tsv
-chr clusterID start end count
+chr clusterID start end count freq cM
 ```
 
-Additionally, there are two optional columns that are required if you use the corresponding filtering arguments. The
-filtering arguments are --af which filters on cluster frequency, and --cm which filters on cluster length. The columns
-are:
+freq is the frequency of the cluster in the sample, and cM is the length of the segment. Both are used to filter out
+segments. Reasonable defaults are provided for the corresponding --cm and --af options.
 
-```tsv
-freq cM
-```
+Both file formats can be created with scripts provided in the tools directory. They take data from GERMLINE, hap-ibd,
+iLASH, or any of the three that have been passed through DASH, and generate our input format.
 
 ## Major Changes
 
