@@ -11,6 +11,7 @@
 #include <vector>
 #include <memory>
 
+template <typename T>
 class Phenotypes {
     Parameters params;
 
@@ -22,8 +23,8 @@ class Phenotypes {
     void pad_phenotypes();
 public:
     std::shared_ptr<std::vector<std::string>> samples;
-    std::shared_ptr<std::vector<pheno_vector>> phenotypes;
-    std::shared_ptr<Indexer> indexer;
+    std::shared_ptr<std::vector<T>> phenotypes;
+    std::shared_ptr<Indexer<T>> indexer;
 
     explicit Phenotypes(Parameters params_);
 };

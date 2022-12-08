@@ -5,5 +5,6 @@
 #include <vector>
 
 typedef std::vector<int8_t> pheno_vector;
+typedef std::vector<bool> compressed_pheno_vector;
 
 #endif//CARVAIBD_TYPES_HPP

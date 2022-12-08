@@ -22,13 +22,14 @@
  * in the cartesian product of the samples, excluding matches to self. Autozygous
  * samples are dropped currently.
  */
+template <typename T>
 struct Indexer {
     // Class counts and categories
     arma::uword case_count;
     arma::uword cont_count;
     arma::uword sz;
     std::vector<std::string> samples;
-    pheno_vector phenotypes;
+    T phenotypes;
     std::vector<arma::sword> transitions;// Transition points between pairing sets
     std::unordered_map<std::string, int> ordered_positions;
     std::unordered_map<std::string, int> ordered_cc_positions;
@@ -43,7 +44,7 @@ struct Indexer {
     Indexer(arma::uword case_count_,
             arma::uword cont_count_,
             std::vector<std::string> samples_,
-            pheno_vector phenotypes_)
+            T phenotypes_)
         : case_count(case_count_), cont_count(cont_count_), sz(samples_.size()), phenotypes(std::move(phenotypes_)),
           samples(std::move(samples_)), case_case(0), case_cont(0), cont_cont(0) {
         setup(case_count_, cont_count_);

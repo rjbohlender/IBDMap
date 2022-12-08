@@ -85,6 +85,7 @@
  * 	The statistic is based on the rate of sharing at the locus relative to the rate of sharing globally.
  * 	But how do we permute? How do we determine the case-control status of the individuals?
  */
+template <typename T>
 class Parser {
     void parse_input(std::istream &is);
     bool check_sample_list(const std::string &sample_pair);
@@ -108,7 +109,7 @@ public:
     Parameters params;
     std::shared_ptr<Reporter> reporter;
     GeneticMap gmap;
-    Phenotypes pheno;
+    Phenotypes<T> pheno;
     std::optional<Info> info;
 
     /**
@@ -118,7 +119,7 @@ public:
    * @param gmap_ Genetic map file for calculation of distances between breakpoints
    * @param pheno_ Phenotype parsing class instance
    */
-    Parser(Parameters params_, std::shared_ptr<Reporter> reporter_, GeneticMap &gmap_, Phenotypes &pheno_);
+    Parser(Parameters params_, std::shared_ptr<Reporter> reporter_, GeneticMap &gmap_, Phenotypes<T> &pheno_);
 };
 
 #endif//CARVAIBD_PARSER_HPP

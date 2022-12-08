@@ -117,6 +117,9 @@ int main(int argc, char *argv[]) {
   app.add_flag("--old",
                params.oldformat,
                "Expect input to include the npairs and nsegments columns.");
+  app.add_flag("--compressed-memory",
+               params.compressed_memory,
+               "Use significantly less memory at the cost of 3x-5x longer runtime.");
 
   CLI11_PARSE(app, argc, argv);
 
@@ -174,12 +177,23 @@ int main(int argc, char *argv[]) {
   if (params.verbose) {
 	fmt::print(std::cerr, "Running parser.\n");
   }
-  Phenotypes pheno(params);
-  Parser parser(
-          params,
-          reporter,
-          gmap,
-          pheno);
+
+  if (params.compressed_memory) {
+      Phenotypes<compressed_pheno_vector> pheno(params);
+      Parser<compressed_pheno_vector> parser(
+              params,
+              reporter,
+              gmap,
+              pheno);
+  } else {
+      Phenotypes<pheno_vector> pheno(params);
+      Parser<pheno_vector> parser(
+              params,
+              reporter,
+              gmap,
+              pheno);
+  }
+
 
   // Sort output
   fmt::print(std::cerr, "Sorting output.\n");

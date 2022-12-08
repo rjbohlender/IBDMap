@@ -5,14 +5,15 @@
 #include "parser.hpp"
 #include "inputvalidator.hpp"
 
-void Parser::parse_input(std::istream &is) {
+template <typename T>
+void Parser<T>::parse_input(std::istream &is) {
     std::string line;
     unsigned long submitted = 0;
     double cur_dist = 0;
     double last_dist = 0;
 
     // Initialize ThreadPool
-    ThreadPool<Statistic> threadpool(params);
+    ThreadPool<Statistic<T>> threadpool(params);
 
     // Maintain a single vector that we just update with each line
     arma::SpCol<int32_t> last(pheno.samples->size() * (pheno.samples->size() - 1) / 2.);
@@ -172,16 +173,19 @@ void Parser::parse_input(std::istream &is) {
     }
 }
 
-bool Parser::check_sample_list(const std::string &sample_pair) {
+template <typename T>
+bool Parser<T>::check_sample_list(const std::string &sample_pair) {
     RJBUtil::Splitter<std::string_view> vals(sample_pair, ":");
     return params.sample_list->find(vals[0]) == params.sample_list->end() && params.sample_list->find(vals[1]) == params.sample_list->end();
 }
 
-bool Parser::check_range(int pos) {
+template <typename T>
+bool Parser<T>::check_range(int pos) {
     return pos < (*params.range)[0] || pos > (*params.range)[1];
 }
 
-bool Parser::check_exclude(int pos) {
+template <typename T>
+bool Parser<T>::check_exclude(int pos) {
     bool exclude_region = false;
     for (const auto &v : *params.exclude) {
         exclude_region |= pos >= v.first && pos <= v.second;
@@ -189,7 +193,8 @@ bool Parser::check_exclude(int pos) {
     return exclude_region;
 }
 
-bool Parser::check_r2(const arma::SpCol<int32_t> &data, const arma::SpCol<int32_t> &last) {
+template <typename T>
+bool Parser<T>::check_r2(const arma::SpCol<int32_t> &data, const arma::SpCol<int32_t> &last) {
     double r2 = cor(data, last);
     if (params.verbose) {
         std::cerr << "r2: " << r2 << std::endl;
@@ -197,7 +202,8 @@ bool Parser::check_r2(const arma::SpCol<int32_t> &data, const arma::SpCol<int32_
     return r2 > *params.rsquared;
 }
 
-void Parser::update_data(arma::SpCol<int32_t> &data,
+template <typename T>
+void Parser<T>::update_data(arma::SpCol<int32_t> &data,
                          std::map<std::string, int> &indices,
                          RJBUtil::Splitter<std::string> &changes,
                          Breakpoint &bp,
@@ -286,7 +292,8 @@ void Parser::update_data(arma::SpCol<int32_t> &data,
     }
 }
 
-void Parser::update_data(arma::SpCol<int32_t> &data,
+template <typename T>
+void Parser<T>::update_data(arma::SpCol<int32_t> &data,
                          std::map<std::string, int> &indices,
                          boost::tokenizer<boost::char_separator<char>> &changes,
                          Breakpoint &bp,
@@ -374,8 +381,8 @@ void Parser::update_data(arma::SpCol<int32_t> &data,
     }
 }
 
-
-Parser::Parser(Parameters params_, std::shared_ptr<Reporter> reporter_, GeneticMap &gmap_, Phenotypes &pheno_)
+template <typename T>
+Parser<T>::Parser(Parameters params_, std::shared_ptr<Reporter> reporter_, GeneticMap &gmap_, Phenotypes<T> &pheno_)
     : params(std::move(params_)), reporter(std::move(reporter_)), gmap(std::move(gmap_)), pheno(pheno_) {
     // Default construct shared ptrs
     if (params.info) {
@@ -392,3 +399,6 @@ Parser::Parser(Parameters params_, std::shared_ptr<Reporter> reporter_, GeneticM
     }
     parse_input(input_s);
 }
+
+template class Parser<pheno_vector>;
+template class Parser<compressed_pheno_vector>;

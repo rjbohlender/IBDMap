@@ -11,12 +11,13 @@
 #include <immintrin.h>
 #endif
 
-Statistic::Statistic(arma::SpCol<int32_t> data_,
+template <typename T>
+Statistic<T>::Statistic(arma::SpCol<int32_t> data_,
                      Breakpoint bp_,
-                     std::shared_ptr<Indexer> indexer_,
+                     std::shared_ptr<Indexer<T>> indexer_,
                      std::shared_ptr<Reporter> reporter_,
                      Parameters params_,
-                     std::shared_ptr<std::vector<pheno_vector>> phenotypes_) : data(std::move(data_)), indexer(std::move(indexer_)),
+                     std::shared_ptr<std::vector<T>> phenotypes_) : data(std::move(data_)), indexer(std::move(indexer_)),
                                                                                params(std::move(params_)),
                                                                                bp(std::move(bp_)), reporter(std::move(reporter_)),
                                                                                phenotypes(std::move(phenotypes_)) {
@@ -25,8 +26,9 @@ Statistic::Statistic(arma::SpCol<int32_t> data_,
     }
 }
 
+template <typename T>
 double
-Statistic::calculate(pheno_vector &phenotypes_, bool original_) noexcept {
+Statistic<T>::calculate(T &phenotypes_, bool original_) noexcept {
     double statistic;
 
     int64_t cscs = 0;
@@ -44,34 +46,36 @@ Statistic::calculate(pheno_vector &phenotypes_, bool original_) noexcept {
     size_t i = 0;
 
 #if defined __AVX2__
-    // AVX2 has less friendly instructions for sure. I wonder if I can clean up all these nasty casts.
-    // We could avoid 2 expensive instructions if we stored phenotypes as 0xFF (or honestly just the most significant bit)
-    // As is this, helps on Skylake-server but does not help on Desktop Zen 3, until the dataset gets too big for L2, then it helps.
+    if constexpr (typeid(T) == typeid(int8_t)) {
+        // AVX2 has less friendly instructions for sure. I wonder if I can clean up all these nasty casts.
+        // We could avoid 2 expensive instructions if we stored phenotypes as 0xFF (or honestly just the most significant bit)
+        // As is this, helps on Skylake-server but does not help on Desktop Zen 3, until the dataset gets too big for L2, then it helps.
 
-    for (; i + 7 < pairs.first.size(); i += 8) {
-        auto left_addresses = _mm256_loadu_si256((const __m256i *) &pairs.first[i]);
-        auto right_addresses = _mm256_loadu_si256((const __m256i *) &pairs.second[i]);
+        for (; i + 7 < pairs.first.size(); i += 8) {
+            auto left_addresses = _mm256_loadu_si256((const __m256i *) &pairs.first[i]);
+            auto right_addresses = _mm256_loadu_si256((const __m256i *) &pairs.second[i]);
 
-        auto lefts = _mm256_i32gather_epi32((const int *) phenotypes_.data(), left_addresses, 1);
-        auto rights = _mm256_i32gather_epi32((const int *) phenotypes_.data(), right_addresses, 1);
+            auto lefts = _mm256_i32gather_epi32((const int *) phenotypes_.data(), left_addresses, 1);
+            auto rights = _mm256_i32gather_epi32((const int *) phenotypes_.data(), right_addresses, 1);
 
-        const auto MASK_AND_SET_HIGH_BIT = _mm256_setr_epi8(0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127,
-                                                      0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127);
+            const auto MASK_AND_SET_HIGH_BIT = _mm256_setr_epi8(0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127,
+                                                                0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127, 0, 0, 0, 127);
 
-        // Set the high bit on each byte only if the value was 1
-        // We are using this both to mask out only the bytes we care about, as we retrieved 3 bytes of junk for every byte we want
-        // And also to set things up for movemask_epi8 to look at only the most significant bit
-        auto left_masked = _mm256_add_epi8(lefts, MASK_AND_SET_HIGH_BIT);
-        auto right_masked = _mm256_add_epi8(rights, MASK_AND_SET_HIGH_BIT);
+            // Set the high bit on each byte only if the value was 1
+            // We are using this both to mask out only the bytes we care about, as we retrieved 3 bytes of junk for every byte we want
+            // And also to set things up for movemask_epi8 to look at only the most significant bit
+            auto left_masked = _mm256_add_epi8(lefts, MASK_AND_SET_HIGH_BIT);
+            auto right_masked = _mm256_add_epi8(rights, MASK_AND_SET_HIGH_BIT);
 
-        auto left_packed = _mm256_movemask_epi8(left_masked);
-        auto right_packed = _mm256_movemask_epi8(right_masked);
+            auto left_packed = _mm256_movemask_epi8(left_masked);
+            auto right_packed = _mm256_movemask_epi8(right_masked);
 
-        auto cscs_batch = left_packed & right_packed;
-        auto cscn_batch = left_packed ^ right_packed;
+            auto cscs_batch = left_packed & right_packed;
+            auto cscn_batch = left_packed ^ right_packed;
 
-        cscs += __builtin_popcount(cscs_batch);
-        cscn += __builtin_popcount(cscn_batch);
+            cscs += __builtin_popcount(cscs_batch);
+            cscn += __builtin_popcount(cscn_batch);
+        }
     }
 #endif
 
@@ -100,7 +104,8 @@ Statistic::calculate(pheno_vector &phenotypes_, bool original_) noexcept {
     return statistic;
 }
 
-void Statistic::run() {
+template <typename T>
+void Statistic<T>::run() {
     initialize();
 
     arma::vec odds;
@@ -119,7 +124,8 @@ void Statistic::run() {
     done = true;
 }
 
-void Statistic::build_output(std::stringstream &ss) {
+template <typename T>
+void Statistic<T>::build_output(std::stringstream &ss) {
     double cscs = (*indexer).case_case;
     double cscn = (*indexer).case_cont;
     double cncn = (*indexer).cont_cont;
@@ -131,7 +137,8 @@ void Statistic::build_output(std::stringstream &ss) {
     fmt::print(ss, "\n");
 }
 
-void Statistic::permute() {
+template <typename T>
+void Statistic<T>::permute() {
     double val;
     for (int i = 1; i <= params.nperms; i++) {
         val = calculate(phenotypes->at(i), false);
@@ -139,24 +146,27 @@ void Statistic::permute() {
     }
 }
 
-void Statistic::initialize() {
+template <typename T>
+void Statistic<T>::initialize() {
     original = calculate(phenotypes->at(0), true);
 }
 
-void Statistic::cleanup() {
+template <typename T>
+void Statistic<T>::cleanup() {
     data.reset();
     permuted.clear();
     permuted.shrink_to_fit();
 }
 
-void Statistic::test_statistic() {
+template <typename T>
+void Statistic<T>::test_statistic() {
     // Test case setup
     std::vector<std::string> tsamples{
             "case1", "case2", "case3", "case4", "case5",
             "case6", "case7", "case8", "case9", "case10",
             "control1", "control2", "control3", "control4", "control5",
             "control6", "control7", "control8", "control9", "control10"};
-    pheno_vector tphenotypes_{
+    T tphenotypes_{
             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     Indexer tindexer(10, 10, tsamples, tphenotypes_);
 
@@ -217,3 +227,6 @@ void Statistic::test_statistic() {
                tindexer.case_cont,
                tindexer.cont_cont);
 }
+
+template class Statistic<pheno_vector>;
+template class Statistic<compressed_pheno_vector>;
