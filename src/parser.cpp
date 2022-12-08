@@ -245,7 +245,7 @@ void Parser::update_data(arma::SpCol<int32_t> &data,
                         continue;
                     } else {
                         if (value > 0) {
-                            bp.ibd_pairs.emplace_back(std::make_pair(*it1, *it2));
+                            bp.ibd_pairs.emplace_back(*it1, *it2);
                         }
                     }
                     data(row_idx) += value;
@@ -278,7 +278,7 @@ void Parser::update_data(arma::SpCol<int32_t> &data,
                     } catch (std::invalid_argument &e) {
                         bp.segment_lengths.push_back(nan("1"));
                     }
-                    bp.ibd_pairs.emplace_back(std::make_pair(pairs[0], pairs[1]));
+                    bp.ibd_pairs.emplace_back(pairs[0], pairs[1]);
                 }
             }
             data(row_idx) += value;
@@ -366,7 +366,7 @@ void Parser::update_data(arma::SpCol<int32_t> &data,
                     } catch (std::invalid_argument &e) {
                         bp.segment_lengths.push_back(nan("1"));
                     }
-                    bp.ibd_pairs.emplace_back(std::make_pair(pairs[0], pairs[1]));
+                    bp.ibd_pairs.emplace_back(pairs[0], pairs[1]);
                 }
             }
             data(row_idx) += value;
