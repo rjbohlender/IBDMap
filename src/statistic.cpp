@@ -46,7 +46,8 @@ Statistic<T>::calculate(T &phenotypes_, bool original_) noexcept {
     size_t i = 0;
 
 #if defined __AVX2__
-    if constexpr (typeid(T) == typeid(int8_t)) {
+    // This vectorized code is only when phenotype values are stored as bytes, not vector<bool>
+    if constexpr (std::is_same<T, int8_t>::value) {
         // AVX2 has less friendly instructions for sure. I wonder if I can clean up all these nasty casts.
         // We could avoid 2 expensive instructions if we stored phenotypes as 0xFF (or honestly just the most significant bit)
         // As is this, helps on Skylake-server but does not help on Desktop Zen 3, until the dataset gets too big for L2, then it helps.

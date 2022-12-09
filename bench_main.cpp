@@ -13,11 +13,12 @@
 static const auto NUM_PHENOS = 500000;
 static const auto NUM_PAIRS = 256;
 
-static std::vector<int8_t> make_random_bools(size_t n = NUM_PHENOS) {
+template <typename T = int8_t>
+static std::vector<T> make_random_bools(size_t n = NUM_PHENOS) {
     auto seed = std::random_device{}();
     std::mt19937 rng(seed);
     std::uint32_t data;
-    std::vector<int8_t> bools;
+    std::vector<T> bools;
     bools.reserve(n);
 
     int bit_count = 0;
@@ -211,7 +212,7 @@ BENCHMARK(BM_nochecks_int);
 
 static void BM_nochecks_bool(benchmark::State &state) {
     std::vector<std::pair<size_t, size_t>> pairs = make_pairs();
-    auto pheno_bytes = make_random_bools();
+    auto pheno_bytes = make_random_bools<bool>();
 
     std::vector<bool> phenotypes_;
     phenotypes_.reserve(NUM_PHENOS);
@@ -245,7 +246,7 @@ BENCHMARK(BM_nochecks_bool);
 
 static void BM_nochecks_valarray_bool(benchmark::State &state) {
     std::vector<std::pair<size_t, size_t>> pairs = make_pairs();
-    auto pheno_bytes = make_random_bools();
+    auto pheno_bytes = make_random_bools<bool>();
 
     std::valarray<bool> phenotypes_(NUM_PHENOS);
 
@@ -276,7 +277,7 @@ static void BM_nochecks_valarray_bool(benchmark::State &state) {
 
 BENCHMARK(BM_nochecks_valarray_bool);
 
-static void BM_nochecks_bool_nocncn(benchmark::State &state) {
+static void BM_nochecks_int8_t_nocncn(benchmark::State &state) {
     std::vector<std::pair<size_t, size_t>> pairs = make_pairs();
     std::vector<int8_t> phenotypes_ = make_random_bools();
 
@@ -298,9 +299,33 @@ static void BM_nochecks_bool_nocncn(benchmark::State &state) {
     benchmark::DoNotOptimize(cscn);
 }
 
-BENCHMARK(BM_nochecks_bool_nocncn);
+BENCHMARK(BM_nochecks_int8_t_nocncn);
 
 static void BM_nochecks_bool_32_bit_pairs_nocncn(benchmark::State &state) {
+    auto pairs = make_pairs<int32_t>();
+    std::vector<bool> phenotypes_ = make_random_bools<bool>();
+
+    int64_t cscs = 0;
+    int64_t cscn = 0;
+
+    for (auto _ : state) {
+        for (const auto p : pairs) {
+            const auto [p1, p2] = p;
+            const auto x = phenotypes_[p1];
+            const auto y = phenotypes_[p2];
+
+            cscs += x & y;
+            cscn += x ^ y;
+        }
+    }
+
+    benchmark::DoNotOptimize(cscs);
+    benchmark::DoNotOptimize(cscn);
+}
+
+BENCHMARK(BM_nochecks_bool_32_bit_pairs_nocncn);
+
+static void BM_nochecks_int8_t_32_bit_pairs_nocncn(benchmark::State &state) {
     auto pairs = make_pairs<int32_t>();
     std::vector<int8_t> phenotypes_ = make_random_bools();
 
@@ -322,7 +347,7 @@ static void BM_nochecks_bool_32_bit_pairs_nocncn(benchmark::State &state) {
     benchmark::DoNotOptimize(cscn);
 }
 
-BENCHMARK(BM_nochecks_bool_32_bit_pairs_nocncn);
+BENCHMARK(BM_nochecks_int8_t_32_bit_pairs_nocncn);
 
 static void BM_fastest_two_accumulators(benchmark::State &state) {
     auto pairs = make_pairs<int32_t>();
