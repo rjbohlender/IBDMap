@@ -29,6 +29,7 @@ public:
     double min_dist;
     std::optional<double> rsquared;
     bool verbose = false;
+    bool compressed_memory = false;
     bool enable_testing = false;
     bool dash = false;
     bool oldformat = false;

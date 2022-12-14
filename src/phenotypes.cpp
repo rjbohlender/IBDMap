@@ -9,7 +9,8 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <map>
 
-void Phenotypes::parse(std::istream &is) {
+template <typename T>
+void Phenotypes<T>::parse(std::istream &is) {
     int iid = 0;
     int phe = params.pheno_col;
     std::string line;
@@ -64,7 +65,8 @@ void Phenotypes::parse(std::istream &is) {
  * Makes sure that we can do vectorized reads a little bit past the end of phenotypes without a segfault
  * Necessary for a vectorized gather from phenotypes, in Statistic::calculate
  */
-void Phenotypes::pad_phenotypes() {
+template <typename T>
+void Phenotypes<T>::pad_phenotypes() {
     for (auto p : *phenotypes) {
             if (p.capacity() < p.size() + 3) {
                 p.resize(p.size() + 3);
@@ -72,7 +74,8 @@ void Phenotypes::pad_phenotypes() {
         }
 }
 
-void Phenotypes::create_indexers() {
+template <typename T>
+void Phenotypes<T>::create_indexers() {
     int case_count = 0;
     int control_count = 0;
     int excluded = 0;
@@ -95,10 +98,11 @@ void Phenotypes::create_indexers() {
     }
 
     fmt::print(std::cerr, "Phenotype counts --> cases: {}, controls: {}, excluded: {}\n", case_count, control_count, excluded);
-    indexer = std::make_shared<Indexer>(case_count, control_count, (*samples), (*phenotypes)[0]);
+    indexer = std::make_shared<Indexer<T>>(case_count, control_count, (*samples), (*phenotypes)[0]);
 }
 
-void Phenotypes::shuffle() {
+template <typename T>
+void Phenotypes<T>::shuffle() {
     for (int i = 1; i < params.nperms + 1; i++) {
         (*phenotypes)[i] = (*phenotypes)[0];
         for (int j = (*phenotypes)[0].size() - 1; j > 0; j--) {
@@ -109,9 +113,13 @@ void Phenotypes::shuffle() {
     }
 }
 
-Phenotypes::Phenotypes(Parameters params_) : params(std::move(params_)), gen(params.seed) {
+template <typename T>
+Phenotypes<T>::Phenotypes(Parameters params_) : params(std::move(params_)), gen(params.seed) {
     samples = std::make_shared<std::vector<std::string>>();
-    phenotypes = std::make_shared<std::vector<pheno_vector>>();
+    phenotypes = std::make_shared<std::vector<T>>();
     std::ifstream ifs(params.pheno);
     parse(ifs);
 }
+
+template class Phenotypes<pheno_vector>;
+template class Phenotypes<compressed_pheno_vector>;

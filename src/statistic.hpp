@@ -20,12 +20,13 @@
 /**
  * @brief IBD Statistic Calculation Class
  */
+template <typename T>
 class Statistic {
     arma::SpCol<int32_t> data;
-    std::shared_ptr<Indexer> indexer;
+    std::shared_ptr<Indexer<T>> indexer;
     std::shared_ptr<Reporter> reporter;
     Parameters params;
-    std::shared_ptr<std::vector<pheno_vector>> phenotypes;
+    std::shared_ptr<std::vector<T>> phenotypes;
 
 
     std::pair<std::vector<int32_t>, std::vector<int32_t>> pairs;
@@ -48,12 +49,12 @@ public:
 
     Statistic(arma::SpCol<int32_t> data_,
               Breakpoint bp_,
-              std::shared_ptr<Indexer> indexer_,
+              std::shared_ptr<Indexer<T>> indexer_,
               std::shared_ptr<Reporter> reporter_,
               Parameters params_,
-              std::shared_ptr<std::vector<pheno_vector>> phenotypes_);
+              std::shared_ptr<std::vector<T>> phenotypes_);
 
-    double calculate(pheno_vector &phenotypes_, bool original_ = false) noexcept;
+    double calculate(T &phenotypes_, bool original_ = false) noexcept;
 
     void run();
     void cleanup();
