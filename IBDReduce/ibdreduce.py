@@ -11,7 +11,9 @@ import glob
 import argparse as ap
 import sys
 import concurrent.futures
+import multiprocessing as mp
 import gzip
+import zstandard as zstd
 from typing import Dict, List, Tuple
 from geneticmap import GeneticMap
 from pathlib import Path
@@ -19,21 +21,28 @@ from datetime import datetime
 import numpy as np
 import scipy.stats as stats
 
-
-def is_gzipped(fpath: Path) -> bool:
-    """Check if the provided file is gzipped or not.
+def is_compressed(fpath: Path) -> str:
+    """Check if the provided file is compressed with gzip or zstd or not.
 
     Args:
         fpath: The path to the file to check.
 
     Returns:
-        A bool indicating if the file is gzipped (true) or not (false).
+        A str indicating if the file is compressed (zstd, gzip) or not (no)..
     """
 
-    with fpath.open('rb') as f:
-        magic = f.read(2)
+    gzip = b'\x1f\x8b'
+    zstd = b'\x28\xb5\x2f\xfd'
 
-    return magic == b'\x1f\x8b'
+    with fpath.open('rb') as f:
+        magic = f.read(4)
+
+    if magic[:2] == gzip:
+        return 'gzip'
+    elif magic == zstd:
+        return 'zstd'
+    else:
+        return 'no'
 
 
 def check_and_open(fpath: str):
@@ -47,8 +56,11 @@ def check_and_open(fpath: str):
 
     file_ = Path(fpath)
 
-    if is_gzipped(file_):
+    compressed = is_compressed(file_)
+    if compressed == 'gzip':
         f = gzip.open(str(file_), 'rt')
+    elif compressed == 'zstd':
+        f = zstd.open(str(file_), 'rt')
     else:
         f = file_.open('r')
     return f
@@ -69,7 +81,7 @@ def ibdlen_parse(i: int, gmap: GeneticMap, args: ap.Namespace) -> Tuple[Dict[int
     breakpoints = {i: 0}
     file_ = Path(args.prefix + args.suffix.format(i=i, j=args.at))
 
-    if is_gzipped(file_):
+    if is_compressed(file_):
         f = gzip.open(str(file_), 'rt')
     else:
         f = file_.open('r')
@@ -126,7 +138,7 @@ def parse_avg(i: int, args: ap.Namespace, ibd_frac: Dict[int, dict]) \
     for j in range(args.at, args.at + args.nruns):
         file_ = Path(args.prefix + args.suffix.format(i=i, j=j))
 
-        if is_gzipped(file_):
+        if is_compressed(file_):
             f = gzip.open(str(file_), 'rt')
         else:
             f = file_.open('r')
@@ -214,9 +226,9 @@ def get_pdist(stat_dist: np.ndarray, method: str) -> np.ndarray:
 def parse(i: int, orig_avg: List[float], permuted_avg: List[np.ndarray], breakpoints: Dict[int, int],
           args: ap.Namespace) \
         -> Tuple[List[Dict[int, dict]],
-                 List[Dict[int, np.ndarray]],
-                 List[Dict[int, np.ndarray]],
-                 List[Dict[int, Dict[int, float]]]]:
+        List[Dict[int, np.ndarray]],
+        List[Dict[int, np.ndarray]],
+        List[Dict[int, Dict[int, float]]]]:
     """Final pass parser for the extreme value distribution.
 
     Args:
@@ -229,7 +241,7 @@ def parse(i: int, orig_avg: List[float], permuted_avg: List[np.ndarray], breakpo
     Returns:
         The original statistics for each marker, converted to empirical p-value, and the extreme value distribution of
         statistics for the current chromosome, as well as the full distribution of resampled statistics if FDR argument
-        is passed..
+        is passed.
     """
     original = []
     extreme_val_dist = []
@@ -316,11 +328,10 @@ def run_ibdlen(args: ap.Namespace, gmap: GeneticMap) -> Tuple[
             skips = [int(x) for x in args.skip_chromosomes.split(',')]
             chroms = list(filter(lambda x: x not in skips, chroms))
 
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        for i in chroms:
-            future.append(executor.submit(ibdlen_parse, i, gmap, args))
-        for fut in future:
-            res = fut.result()
+    with mp.Pool(processes=len(chroms)) as pool:
+        map_args = [(i, gmap, args) for i in chroms]
+        multi_res = pool.starmap(ibdlen_parse, map_args)
+        for res in multi_res:
             ibdlen.update(res[0])
             breakpoints.update(res[1])
 
@@ -368,13 +379,11 @@ def run_avg(args: ap.Namespace, ibd_frac: Dict[int, Dict[int, float]]) \
             skips = [int(x) for x in args.skip_chromosomes.split(',')]
             chroms = list(filter(lambda x: x not in skips, chroms))
 
-
     future = []
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        for i in chroms:
-            future.append(executor.submit(parse_avg, i, args, ibd_frac))
-        for fut in future:
-            res = fut.result()
+    with mp.Pool(processes=len(chroms)) as pool:
+        map_args = [(i, args, ibd_frac) for i in chroms]
+        multi_res = pool.starmap(parse_avg, map_args)
+        for res in multi_res:
             for j in range(args.phenotypes):
                 original_avg[j].update(res[0][j])
                 permuted_avg[j].update(res[1][j])
@@ -418,11 +427,10 @@ def run_parse(args: ap.Namespace, original_avg: List[Dict[int, Dict[int, float]]
     total_breakpoints = 0
     for i in chroms:
         total_breakpoints += breakpoints[i]
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        for i in chroms:
-            future.append(executor.submit(parse, i, original_avg, p_avg, breakpoints, args))
-        for i, fut in enumerate(future):
-            res = fut.result()
+    with mp.Pool(processes=len(chroms)) as pool:
+        map_args = [(i, original_avg, p_avg, breakpoints, args) for i in chroms]
+        multi_res = pool.starmap(parse, map_args)
+        for i, res in enumerate(multi_res):
             for j in range(args.phenotypes):
                 original[j].update(res[0][j])
                 extreme_val_dist[j].update(res[1][j])
@@ -447,9 +455,41 @@ def run_parse(args: ap.Namespace, original_avg: List[Dict[int, Dict[int, float]]
     return original, evd, full_dist, deltas
 
 
+def calculate_adjustment(args, chroms, deltas, evd, fdr, ibdlen, memoize, original, p_adjust_cutoff, phen,
+                         total_perms):
+    i, chroms = chroms
+    for k, res in original[phen][i].items():
+        p = res[0]
+        succ = res[1]
+        d = deltas[phen][i][k]
+        # Poisson CI
+        upper = stats.chi2.ppf(0.975, 2 * succ + 2) / 2.
+        if succ > 0:
+            lower = stats.chi2.ppf(0.025, 2 * succ) / 2.
+        else:
+            lower = 0.
+
+        # Adjusted p-value
+        if args.fdr:
+            if p in memoize:
+                Rstar = memoize[p]
+            else:
+                Rstar = np.sum(fdr[phen] <= p, axis=0)
+                memoize[p] = Rstar
+            rp = sum(res[0] <= p for j in chroms for _, res in original[phen][j].items())
+            pm = p * fdr[phen].shape[0]
+            rb = np.percentile(Rstar, 95)
+            if rp - rb >= pm:
+                p_adjust = np.mean(Rstar / (Rstar + rp - pm))
+            else:
+                p_adjust = sum(Rstar >= 1) / len(Rstar)
+        else:
+            p_adjust = stats.percentileofscore(evd[phen], p, kind='weak') / 100.
+        return f"{i}\t{k}\t{ibdlen[i][k]}\t{p}\t{lower},{upper}\t{p_adjust}\t{p_adjust_cutoff}\t{succ}\t{total_perms}\t{d}"
+
+
 def main():
     """Entrypoint."""
-    global args
     parser = ap.ArgumentParser()
     parser.add_argument('prefix',
                         type=str,
@@ -524,58 +564,26 @@ def main():
     for phen in range(args.phenotypes):
         opf = open(f'{args.output}.{phen}', 'w')
         print('# {}'.format(' '.join(sys.argv)), file=opf)
+        print('# Breakpoints: {}'.format(' '.join(f'{chrom},{breakpoints[chrom]}' for chrom in chroms)), file=opf)
+        print('# Total breakpoints: {}'.format(sum(breakpoints[chrom] for chrom in chroms)), file=opf)
         print("CHROM\tPOS\tcM\tPVal\tPValCI\tPAdj\tPAdjCutoff\tSuccess\tPermutation\tDelta", file=opf)
 
         # Significance level for p-value in permutation correcting for multiple tests
         p_adjust_cutoff = np.percentile(evd[phen], 5.)
         memoize = {}
 
-        for i in chroms:
-            for k, res in original[phen][i].items():
-                p = res[0]
-                succ = res[1]
-                d = deltas[phen][i][k]
-                # Poisson CI
-                upper = stats.chi2.ppf(0.975, 2 * succ + 2) / 2.
-                if succ > 0:
-                    lower = stats.chi2.ppf(0.025, 2 * succ) / 2.
-                else:
-                    lower = 0.
-
-                # Adjusted p-value
-                if args.fdr:
-                    if p in memoize:
-                        Rstar = memoize[p]
-                    else:
-                        Rstar = np.sum(fdr[phen] <= p, axis=0)
-                        memoize[p] = Rstar
-                    rp = sum(res[0] <= p for j in chroms for _, res in original[phen][j].items())
-                    pm = p * fdr[phen].shape[0]
-                    rb = np.percentile(Rstar, 95)
-                    if rp - rb >= pm:
-                        p_adjust = np.mean(Rstar / (Rstar + rp - pm))
-                    else:
-                        p_adjust = sum(Rstar >= 1) / len(Rstar)
-                        # p_adjust = stats.percentileofscore(evd[phen], p, kind='weak') / 100.
-                    # Try the formula in Millstein and Volfson 2013
-                    # if p in memoize:
-                    #     Sstar = memoize[p]
-                    # else:
-                    #     Sstar = np.sum(fdr[phen] <= p, axis=0)
-                    #     memoize[p] = Sstar
-                    # m = fdr[phen].shape[0]
-                    # Sbar = np.mean(Sstar)
-                    # S = sum(res[0] <= p for j in chroms for _, res in original[phen][j].items())
-                    # p_adjust = Sbar / S * (1. - S / m) / (1. - Sbar / m)
-                    # if p_adjust > 1:
-                    #     p_adjust = 1
-                else:
-                    p_adjust = stats.percentileofscore(evd[phen], p, kind='weak') / 100.
-                print(f"{i}\t{k}\t{ibdlen[i][k]}\t{p}\t{lower}," +
-                      f"{upper}\t{p_adjust}\t{p_adjust_cutoff}\t{succ}\t{total_perms}\t{d}", file=opf)
+        with mp.Pool(processes=len(chroms)) as pool:
+            map_args = [(args, (i, chroms), deltas, evd, fdr, ibdlen, memoize, original, p_adjust_cutoff, phen, total_perms) for i in chroms]
+            multi_res = pool.starmap(calculate_adjustment, map_args)
+        for lines in [res for res in multi_res]:
+            for line in lines:
+                print(line, file=opf)
     ttotal2 = datetime.now()
     print('Total runtime: {}'.format(ttotal2 - ttotal1))
 
 
 if __name__ == "__main__":
+
+    # Ensure we don't duplicate resource usage when starting processes.
+    mp.set_start_method('spawn')
     main()

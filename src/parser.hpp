@@ -19,7 +19,7 @@
 #include "indexer.hpp"
 #include "indexsort.hpp"
 #include "info.hpp"
-#include "isgzipped.hpp"
+#include "iscompressed.hpp"
 #include "math.hpp"
 #include "parameters.hpp"
 #include "phenotypes.hpp"
@@ -30,6 +30,7 @@
 #include "threadpool.hpp"
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/tokenizer.hpp>
+
 
 /**
  * @brief Unified IBD data format parser

@@ -75,7 +75,6 @@ def parse_avg(i: int, args: ap.Namespace, ibd_frac: Dict[int, dict]) \
     permuted = [{i: np.zeros(arr_size)} for _ in range(args.phenotypes)]
     original = [{i: {}} for _ in range(args.phenotypes)]
 
-
     #    start = min(list(range(args.at, args.at + args.nruns)))
     start = args.at
     for j in range(args.at, args.at + args.nruns):
