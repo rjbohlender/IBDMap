@@ -9,7 +9,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <map>
 
-template <typename T>
+template<typename T>
 void Phenotypes<T>::parse(std::istream &is) {
     int iid = 0;
     int phe = params.pheno_col;
@@ -26,31 +26,31 @@ void Phenotypes<T>::parse(std::istream &is) {
         }
         RJBUtil::Splitter<std::string_view> splitter(line, " \t");
 
-        samples->push_back(splitter[iid]);
-            if (splitter[phe] == "NA") {
-                (*phenotypes)[0].push_back(-1);
-            } else {
-                (*phenotypes)[0].push_back(static_cast<int8_t>(std::stoi(splitter[phe])));
-                // Checking for erroneous (*phenotypes)
-                if ((*phenotypes)[0].back() < 0 || (*phenotypes)[0].back() > 1) {
-                    if (params.verbose) {
-                        fmt::print(std::cerr, "{} {}\n", splitter[0], splitter[phe]);
-                    }
-                    throw(std::runtime_error(fmt::format("Incorrect phenotype value at lineno: {}", lineno)));
+        if (splitter[phe] == "NA") {
+            continue;
+        } else {
+            samples->push_back(splitter[iid]);
+            (*phenotypes)[0].push_back(static_cast<int8_t>(std::stoi(splitter[phe])));
+            // Checking for erroneous (*phenotypes)
+            if ((*phenotypes)[0].back() < 0 || (*phenotypes)[0].back() > 1) {
+                if (params.verbose) {
+                    fmt::print(std::cerr, "{} {}\n", splitter[0], splitter[phe]);
                 }
-                if (params.swap) {// Swap case-control status
-                    switch ((*phenotypes)[0].back()) {
-                        case 1:
-                            (*phenotypes)[0].back() = 0;
-                            break;
-                        case 0:
-                            (*phenotypes)[0].back() = 1;
-                            break;
-                        default:
-                            break;
-                    }
+                throw(std::runtime_error(fmt::format("Incorrect phenotype value at lineno: {}", lineno)));
+            }
+            if (params.swap) {// Swap case-control status
+                switch ((*phenotypes)[0].back()) {
+                    case 1:
+                        (*phenotypes)[0].back() = 0;
+                        break;
+                    case 0:
+                        (*phenotypes)[0].back() = 1;
+                        break;
+                    default:
+                        break;
                 }
             }
+        }
         lineno++;
     }
     create_indexers();
@@ -65,16 +65,16 @@ void Phenotypes<T>::parse(std::istream &is) {
  * Makes sure that we can do vectorized reads a little bit past the end of phenotypes without a segfault
  * Necessary for a vectorized gather from phenotypes, in Statistic::calculate
  */
-template <typename T>
+template<typename T>
 void Phenotypes<T>::pad_phenotypes() {
     for (auto p : *phenotypes) {
-            if (p.capacity() < p.size() + 3) {
-                p.resize(p.size() + 3);
-            }
+        if (p.capacity() < p.size() + 3) {
+            p.resize(p.size() + 3);
         }
+    }
 }
 
-template <typename T>
+template<typename T>
 void Phenotypes<T>::create_indexers() {
     int case_count = 0;
     int control_count = 0;
@@ -101,7 +101,7 @@ void Phenotypes<T>::create_indexers() {
     indexer = std::make_shared<Indexer<T>>(case_count, control_count, (*samples), (*phenotypes)[0]);
 }
 
-template <typename T>
+template<typename T>
 void Phenotypes<T>::shuffle() {
     for (int i = 1; i < params.nperms + 1; i++) {
         (*phenotypes)[i] = (*phenotypes)[0];
@@ -113,7 +113,7 @@ void Phenotypes<T>::shuffle() {
     }
 }
 
-template <typename T>
+template<typename T>
 Phenotypes<T>::Phenotypes(Parameters params_) : params(std::move(params_)), gen(params.seed) {
     samples = std::make_shared<std::vector<std::string>>();
     phenotypes = std::make_shared<std::vector<T>>();
