@@ -31,7 +31,8 @@ void Phenotypes<T>::parse(std::istream &is) {
         } else {
             samples->push_back(splitter[iid]);
             (*phenotypes)[0].push_back(static_cast<int8_t>(std::stoi(splitter[phe])));
-            // Checking for erroneous (*phenotypes)
+            lookup[splitter[iid]] = (*phenotypes)[0].back();
+                    // Checking for erroneous (*phenotypes)
             if ((*phenotypes)[0].back() < 0 || (*phenotypes)[0].back() > 1) {
                 if (params.verbose) {
                     fmt::print(std::cerr, "{} {}\n", splitter[0], splitter[phe]);
@@ -53,6 +54,9 @@ void Phenotypes<T>::parse(std::istream &is) {
         }
         lineno++;
     }
+    IndexSort indexSort(*samples);
+    indexSort.sort_vector(*samples);
+    indexSort.sort_vector((*phenotypes)[0]);// Both must be sorted
     create_indexers();
     arma::wall_clock timer;
     timer.tic();

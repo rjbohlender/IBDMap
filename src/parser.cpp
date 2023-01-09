@@ -4,6 +4,7 @@
 
 #include "parser.hpp"
 #include "inputvalidator.hpp"
+#include <unordered_set>
 
 template <typename T>
 void Parser<T>::parse_input(std::istream &is) {
@@ -300,6 +301,7 @@ void Parser<T>::update_data(arma::SpCol<int32_t> &data,
                          int value,
                          bool cluster) {
     std::string iid_key;
+    std::unordered_set<std::string> seen;
     if (params.dash) {
         if (cluster) {
             iid_key = "IIDs";
@@ -340,7 +342,7 @@ void Parser<T>::update_data(arma::SpCol<int32_t> &data,
                             }
                         }
                         if (value > 0) {
-                            bp.ibd_pairs.emplace_back(std::make_pair(*it1, *it2));
+                            bp.ibd_pairs.emplace_back(*it1, *it2);
                         }
                     }
                     data(row_idx) += value;
@@ -351,12 +353,24 @@ void Parser<T>::update_data(arma::SpCol<int32_t> &data,
             RJBUtil::Splitter<std::string> pairs(vals[indices[iid_key]], "-");
 
             std::sort(pairs.begin(), pairs.end());
+            if (pheno.lookup.find(pairs[0]) == pheno.lookup.end() || pheno.lookup.find(pairs[1]) == pheno.lookup.end()) {
+                continue;
+            }
             arma::sword row_idx = (*pheno.indexer).translate(pairs[0], pairs[1]);
 
             auto ids = fmt::format("{},{}", pairs[0], pairs[1]);
+            if (seen.find(ids) == seen.end()) {
+                seen.insert(ids);
+            } else {
+                continue;
+            }
             if (row_idx < 0) {
                 continue;
             } else {
+                auto test = (*pheno.indexer).back_translate(row_idx);
+                if ((*pheno.samples)[test.first] != pairs[0] || (*pheno.samples)[test.second] != pairs[1]) {
+                    fmt::print(std::cerr, "Failed to map back. {} == {} ; {} == {}\n", (*pheno.samples)[test.first], pairs[0], (*pheno.samples)[test.second], pairs[1]);
+                }
                 if (params.cM) {
                     try {
                         double test_val = std::stod(vals[indices["cM"]]);

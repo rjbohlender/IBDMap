@@ -17,6 +17,7 @@ class Phenotypes {
 
     std::mt19937_64 gen;
 
+
     void parse(std::istream &is);
     void create_indexers();
     void shuffle();
@@ -25,6 +26,7 @@ public:
     std::shared_ptr<std::vector<std::string>> samples;
     std::shared_ptr<std::vector<T>> phenotypes;
     std::shared_ptr<Indexer<T>> indexer;
+    std::unordered_map<std::string, int8_t> lookup;
 
     explicit Phenotypes(Parameters params_);
 };

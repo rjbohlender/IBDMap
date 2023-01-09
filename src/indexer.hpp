@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <fmt/include/fmt/ostream.h>
 
 /**
  * @brief Class to handle converting individual indices into row index
@@ -55,9 +56,6 @@ struct Indexer {
 
     void setup(arma::uword case_count_,
                arma::uword cont_count_) {
-        IndexSort indexSort(samples);
-        indexSort.sort_vector(samples);
-        indexSort.sort_vector(phenotypes);// Both must be sorted
         case_case = case_count * (case_count - 1.) / 2.;
         case_cont = case_count * cont_count;
         cont_cont = cont_count * (cont_count - 1.) / 2.;
@@ -111,8 +109,8 @@ struct Indexer {
 
         arma::sword start = 0;
         // Replace loop with function for the value -- 1 - 2 orders of magnitude faster
-        long double sz_ = sz;
-        start = (2. * sz_ - 1. - i) * i / 2.;
+        arma::sword sz_ = sz;
+        start = (2 * sz_ - 1 - i) * i / 2;
 
         return start + j - i - 1;
     }
