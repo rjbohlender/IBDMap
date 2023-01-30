@@ -10,6 +10,7 @@ the position across permutations, scaled to the total number of breakpoints.
 import glob
 import argparse as ap
 import sys
+from itertools import starmap
 import concurrent.futures
 import multiprocessing as mp
 import gzip
@@ -81,10 +82,7 @@ def ibdlen_parse(i: int, gmap: GeneticMap, args: ap.Namespace) -> Tuple[Dict[int
     breakpoints = {i: 0}
     file_ = Path(args.prefix + args.suffix.format(i=i, j=args.at))
 
-    if is_compressed(file_):
-        f = gzip.open(str(file_), 'rt')
-    else:
-        f = file_.open('r')
+    f = check_and_open(str(file_))
 
     predis = 0
     prechr = 0
@@ -138,10 +136,7 @@ def parse_avg(i: int, args: ap.Namespace, ibd_frac: Dict[int, dict]) \
     for j in range(args.at, args.at + args.nruns):
         file_ = Path(args.prefix + args.suffix.format(i=i, j=j))
 
-        if is_compressed(file_):
-            f = gzip.open(str(file_), 'rt')
-        else:
-            f = file_.open('r')
+        f = check_and_open(str(file_))
 
         for lineno, l in enumerate(f):
             chrom, orig, pos, vals = parse_line(l, args.new)
@@ -455,10 +450,13 @@ def run_parse(args: ap.Namespace, original_avg: List[Dict[int, Dict[int, float]]
     return original, evd, full_dist, deltas
 
 
-def calculate_adjustment(args, chroms, deltas, evd, fdr, ibdlen, memoize, original, p_adjust_cutoff, phen,
-                         total_perms):
-    i, chroms = chroms
-    for k, res in original[phen][i].items():
+def calculate_adjustment(args, i, chroms, deltas, evd, fdr, ibdlen, original, p_adjust_cutoff, phen, total_perms):
+    memoize = {}
+    results = [''] * len(original[phen][i].items())
+    res_no = -1
+    data = list(original[phen][i].items())
+    for k, res in data:
+        res_no += 1
         p = res[0]
         succ = res[1]
         d = deltas[phen][i][k]
@@ -476,7 +474,7 @@ def calculate_adjustment(args, chroms, deltas, evd, fdr, ibdlen, memoize, origin
             else:
                 Rstar = np.sum(fdr[phen] <= p, axis=0)
                 memoize[p] = Rstar
-            rp = sum(res[0] <= p for j in chroms for _, res in original[phen][j].items())
+            rp = sum(res[0] <= p for j in chroms for _, res in data)
             pm = p * fdr[phen].shape[0]
             rb = np.percentile(Rstar, 95)
             if rp - rb >= pm:
@@ -485,7 +483,8 @@ def calculate_adjustment(args, chroms, deltas, evd, fdr, ibdlen, memoize, origin
                 p_adjust = sum(Rstar >= 1) / len(Rstar)
         else:
             p_adjust = stats.percentileofscore(evd[phen], p, kind='weak') / 100.
-        return f"{i}\t{k}\t{ibdlen[i][k]}\t{p}\t{lower},{upper}\t{p_adjust}\t{p_adjust_cutoff}\t{succ}\t{total_perms}\t{d}"
+        results[res_no] = f"{i}\t{k}\t{ibdlen[i][k]}\t{p}\t{lower},{upper}\t{p_adjust}\t{p_adjust_cutoff}\t{succ}\t{total_perms}\t{d}"
+    return results
 
 
 def main():
@@ -570,13 +569,11 @@ def main():
 
         # Significance level for p-value in permutation correcting for multiple tests
         p_adjust_cutoff = np.percentile(evd[phen], 5.)
-        memoize = {}
 
-        with mp.Pool(processes=len(chroms)) as pool:
-            map_args = [(args, (i, chroms), deltas, evd, fdr, ibdlen, memoize, original, p_adjust_cutoff, phen, total_perms) for i in chroms]
-            multi_res = pool.starmap(calculate_adjustment, map_args)
-        for lines in [res for res in multi_res]:
-            for line in lines:
+        map_args = [(args, i, chroms, deltas, evd, fdr, ibdlen, original, p_adjust_cutoff, phen, total_perms) for i in chroms]
+        multi_res = starmap(calculate_adjustment, map_args)
+        for res in multi_res:
+            for line in res:
                 print(line, file=opf)
     ttotal2 = datetime.now()
     print('Total runtime: {}'.format(ttotal2 - ttotal1))
