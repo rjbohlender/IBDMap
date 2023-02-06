@@ -22,6 +22,9 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: recursive
+    
+    - name: Update aptitude
+      run: sudo apt-get update
 
     - name: Install dependencies
       run: sudo apt-get install -y libarmadillo-dev libboost-iostreams-dev intel-mkl gfortran libboost-python-dev libboost-numpy-dev
