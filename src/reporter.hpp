@@ -13,6 +13,7 @@
 #include <boost/iostreams/copy.hpp>
 #include <boost/iostreams/device/file.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
+#include <boost/iostreams/filter/zstd.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/filtering_streambuf.hpp>
 #include <fmt/include/fmt/ostream.h>
@@ -62,7 +63,18 @@ class Reporter {
     void print() {
         std::unique_lock<std::mutex> lk(mut);
         std::string s;
-        zstr::ofstream ofs(out_path);
+
+        // zstr::ofstream os(out_path);
+        // Switch to zstd compression
+#if 1
+        boost::iostreams::filtering_streambuf<boost::iostreams::output> streambuf;
+        std::ofstream ofs;
+        ofs.open(out_path, std::ios_base::out | std::ios_base::binary);
+        streambuf.push(boost::iostreams::gzip_compressor());
+        streambuf.push(ofs);
+
+        std::ostream os(&streambuf);
+#endif
 
         while (!done || nstrings > 0) {
             data_cond.wait_for(lk, std::chrono::seconds(1), [this] { return !string_queue.empty() || done; });
@@ -71,8 +83,8 @@ class Reporter {
                 string_queue.pop();
                 lk.unlock();
                 if (!out_path.empty()) {
-                    fmt::print(ofs, s);
-                    ofs.flush();
+                    fmt::print(os, s);
+                    os.flush();
                 } else {
                     fmt::print(s);
                 }
@@ -102,7 +114,6 @@ public:
         done = true;
         data_cond.notify_all();
         if (print_thread.joinable()) {
-            fmt::print(std::cerr, "In reporter:\nnwritten: {}\nnsubmitted: {}\n", nwritten, nsubmitted);
             print_thread.join();
         }
     }
@@ -143,12 +154,17 @@ public:
 
         // Begin sorting
         if (!out_path.empty()) {
-            zstr::ifstream reinput(out_path);
+            boost::iostreams::filtering_streambuf<boost::iostreams::input> streambuf;
+            std::ifstream reinput;
+            reinput.open(out_path, std::ios_base::out | std::ios_base::binary);
+            streambuf.push(boost::iostreams::gzip_decompressor());
+            streambuf.push(reinput);
+            std::istream reinput_stream(&streambuf);
             std::string line;
             std::vector<OutContainer> sortable_output;
 
             int line_no = 0;
-            while (std::getline(reinput, line)) {
+            while (std::getline(reinput_stream, line)) {
                 line_no++;
                 RJBUtil::Splitter<std::string> splitter(line, " \t");
                 std::vector<std::string> stats;
@@ -172,11 +188,16 @@ public:
             std::sort(sortable_output.begin(),
                       sortable_output.end(),
                       [](OutContainer &a, OutContainer &b) { return a.pos < b.pos; });
-            zstr::ofstream reoutput(out_path);
+            boost::iostreams::filtering_streambuf<boost::iostreams::output> streambuf2;
+            std::ofstream reoutput;
+            reoutput.open(out_path, std::ios_base::out | std::ios_base::binary);
+            streambuf2.push(boost::iostreams::gzip_compressor());
+            streambuf2.push(reoutput);
+            std::ostream reoutput_stream(&streambuf2);
             for (const auto &v : sortable_output) {
                 for (const auto &w : v.data) {
-                    fmt::print(reoutput, "{}\t{}\t{}\n", v.chrom, v.pos, fmt::join(w.begin(), w.end(), "\t"));
-                    reoutput.flush();
+                    fmt::print(reoutput_stream, "{}\t{}\t{}\n", v.chrom, v.pos, fmt::join(w.begin(), w.end(), "\t"));
+                    reoutput_stream.flush();
                 }
             }
         }
