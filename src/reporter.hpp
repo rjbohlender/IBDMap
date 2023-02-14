@@ -13,6 +13,7 @@
 #include <boost/iostreams/copy.hpp>
 #include <boost/iostreams/device/file.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
+#include <boost/iostreams/filter/zstd.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/filtering_streambuf.hpp>
 #include <fmt/include/fmt/ostream.h>
@@ -62,7 +63,11 @@ class Reporter {
     void print() {
         std::unique_lock<std::mutex> lk(mut);
         std::string s;
-        zstr::ofstream ofs(out_path);
+
+        boost::iostreams::filtering_ostream os;
+        boost::iostreams::file_sink sink{out_path};
+        os.push(boost::iostreams::zstd_compressor());
+        os.push(sink);
 
         while (!done || nstrings > 0) {
             data_cond.wait_for(lk, std::chrono::seconds(1), [this] { return !string_queue.empty() || done; });
@@ -71,8 +76,8 @@ class Reporter {
                 string_queue.pop();
                 lk.unlock();
                 if (!out_path.empty()) {
-                    fmt::print(ofs, s);
-                    ofs.flush();
+                    fmt::print(os, s);
+                    os.flush();
                 } else {
                     fmt::print(s);
                 }
@@ -85,15 +90,20 @@ class Reporter {
 
 public:
     /**
-   * @brief Contructor for the reporter
-   * @param output Path to the output file.
-   *
-   * Should always be instantiated inside a std::make_shared call.
-   */
+     * @brief Contructor for the reporter
+     * @param output Path to the output file.
+     *
+     * Should always be instantiated inside a std::make_shared call.
+     */
     explicit Reporter(std::string output) : done(false), nstrings(0), nsubmitted(0), nwritten(0), out_path(std::move(output)) {
         print_thread = std::thread(&Reporter::print, std::ref(*this));
     }
 
+    /**
+     * @brief Destructor for the reporter
+     * @details
+     * Ensure all output is written before exiting, and thread is joined.
+     */
     ~Reporter() {
         while (!string_queue.empty() || nstrings > 0) {
             fmt::print(std::cerr, "queue size: {} nstrings: {}\n", string_queue.size(), nstrings);
@@ -102,15 +112,14 @@ public:
         done = true;
         data_cond.notify_all();
         if (print_thread.joinable()) {
-            fmt::print(std::cerr, "In reporter:\nnwritten: {}\nnsubmitted: {}\n", nwritten, nsubmitted);
             print_thread.join();
         }
     }
 
     /**
-   * @brief Locking submission function for submitting work
-   * @param s The string to be printed.
-   */
+     * @brief Locking submission function for submitting work
+     * @param s The string to be printed.
+     */
     void submit(const std::string &s) {
         std::unique_lock<std::mutex> lk(mut);
         string_queue.push(s);
@@ -121,13 +130,13 @@ public:
     }
 
     /**
-   * @brief Ensure that the output is in sorted order.
-   *
-   * Read through all the output, collect it, sort it by position, then
-   * write to a final file. Output is initially written to the output location
-   * with a .tmp extension added. All output is zipped to save space as the
-   * output can be quite large for large jobs.
-   */
+     * @brief Ensure that the output is in sorted order.
+     *
+     * Read through all the output, collect it, sort it by position, then
+     * write to a final file. Output is initially written to the output location
+     * with a .tmp extension added. All output is zipped to save space as the
+     * output can be quite large for large jobs.
+     */
     void sort() {
         // Ensure printing is completed and print thread is terminated before sorting.
         while (!string_queue.empty() || nstrings > 0) {
@@ -143,12 +152,16 @@ public:
 
         // Begin sorting
         if (!out_path.empty()) {
-            zstr::ifstream reinput(out_path);
+            boost::iostreams::filtering_istream reinput_stream;
+            boost::iostreams::file_source source(out_path);
+            reinput_stream.push(boost::iostreams::zstd_decompressor());
+            reinput_stream.push(source);
+
             std::string line;
             std::vector<OutContainer> sortable_output;
 
             int line_no = 0;
-            while (std::getline(reinput, line)) {
+            while (std::getline(reinput_stream, line)) {
                 line_no++;
                 RJBUtil::Splitter<std::string> splitter(line, " \t");
                 std::vector<std::string> stats;
@@ -172,11 +185,15 @@ public:
             std::sort(sortable_output.begin(),
                       sortable_output.end(),
                       [](OutContainer &a, OutContainer &b) { return a.pos < b.pos; });
-            zstr::ofstream reoutput(out_path);
+            boost::iostreams::filtering_ostream reoutput_stream;
+            boost::iostreams::file_sink sink(out_path);
+            reoutput_stream.push(boost::iostreams::zstd_compressor());
+            reoutput_stream.push(sink);
+
             for (const auto &v : sortable_output) {
                 for (const auto &w : v.data) {
-                    fmt::print(reoutput, "{}\t{}\t{}\n", v.chrom, v.pos, fmt::join(w.begin(), w.end(), "\t"));
-                    reoutput.flush();
+                    fmt::print(reoutput_stream, "{}\t{}\t{}\n", v.chrom, v.pos, fmt::join(w.begin(), w.end(), "\t"));
+                    reoutput_stream.flush();
                 }
             }
         }
