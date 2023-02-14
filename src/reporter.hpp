@@ -64,14 +64,10 @@ class Reporter {
         std::unique_lock<std::mutex> lk(mut);
         std::string s;
 
-        // zstr::ofstream os(out_path);
-        // Switch to zstd compression
-#if 1
         boost::iostreams::filtering_ostream os;
         boost::iostreams::file_sink sink{out_path};
-        os.push(boost::iostreams::gzip_compressor());
+        os.push(boost::iostreams::zstd_compressor());
         os.push(sink);
-#endif
 
         while (!done || nstrings > 0) {
             data_cond.wait_for(lk, std::chrono::seconds(1), [this] { return !string_queue.empty() || done; });
@@ -94,15 +90,20 @@ class Reporter {
 
 public:
     /**
-   * @brief Contructor for the reporter
-   * @param output Path to the output file.
-   *
-   * Should always be instantiated inside a std::make_shared call.
-   */
+     * @brief Contructor for the reporter
+     * @param output Path to the output file.
+     *
+     * Should always be instantiated inside a std::make_shared call.
+     */
     explicit Reporter(std::string output) : done(false), nstrings(0), nsubmitted(0), nwritten(0), out_path(std::move(output)) {
         print_thread = std::thread(&Reporter::print, std::ref(*this));
     }
 
+    /**
+     * @brief Destructor for the reporter
+     * @details
+     * Ensure all output is written before exiting, and thread is joined.
+     */
     ~Reporter() {
         while (!string_queue.empty() || nstrings > 0) {
             fmt::print(std::cerr, "queue size: {} nstrings: {}\n", string_queue.size(), nstrings);
@@ -116,9 +117,9 @@ public:
     }
 
     /**
-   * @brief Locking submission function for submitting work
-   * @param s The string to be printed.
-   */
+     * @brief Locking submission function for submitting work
+     * @param s The string to be printed.
+     */
     void submit(const std::string &s) {
         std::unique_lock<std::mutex> lk(mut);
         string_queue.push(s);
@@ -129,13 +130,13 @@ public:
     }
 
     /**
-   * @brief Ensure that the output is in sorted order.
-   *
-   * Read through all the output, collect it, sort it by position, then
-   * write to a final file. Output is initially written to the output location
-   * with a .tmp extension added. All output is zipped to save space as the
-   * output can be quite large for large jobs.
-   */
+     * @brief Ensure that the output is in sorted order.
+     *
+     * Read through all the output, collect it, sort it by position, then
+     * write to a final file. Output is initially written to the output location
+     * with a .tmp extension added. All output is zipped to save space as the
+     * output can be quite large for large jobs.
+     */
     void sort() {
         // Ensure printing is completed and print thread is terminated before sorting.
         while (!string_queue.empty() || nstrings > 0) {
@@ -153,7 +154,7 @@ public:
         if (!out_path.empty()) {
             boost::iostreams::filtering_istream reinput_stream;
             boost::iostreams::file_source source(out_path);
-            reinput_stream.push(boost::iostreams::gzip_decompressor());
+            reinput_stream.push(boost::iostreams::zstd_decompressor());
             reinput_stream.push(source);
 
             std::string line;
@@ -186,7 +187,7 @@ public:
                       [](OutContainer &a, OutContainer &b) { return a.pos < b.pos; });
             boost::iostreams::filtering_ostream reoutput_stream;
             boost::iostreams::file_sink sink(out_path);
-            reoutput_stream.push(boost::iostreams::gzip_compressor());
+            reoutput_stream.push(boost::iostreams::zstd_compressor());
             reoutput_stream.push(sink);
 
             for (const auto &v : sortable_output) {
