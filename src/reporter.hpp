@@ -69,7 +69,7 @@ class Reporter {
 #if 1
         boost::iostreams::filtering_ostream os;
         boost::iostreams::file_sink sink{out_path};
-        os.push(boost::iostreams::gzip_compressor ());
+        os.push(boost::iostreams::gzip_compressor());
         os.push(sink);
 #endif
 
@@ -151,12 +151,11 @@ public:
 
         // Begin sorting
         if (!out_path.empty()) {
-            boost::iostreams::filtering_streambuf<boost::iostreams::input> streambuf;
-            std::ifstream reinput;
-            reinput.open(out_path, std::ios_base::out | std::ios_base::binary);
-            streambuf.push(boost::iostreams::gzip_decompressor());
-            streambuf.push(reinput);
-            std::istream reinput_stream(&streambuf);
+            boost::iostreams::filtering_istream reinput_stream;
+            boost::iostreams::file_source source(out_path);
+            reinput_stream.push(boost::iostreams::gzip_decompressor());
+            reinput_stream.push(source);
+
             std::string line;
             std::vector<OutContainer> sortable_output;
 
@@ -185,12 +184,11 @@ public:
             std::sort(sortable_output.begin(),
                       sortable_output.end(),
                       [](OutContainer &a, OutContainer &b) { return a.pos < b.pos; });
-            boost::iostreams::filtering_streambuf<boost::iostreams::output> streambuf2;
-            std::ofstream reoutput;
-            reoutput.open(out_path, std::ios_base::out | std::ios_base::binary);
-            streambuf2.push(boost::iostreams::gzip_compressor());
-            streambuf2.push(reoutput);
-            std::ostream reoutput_stream(&streambuf2);
+            boost::iostreams::filtering_ostream reoutput_stream;
+            boost::iostreams::file_sink sink(out_path);
+            reoutput_stream.push(boost::iostreams::gzip_compressor());
+            reoutput_stream.push(sink);
+
             for (const auto &v : sortable_output) {
                 for (const auto &w : v.data) {
                     fmt::print(reoutput_stream, "{}\t{}\t{}\n", v.chrom, v.pos, fmt::join(w.begin(), w.end(), "\t"));
