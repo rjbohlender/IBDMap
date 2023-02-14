@@ -67,13 +67,10 @@ class Reporter {
         // zstr::ofstream os(out_path);
         // Switch to zstd compression
 #if 1
-        boost::iostreams::filtering_streambuf<boost::iostreams::output> streambuf;
-        std::ofstream ofs;
-        ofs.open(out_path, std::ios_base::out | std::ios_base::binary);
-        streambuf.push(boost::iostreams::gzip_compressor());
-        streambuf.push(ofs);
-
-        std::ostream os(&streambuf);
+        boost::iostreams::filtering_ostream os;
+        boost::iostreams::file_sink sink{out_path};
+        os.push(boost::iostreams::gzip_compressor ());
+        os.push(sink);
 #endif
 
         while (!done || nstrings > 0) {
