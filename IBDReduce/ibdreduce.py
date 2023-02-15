@@ -22,6 +22,7 @@ from datetime import datetime
 import numpy as np
 import scipy.stats as stats
 
+
 def is_compressed(fpath: Path) -> str:
     """Check if the provided file is compressed with gzip or zstd or not.
 
@@ -451,6 +452,21 @@ def run_parse(args: ap.Namespace, original_avg: List[Dict[int, Dict[int, float]]
 
 
 def calculate_adjustment(args, i, chroms, deltas, evd, fdr, ibdlen, original, p_adjust_cutoff, phen, total_perms):
+    """Calculate the p-value adjustment for the given chromosome.
+
+    :param args: Program arguments
+    :param i: Chromosome number
+    :param chroms: List of chromosomes
+    :param deltas: Test statistic deltas
+    :param evd: Extreme value distribution
+    :param fdr: Should we calculate the false discovery rate?
+    :param ibdlen: The IBD length distribution
+    :param original: The original test statistics
+    :param p_adjust_cutoff: The empirical p-value cutoff for the adjustment
+    :param phen: The phenotype number
+    :param total_perms: The total number of permutations
+    :return: Strings of the results
+    """
     memoize = {}
     results = [''] * len(original[phen][i].items())
     res_no = -1
@@ -572,9 +588,13 @@ def main():
 
         map_args = [(args, i, chroms, deltas, evd, fdr, ibdlen, original, p_adjust_cutoff, phen, total_perms) for i in chroms]
         multi_res = starmap(calculate_adjustment, map_args)
-        for res in multi_res:
-            for line in res:
-                print(line, file=opf)
+
+        multi_res = [item.split() for sublist in multi_res for item in sublist]
+        # Sort by empirical p-value
+        multi_res = sorted(multi_res, key=lambda x: float(x[3]))
+
+        for line in multi_res:
+            print("\t".join(line), file=opf)
     ttotal2 = datetime.now()
     print('Total runtime: {}'.format(ttotal2 - ttotal1))
 
