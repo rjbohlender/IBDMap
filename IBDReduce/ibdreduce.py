@@ -517,8 +517,8 @@ def main():
     parser.add_argument(
         '--method',
         type=str,
-        default='average',
-        help="Method for calculating p-value. One of {average, min, max}, default is average.")
+        default='min',
+        help="Method for calculating p-value. One of {average, min, max}, default is min.")
     parser.add_argument('--at', default=0, type=int,
                         help="The starting index of the output files. Starting value of j.")
     parser.add_argument('--single', default=None, type=int, help="Run only a single chromosome.")
