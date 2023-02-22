@@ -1,10 +1,6 @@
-"""Combine multiple runs of carvaIBD.
+"""Combine multiple runs of IBDMap.
 
 Requires Python >= 3.6
-
-First line is the value of the statistic at the locus without the average
-across permutations. The second line is the value of the average difference at
-the position across permutations, scaled to the total number of breakpoints.
 """
 
 import glob
