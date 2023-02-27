@@ -531,6 +531,7 @@ def main():
                         help="Does the output have the proportion of pairs in 3 columns?")
     parser.add_argument('--fdr', default=False, action='store_true',
                         help="Control FDR instead of FWE.")
+    parser.add_argument('--print_evd', default=False, action='store_true', help="Print the EVD to stdout.")
     args = parser.parse_args()
 
     ttotal1 = datetime.now()
@@ -553,6 +554,9 @@ def main():
     original, evd, fdr, deltas = run_parse(args, original_avg, p_avg, breakpoints)  # Runtime J * M * N / K * (5N + 5)
     t2 = datetime.now()
     print("run_parse time: {}".format(t2 - t1), file=sys.stderr)
+
+    if args.print_evd:
+        print("EVD:\n{}".format("\t".join(evd)))
 
     if args.single:
         chroms = [args.single]
