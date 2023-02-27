@@ -34,7 +34,7 @@
 struct OutContainer {
     std::string chrom;
     int pos;
-    std::vector<std::vector<std::string>> data;// Two dimensional to handle multiple phenotypes in a single file
+    std::vector<std::vector<std::string>> data; // Two dimensional to handle multiple phenotypes in a single file
 };
 
 /**
@@ -56,9 +56,14 @@ class Reporter {
     std::atomic<int> nwritten;
     std::string out_path;
     std::thread print_thread;
+    std::thread debug_thread;
     std::queue<std::string> string_queue;
+    std::queue<std::string> debug_queue;
     mutable std::mutex mut;
+    mutable std::mutex deb;
     std::condition_variable data_cond;
+    std::condition_variable debug_cond;
+    bool debug;
 
     void print() {
         std::unique_lock<std::mutex> lk(mut);
@@ -88,6 +93,32 @@ class Reporter {
         }
     }
 
+    void print_debug() {
+        std::unique_lock<std::mutex> lk(deb);
+        std::string s;
+
+        unsigned int random = std::random_device{}();
+
+        boost::iostreams::filtering_ostream os;
+        boost::iostreams::file_sink sink{fmt::format("debug_{}.txt.zst", random)};
+        os.push(boost::iostreams::zstd_compressor());
+        os.push(sink);
+
+        while (!done || !debug_queue.empty()) {
+            debug_cond.wait_for(lk, std::chrono::seconds(1), [this] { return !debug_queue.empty() || done; });
+            if (!debug_queue.empty()) {
+                s = std::move(debug_queue.front());
+                debug_queue.pop();
+                lk.unlock();
+
+                fmt::print(os, s);
+                os.flush();
+
+                lk.lock();
+            }
+        }
+    }
+
 public:
     /**
      * @brief Contructor for the reporter
@@ -95,8 +126,10 @@ public:
      *
      * Should always be instantiated inside a std::make_shared call.
      */
-    explicit Reporter(std::string output) : done(false), nstrings(0), nsubmitted(0), nwritten(0), out_path(std::move(output)) {
+    explicit Reporter(std::string output, bool debug) : done(false), nstrings(0), nsubmitted(0), nwritten(0), out_path(std::move(output)), debug(debug) {
         print_thread = std::thread(&Reporter::print, std::ref(*this));
+        if (debug)
+            debug_thread = std::thread(&Reporter::print_debug, std::ref(*this));
     }
 
     /**
@@ -111,22 +144,35 @@ public:
         }
         done = true;
         data_cond.notify_all();
+        debug_cond.notify_all();
         if (print_thread.joinable()) {
             print_thread.join();
+        }
+        if (debug_thread.joinable()) {
+            debug_thread.join();
         }
     }
 
     /**
      * @brief Locking submission function for submitting work
      * @param s The string to be printed.
+     * @param dbg_str Whether the string is a debug string or not.
      */
-    void submit(const std::string &s) {
-        std::unique_lock<std::mutex> lk(mut);
-        string_queue.push(s);
-        nstrings++;
-        nsubmitted++;
-        lk.unlock();
-        data_cond.notify_all();
+    void submit(const std::string &s, bool dbg_str) {
+        if (dbg_str) {
+            std::unique_lock<std::mutex> lk(deb);
+            debug_queue.push(s);
+            lk.unlock();
+            debug_cond.notify_all();
+            return;
+        } else {
+            std::unique_lock<std::mutex> lk(mut);
+            string_queue.push(s);
+            nstrings++;
+            nsubmitted++;
+            lk.unlock();
+            data_cond.notify_all();
+        }
     }
 
     /**

@@ -11,22 +11,22 @@
 #include <immintrin.h>
 #endif
 
-template <typename T>
+template<typename T>
 Statistic<T>::Statistic(arma::SpCol<int32_t> data_,
-                     Breakpoint bp_,
-                     std::shared_ptr<Indexer<T>> indexer_,
-                     std::shared_ptr<Reporter> reporter_,
-                     Parameters params_,
-                     std::shared_ptr<std::vector<T>> phenotypes_) : data(std::move(data_)), indexer(std::move(indexer_)),
-                                                                               params(std::move(params_)),
-                                                                               bp(std::move(bp_)), reporter(std::move(reporter_)),
-                                                                               phenotypes(std::move(phenotypes_)) {
+                        Breakpoint bp_,
+                        std::shared_ptr<Indexer<T>> indexer_,
+                        std::shared_ptr<Reporter> reporter_,
+                        Parameters params_,
+                        std::shared_ptr<std::vector<T>> phenotypes_) : data(std::move(data_)), indexer(std::move(indexer_)),
+                                                                       params(std::move(params_)),
+                                                                       bp(std::move(bp_)), reporter(std::move(reporter_)),
+                                                                       phenotypes(std::move(phenotypes_)) {
     if (params.enable_testing) {
         test_statistic();
     }
 }
 
-template <typename T>
+template<typename T>
 double
 Statistic<T>::calculate(T &phenotypes_, bool original_) noexcept {
     double statistic;
@@ -96,6 +96,18 @@ Statistic<T>::calculate(T &phenotypes_, bool original_) noexcept {
         orig_cncn = static_cast<double>(cncn);
     }
 
+    if (params.print_debug) {
+        reporter->submit(fmt::format("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+                                     bp.breakpoint.first,
+                                     bp.breakpoint.second,
+                                     (*indexer).case_case,
+                                     (*indexer).case_cont,
+                                     (*indexer).cont_cont,
+                                     cscs,
+                                     cscn,
+                                     cncn), true);
+    }
+
     // I have some numerical concerns here. This may be prone to catastrophic cancellation and could result in incorrect results.
     // Going to transform it so that we can do everything with integers until we have a single division
 #if 1
@@ -122,7 +134,7 @@ Statistic<T>::calculate(T &phenotypes_, bool original_) noexcept {
     return statistic;
 }
 
-template <typename T>
+template<typename T>
 void Statistic<T>::run() {
     initialize();
 
@@ -137,12 +149,12 @@ void Statistic<T>::run() {
         fmt::print(std::cerr, "Finished {}\t{}\n", bp.breakpoint.first, bp.breakpoint.second);
     }
 
-    reporter->submit(ss.str());
+    reporter->submit(ss.str(), false);
     cleanup();
     done = true;
 }
 
-template <typename T>
+template<typename T>
 void Statistic<T>::build_output(std::stringstream &ss) {
     double cscs = (*indexer).case_case;
     double cscn = (*indexer).case_cont;
@@ -155,7 +167,7 @@ void Statistic<T>::build_output(std::stringstream &ss) {
     fmt::print(ss, "\n");
 }
 
-template <typename T>
+template<typename T>
 void Statistic<T>::permute() {
     double val;
     for (int i = 1; i <= params.nperms; i++) {
@@ -164,19 +176,19 @@ void Statistic<T>::permute() {
     }
 }
 
-template <typename T>
+template<typename T>
 void Statistic<T>::initialize() {
     original = calculate(phenotypes->at(0), true);
 }
 
-template <typename T>
+template<typename T>
 void Statistic<T>::cleanup() {
     data.reset();
     permuted.clear();
     permuted.shrink_to_fit();
 }
 
-template <typename T>
+template<typename T>
 void Statistic<T>::test_statistic() {
     // Test case setup
     std::vector<std::string> tsamples{

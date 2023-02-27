@@ -111,6 +111,9 @@ int main(int argc, char *argv[]) {
   app.add_flag("--dash",
 			   params.dash,
 			   "Expect input to be formatted by DASH.");
+  app.add_flag("--print_debug",
+               params.print_debug,
+               "Print statistic component information to a text file.");
   app.add_flag("--old",
                params.oldformat,
                "Expect non-DASH input to include the npairs and nsegments columns.");
@@ -169,7 +172,7 @@ int main(int argc, char *argv[]) {
   }
 
   // Initialize reporter
-  auto reporter = std::make_shared<Reporter>(params.output_path);
+  auto reporter = std::make_shared<Reporter>(params.output_path, params.print_debug);
 
   if (params.verbose) {
 	fmt::print(std::cerr, "Running parser.\n");
