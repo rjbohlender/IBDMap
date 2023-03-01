@@ -556,7 +556,8 @@ def main():
     print("run_parse time: {}".format(t2 - t1), file=sys.stderr)
 
     if args.print_evd:
-        print("EVD:\n{}".format("\t".join(str(x) for x in evd)))
+        for phen in range(args.phenotypes):
+            print("EVD:\n{}".format("\t".join(str(x) for x in evd[phen])))
 
     if args.single:
         chroms = [args.single]
