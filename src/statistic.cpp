@@ -123,7 +123,7 @@ Statistic<T>::calculate(T &phenotypes_, bool original_) noexcept {
         cscn *= common / static_cast<double>((*indexer).case_cont);
         // Basically restructuring the statistic with an indicator variable for the cscs term.
         if (cscs == 0) {
-            statistic = 0;
+            statistic = -std::sqrt(std::numeric_limits<double>::max());
         } else {
             statistic = static_cast<double>(cscs - cscn) / common;
         }
