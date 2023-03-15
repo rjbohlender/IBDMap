@@ -89,6 +89,9 @@ int main(int argc, char *argv[]) {
 				 params.seed,
 				 "Specify the seed to be shared by all breakpoints for "
 				 "equal permutations.");
+  app.add_option("--threshold",
+                 params.threshold,
+                 "The number of ibd segments that a breakpoint must have to be tested.")->default_val(0);
   app.add_option("-o,--output",
 				 params.output_path,
 				 "Output to a specified file. Default output is is ./output/{date-time}.results.gz.");

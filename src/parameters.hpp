@@ -39,6 +39,7 @@ public:
     std::optional<std::vector<std::pair<int, int>>> exclude;
     double cM;
     double AF;
+    double threshold;
     std::optional<std::set<std::string>> sample_list;
 
     void print(std::ostream &os) {

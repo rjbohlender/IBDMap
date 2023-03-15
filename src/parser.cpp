@@ -150,6 +150,9 @@ void Parser<T>::parse_input(std::istream &is) {
                 continue;
             }
         }
+        if (arma::accu(data) < params.threshold) {
+            continue;
+        }
 
 #ifndef NDEBUG
         if (params.verbose) {
