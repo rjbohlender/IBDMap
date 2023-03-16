@@ -129,7 +129,7 @@ void Parser<T>::parse_input(std::istream &is) {
             cur_dist = nearest.first.second;
         }
 
-        if (cur_dist - last_dist < params.min_dist) {
+        if (last_dist != 0 && cur_dist - last_dist < params.min_dist) {
             continue;
         }
 
