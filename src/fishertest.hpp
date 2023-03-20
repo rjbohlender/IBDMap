@@ -31,8 +31,8 @@ public:
       //      m,  n
 
       // Marginals
-      arma::rowvec bottom_margin = arma::sum(table, 1);
-      arma::vec right_margin = arma::sum(table, 0);
+      arma::rowvec bottom_margin = arma::sum(table, 0);
+      arma::vec right_margin = arma::sum(table, 1);
       double m = bottom_margin(0);
       double n = bottom_margin(1);
       double k = right_margin(0);
