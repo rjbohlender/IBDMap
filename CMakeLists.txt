@@ -58,7 +58,7 @@ set(PROJECT_SUPPORT_FILES
     src/source.cpp
     src/source.hpp
     src/inputvalidator.cpp
-    src/inputvalidator.hpp src/phenotypes.cpp src/phenotypes.hpp)
+    src/inputvalidator.hpp src/phenotypes.cpp src/phenotypes.hpp src/fishertest.hpp)
 
 set(IBDLIB_SOURCE_FILES
         src/ibdlib.hpp

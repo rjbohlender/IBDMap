@@ -3,6 +3,7 @@
 //
 
 #include "statistic.hpp"
+#include "fishertest.hpp"
 #include "split.hpp"
 #include <fmt/include/fmt/ostream.h>
 #include <utility>
@@ -108,33 +109,8 @@ Statistic<T>::calculate(T &phenotypes_, bool original_) noexcept {
                                      cncn), true);
     }
 
-    // I have some numerical concerns here. This may be prone to catastrophic cancellation and could result in incorrect results.
-    // Going to transform it so that we can do everything with integers until we have a single division
-#if 1
-    if (params.contcont) {
-        arma::uword common = std::lcm((*indexer).case_case, std::lcm((*indexer).case_cont, (*indexer).cont_cont));
-        cscs *= common / static_cast<double>((*indexer).case_case);
-        cscn *= common / static_cast<double>((*indexer).case_cont);
-        cncn *= common / static_cast<double>((*indexer).cont_cont);
-        statistic = static_cast<double>(cscs - cscn - cncn) / common;
-    } else {
-        arma::uword common = std::lcm((*indexer).case_case, (*indexer).case_cont);
-        cscs *= common / static_cast<double>((*indexer).case_case);
-        cscn *= common / static_cast<double>((*indexer).case_cont);
-        // Basically restructuring the statistic with an indicator variable for the cscs term.
-        if (cscs == 0) {
-            statistic = 0;
-        } else {
-            statistic = static_cast<double>(cscs - cscn) / common;
-        }
-    }
-#else
-    if (params.contcont) {
-        statistic = static_cast<double>(cscs) / (*indexer).case_case - static_cast<double>(cscn) / (*indexer).case_cont - static_cast<double>(cncn) / (*indexer).cont_cont;
-    } else {
-        statistic = static_cast<double>(cscs) / (*indexer).case_case - static_cast<double>(cscn) / (*indexer).case_cont;
-    }
-#endif
+    FisherTest ft(cscs, cscn, cncn, *indexer, params.contcont);
+    statistic = ft.get_pval();
 
     return statistic;
 }
