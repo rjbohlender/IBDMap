@@ -279,13 +279,17 @@ def parse(i: int, orig_avg: List[float], permuted_avg: List[np.ndarray], breakpo
             if pos not in orig_buffer[lineno % args.phenotypes][chrom]:
                 orig_buffer[lineno % args.phenotypes][chrom][pos] = np.array([0, 0])
 
-            orig_buffer[lineno % args.phenotypes][chrom][pos] += np.array([np.sum(vals >= orig), len(vals)])
+            if args.fisher:
+                orig_buffer[lineno % args.phenotypes][chrom][pos] += np.array([np.sum(vals <= orig), len(vals)])
+            else:
+                orig_buffer[lineno % args.phenotypes][chrom][pos] += np.array([np.sum(vals >= orig), len(vals)])
             evd_buffer[args.nperm * j:args.nperm * (j + 1)] = vals
             if args.fdr:
                 fdr[lineno % args.phenotypes][i][breakpointno, args.nperm * j:args.nperm * (j + 1)] = vals
         if line == '':
             break
-        evd_buffer = get_pdist(evd_buffer, method=args.method)
+        if not args.fisher:
+            evd_buffer = get_pdist(evd_buffer, method=args.method)
         extreme_val_dist[lineno % args.phenotypes][i] = \
             np.minimum(extreme_val_dist[lineno % args.phenotypes][i], evd_buffer)
     for lineno, phen in enumerate(orig_buffer):
@@ -532,6 +536,7 @@ def main():
     parser.add_argument('--fdr', default=False, action='store_true',
                         help="Control FDR instead of FWE.")
     parser.add_argument('--print_evd', default=False, action='store_true', help="Print the EVD to stdout.")
+    parser.add_argument('--fisher', default=False, action='store_true', help="P-values derived from Fisher's Exact Test. Use with no_avg.")
     args = parser.parse_args()
 
     ttotal1 = datetime.now()

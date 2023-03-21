@@ -61,8 +61,26 @@ void Phenotypes<T>::parse(std::istream &is) {
     arma::wall_clock timer;
     timer.tic();
     shuffle();
+#if 1
+    // Output the permutation values to a tab separated file for debugging
+    std::ofstream ofs("permutations.txt");
+    for (int j = 0; j < samples->size(); j++) {
+        for (int i = 0; i < params.nperms + 1; i++) {
+            if (i == 0) {
+                ofs << (*samples)[j] << "\t";
+            }
+            int val = phenotypes->at(i)[j];
+            ofs << val;
+            if (i < samples->size() - 1) {
+                ofs << "\t";
+            }
+        }
+        ofs << "\n";
+    }
+#endif
     pad_phenotypes();
     fmt::print(std::cerr, "Time spent generating permutations: {}\n", timer.toc());
+    std::exit(1);
 }
 
 /**
