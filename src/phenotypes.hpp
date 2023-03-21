@@ -10,13 +10,13 @@
 #include <istream>
 #include <vector>
 #include <memory>
+#include <pcg_random.hpp>
 
 template <typename T>
 class Phenotypes {
     Parameters params;
 
-    std::mt19937_64 gen;
-
+    pcg64 gen;
 
     void parse(std::istream &is);
     void create_indexers();

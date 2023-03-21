@@ -76,6 +76,7 @@ include_directories(${LAPACK_INCLUDE_DIRS})
 include_directories(${BLAS_INCLUDE_DIRS})
 include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party/sse2neon")
 include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party/zstr/src")
+include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party/pcg-cpp-0.98/include")
 
 add_library(ibdlib MODULE ${IBDLIB_SOURCE_FILES})
 target_link_libraries(ibdlib ${Python3_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} fmt::fmt-header-only ${ARMADILLO_LIBRARIES})

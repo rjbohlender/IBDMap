@@ -26,7 +26,7 @@ void Phenotypes<T>::parse(std::istream &is) {
         }
         RJBUtil::Splitter<std::string_view> splitter(line, " \t");
 
-        if (splitter[phe] == "NA") {
+        if (splitter[phe] == "NA" || splitter[phe] == "-9") {
             continue;
         } else {
             samples->push_back(splitter[iid]);
