@@ -118,7 +118,7 @@ void Phenotypes<T>::shuffle() {
 }
 
 template<typename T>
-Phenotypes<T>::Phenotypes(Parameters params_) : params(std::move(params_)), gen(params.seed) {
+Phenotypes<T>::Phenotypes(Parameters params_, std::seed_seq &seed_source) : params(std::move(params_)), gen(seed_source) {
     samples = std::make_shared<std::vector<std::string>>();
     phenotypes = std::make_shared<std::vector<T>>();
     std::ifstream ifs(params.pheno);

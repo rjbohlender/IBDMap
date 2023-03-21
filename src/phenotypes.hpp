@@ -28,7 +28,8 @@ public:
     std::shared_ptr<Indexer<T>> indexer;
     std::unordered_map<std::string, int8_t> lookup;
 
-    explicit Phenotypes(Parameters params_);
+    explicit Phenotypes(Parameters params_, std::seed_seq &seed_source);
+
 };
 
 

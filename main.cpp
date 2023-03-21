@@ -9,6 +9,16 @@
 #include <optional>
 #include <sys/stat.h>
 
+// 32bit xorshift PRNG
+static inline uint32_t prng_u32(uint32_t p)
+{
+    uint32_t  state = p;
+    state ^= state << 13;
+    state ^= state >> 17;
+    state ^= state << 5;
+    return state;
+}
+
 int main(int argc, char *argv[]) {
   // C++ IO only
   std::ios_base::sync_with_stdio(false);
@@ -180,19 +190,22 @@ int main(int argc, char *argv[]) {
   if (params.verbose) {
 	fmt::print(std::cerr, "Running parser.\n");
   }
-  // Convert seed to hash
-  params.seed = std::hash<unsigned int>{}(params.seed);
-  fmt::print(std::cerr, "Hashed seed: {}\n", params.seed);
+  std::array<uint32_t, 4> seed_vals = {0};
+  seed_vals[0] = params.seed;
+  for (int i = 1; i < 4; ++i) {
+      seed_vals[i] = prng_u32(seed_vals[i - 1]);
+  }
+  std::seed_seq seed_source(seed_vals.begin(), seed_vals.end());
 
   if (params.compressed_memory) {
-      Phenotypes<compressed_pheno_vector> pheno(params);
+      Phenotypes<compressed_pheno_vector> pheno(params, seed_source);
       Parser<compressed_pheno_vector> parser(
               params,
               reporter,
               gmap,
               pheno);
   } else {
-      Phenotypes<pheno_vector> pheno(params);
+      Phenotypes<pheno_vector> pheno(params, seed_source);
       Parser<pheno_vector> parser(
               params,
               reporter,
