@@ -108,7 +108,7 @@ void Phenotypes<T>::create_indexers() {
 template<typename T>
 void Phenotypes<T>::shuffle() {
     for (int i = 1; i < params.nperms + 1; i++) {
-        (*phenotypes)[i] = (*phenotypes)[0];
+        (*phenotypes)[i] = (*phenotypes)[i - 1];
         for (int j = (*phenotypes)[0].size() - 1; j > 0; j--) {
             std::uniform_int_distribution<> dis(0, j);
             int k = dis(gen);
