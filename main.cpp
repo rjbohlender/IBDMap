@@ -180,6 +180,9 @@ int main(int argc, char *argv[]) {
   if (params.verbose) {
 	fmt::print(std::cerr, "Running parser.\n");
   }
+  // Convert seed to hash
+  params.seed = std::hash<unsigned int>{}(params.seed);
+  fmt::print(std::cerr, "Hashed seed: {}\n", params.seed);
 
   if (params.compressed_memory) {
       Phenotypes<compressed_pheno_vector> pheno(params);
