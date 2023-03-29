@@ -63,13 +63,18 @@ void Phenotypes<T>::parse(std::istream &is) {
     // Read in the permutations from a TSV file where each row of the file is a permutation
     if (params.read_permutations) {
         std::ifstream ifs(*params.read_permutations);
+        int i = 0;
         while (std::getline(ifs, line)) {
-            RJBUtil::Splitter<std::string_view> splitter(line, " \t");
+            RJBUtil::Splitter<std::string> splitter(line, " \t");
+            if(splitter.size() == 0) {
+                continue;
+            }
             T perm;
             for (const auto &s : splitter) {
                 perm.push_back(static_cast<int8_t>(std::stoi(s)));
             }
-            (*phenotypes).push_back(perm);
+            (*phenotypes)[i + 1] = perm;
+            i++;
         }
         ifs.close();
     } else {
