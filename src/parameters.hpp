@@ -24,6 +24,7 @@ public:
     std::string output_path;
     unsigned seed = std::random_device{}();
     std::optional<arma::uword> lower_bound;
+    std::optional<std::string> read_permutations;
     bool swap = false;
     bool contcont = false;
     double min_dist;

@@ -60,7 +60,35 @@ void Phenotypes<T>::parse(std::istream &is) {
     create_indexers();
     arma::wall_clock timer;
     timer.tic();
-    shuffle();
+    // Read in the permutations from a TSV file where each row of the file is a permutation
+    if (params.read_permutations) {
+        std::ifstream ifs(*params.read_permutations);
+        while (std::getline(ifs, line)) {
+            RJBUtil::Splitter<std::string_view> splitter(line, " \t");
+            T perm;
+            for (const auto &s : splitter) {
+                perm.push_back(static_cast<int8_t>(std::stoi(s)));
+            }
+            (*phenotypes).push_back(perm);
+        }
+        ifs.close();
+    } else {
+        shuffle();
+    }
+#if 0
+    // Print the permutations to a file
+    std::ofstream ofs("permutations.txt");
+    for (const auto &p : *phenotypes) {
+        for (const auto &[i, v] : Enumerate(p)) {
+            if (i < p.size() - 1) {
+                fmt::print(ofs, "{}\t", v);
+            } else {
+                fmt::print(ofs, "{}\n", v);
+            }
+        }
+    }
+    ofs.close();
+#endif
     pad_phenotypes();
     fmt::print(std::cerr, "Time spent generating permutations: {}\n", timer.toc());
 }

@@ -108,6 +108,9 @@ int main(int argc, char *argv[]) {
   app.add_option("--pheno_col",
                  params.pheno_col,
                  "The column to read from the phenotype file. Column 0 should be sample ID and column 1+ should be 0, 1, NA.")->default_val(1);
+  app.add_option("--read_permutations",
+                 params.read_permutations,
+                 "Read the set of permutations from a pre-generated TSV file at the given path.")->check(CLI::ExistingFile);
   app.add_flag("--swap_pheno",
 			   params.swap,
 			   "Swap case-control status of individuals. Useful for "
