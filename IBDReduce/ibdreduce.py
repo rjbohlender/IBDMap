@@ -379,11 +379,12 @@ def run_avg(args: ap.Namespace, ibd_frac: Dict[int, Dict[int, float]]) \
             for j in range(args.phenotypes):
                 original_avg[j].update(res[0][j])
                 permuted_avg[j].update(res[1][j])
-    original_avg = [
-        sum(sum(v for _, v in original_avg[j][i].items()) for i in chroms) for j in range(args.phenotypes)]
     if args.simple_avg:
         original_count = [
             sum(sum(1 for _, v in original_avg[j][i].items()) for i in chroms) for j in range(args.phenotypes)]
+    original_avg = [
+        sum(sum(v for _, v in original_avg[j][i].items()) for i in chroms) for j in range(args.phenotypes)]
+    if args.simple_avg:
         original_avg = [original_avg[j] / original_count[j] for j in range(args.phenotypes)]
     p_avg = [np.zeros(arr_size) for _ in range(args.phenotypes)]
     for i, phen_set in enumerate(permuted_avg):
