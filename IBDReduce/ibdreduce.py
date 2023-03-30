@@ -138,7 +138,7 @@ def parse_avg(i: int, args: ap.Namespace, ibd_frac: Dict[int, dict]) \
         for lineno, l in enumerate(f):
             chrom, orig, pos, vals = parse_line(l, args.new)
 
-            if not args.no_avg:
+            if not args.no_avg and not args.simple_avg:
                 orig *= ibd_frac[chrom][pos]
                 vals *= ibd_frac[chrom][pos]
 
@@ -381,6 +381,10 @@ def run_avg(args: ap.Namespace, ibd_frac: Dict[int, Dict[int, float]]) \
                 permuted_avg[j].update(res[1][j])
     original_avg = [
         sum(sum(v for _, v in original_avg[j][i].items()) for i in chroms) for j in range(args.phenotypes)]
+    if args.simple_avg:
+        original_count = [
+            sum(sum(1 for _, v in original_avg[j][i].items()) for i in chroms) for j in range(args.phenotypes)]
+        original_avg = [original_avg[j] / original_count[j] for j in range(args.phenotypes)]
     p_avg = [np.zeros(arr_size) for _ in range(args.phenotypes)]
     for i, phen_set in enumerate(permuted_avg):
         for _, v in phen_set.items():
@@ -523,6 +527,7 @@ def main():
     parser.add_argument('--skip_chromosomes', default=None, type=str,
                         help="A comma separated list of chromosome numbers to skip.")
     parser.add_argument('--no_avg', default=False, action='store_true', help="Don't calculate the genomewide average.")
+    parser.add_argument('--simple_avg', default=False, action='store_true', help="Calculate the unweighted average.")
     parser.add_argument('--two_sided', default=False, action='store_true', help="Calculate for a two-sided test.")
     parser.add_argument('--phenotypes', default=1, type=int, help="Number of phenotypes we're parsing.")
     parser.add_argument('--output', required=True, help="Output path. will be appended with number.")
