@@ -389,6 +389,8 @@ def run_avg(args: ap.Namespace, ibd_frac: Dict[int, Dict[int, float]]) \
     for i, phen_set in enumerate(permuted_avg):
         for _, v in phen_set.items():
             p_avg[i] += v
+            if args.simple_avg:
+                p_avg[i] /= original_count[i]
     return original_avg, p_avg
 
 
