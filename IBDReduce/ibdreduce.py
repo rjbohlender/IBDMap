@@ -19,51 +19,6 @@ import numpy as np
 import scipy.stats as stats
 
 
-def is_compressed(fpath: Path) -> str:
-    """Check if the provided file is compressed with gzip or zstd or not.
-
-    Args:
-        fpath: The path to the file to check.
-
-    Returns:
-        A str indicating if the file is compressed (zstd, gzip) or not (no)..
-    """
-
-    gzip = b'\x1f\x8b'
-    zstd = b'\x28\xb5\x2f\xfd'
-
-    with fpath.open('rb') as f:
-        magic = f.read(4)
-
-    if magic[:2] == gzip:
-        return 'gzip'
-    elif magic == zstd:
-        return 'zstd'
-    else:
-        return 'no'
-
-
-def check_and_open(fpath: str):
-    """Check if a file is gzipped and return an open file handle.
-
-    Args:
-        fpath: The path to the file.
-    Returns:
-        A file handle pointing to the file.
-    """
-
-    file_ = Path(fpath)
-
-    compressed = is_compressed(file_)
-    if compressed == 'gzip':
-        f = gzip.open(str(file_), 'rt')
-    elif compressed == 'zstd':
-        f = zstd.open(str(file_), 'rt')
-    else:
-        f = file_.open('r')
-    return f
-
-
 def ibdlen_parse(i: int, gmap: GeneticMap, args: ap.Namespace) -> Tuple[Dict[int, dict], Dict[int, int]]:
     """First pass of parsing for the distribution of distances between markers and length of the genome.
 
@@ -605,7 +560,7 @@ def main():
         for line in multi_res:
             print("\t".join(line), file=opf)
     ttotal2 = datetime.now()
-    print('Total runtime: {}'.format(ttotal2 - ttotal1))
+    print('Total runtime: {}'.format(ttotal2 - ttotal1), file=sys.stderr)
 
 
 if __name__ == "__main__":
