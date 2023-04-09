@@ -177,7 +177,7 @@ def main():
                         predis = dis
                         data[idx, offset:] = vals
                     else:
-                        data[idx, (offset * args.nperm):] = vals[1:]
+                        data[idx, (offset * args.nperm):((offset + 1) * args.nperm)] = vals[1:]
                     idx += 1
 
     # Calculate the average and subtract it from the data.
