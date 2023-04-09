@@ -175,7 +175,7 @@ def main():
                                     gmap.gmap[chrom][close[1]] - gmap.gmap[chrom][close[0]])
                         ibdfrac[idx] = (float(dis) - float(predis)) / total
                         predis = dis
-                        data[idx, offset:args.nperm] = vals
+                        data[idx, offset:(args.nperm + 1)] = vals
                     else:
                         data[idx, (offset * args.nperm):((offset + 1) * args.nperm)] = vals[1:]
                     idx += 1
