@@ -150,7 +150,7 @@ def main():
 
     # Create numpy arrays to store the data.
     ibdfrac = np.zeros(breakpoints, dtype=np.float64)
-    data = np.zeros((breakpoints, args.nperm + 1), dtype=np.float64)
+    data = np.zeros((breakpoints, args.nperm * args.nruns + 1), dtype=np.float64)
     bp_ids = []
 
     # Loop over chromosomes again to fill the arrays.
@@ -175,7 +175,7 @@ def main():
                                     gmap.gmap[chrom][close[1]] - gmap.gmap[chrom][close[0]])
                         ibdfrac[idx] = (float(dis) - float(predis)) / total
                         predis = dis
-                        data[idx, offset:] = vals
+                        data[idx, offset:args.nperm] = vals
                     else:
                         data[idx, (offset * args.nperm):((offset + 1) * args.nperm)] = vals[1:]
                     idx += 1
