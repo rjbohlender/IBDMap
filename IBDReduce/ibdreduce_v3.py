@@ -124,6 +124,7 @@ def main():
     parser.add_argument('--unweighted', action='store_true', help='Use unweighted average.')
     parser.add_argument('--output', required=True, help="Output path.")
     parser.add_argument('--print_evd', default=False, action='store_true', help="Print the EVD to stdout.")
+    parser.add_argument('--single', default=None, type=int, help="Run only a single chromosome.")
     args = parser.parse_args()
 
     ttotal1 = datetime.now()
@@ -133,11 +134,16 @@ def main():
     t2 = datetime.now()
     print("GMAP time: {}".format(t2 - t1), file=sys.stderr)
 
+    if args.single:
+        chrom = args.single
+    else:
+        chrom = list(range(1, 23))
+
     # Loop over chromosomes to determine the number of IBD segments and the total length of IBD segments.
     t1 = datetime.now()
     breakpoints = 0
     total = 0
-    map_args = [(args.prefix + args.suffix.format(i=i, j=args.at), gmap) for i in range(1, 23)]
+    map_args = [(args.prefix + args.suffix.format(i=i, j=args.at), gmap) for i in chrom]
     with mp.Pool() as pool:
         results = pool.starmap(ibdlen, map_args)
     for result in results:
@@ -155,7 +161,7 @@ def main():
 
     # Loop over chromosomes again to fill the arrays.
     idx = 0
-    for i in range(1, 23):
+    for i in chrom:
         start_idx = idx
         for j in range(args.at, args.at + args.nruns):
             idx = start_idx
