@@ -125,6 +125,7 @@ def main():
     parser.add_argument('--output', required=True, help="Output path.")
     parser.add_argument('--print_evd', default=False, action='store_true', help="Print the EVD to stdout.")
     parser.add_argument('--single', default=None, type=int, help="Run only a single chromosome.")
+    parser.add_argument('--no_avg', default=False, action='store_true', help="Don't calculate the genomewide average.")
     args = parser.parse_args()
 
     ttotal1 = datetime.now()
@@ -187,7 +188,9 @@ def main():
                     idx += 1
 
     # Calculate the average and subtract it from the data.
-    if args.unweighted:
+    if args.no_avg:
+        avgs = np.zeros(args.nperm * args.nruns + 1)
+    elif args.unweighted:
         avgs = np.mean(data, axis=0)
     else:
         avgs = np.matmul(data.T, ibdfrac)
