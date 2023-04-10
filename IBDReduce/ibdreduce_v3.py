@@ -136,7 +136,7 @@ def main():
     print("GMAP time: {}".format(t2 - t1), file=sys.stderr)
 
     if args.single:
-        chrom = args.single
+        chrom = [args.single]
     else:
         chrom = list(range(1, 23))
 
