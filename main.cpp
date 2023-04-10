@@ -136,6 +136,9 @@ int main(int argc, char *argv[]) {
   app.add_flag("--compressed-memory",
                params.compressed_memory,
                "Use significantly less memory at the cost of 3x-5x longer runtime.");
+  app.add_flag("--cscs_only",
+               params.cscs_only,
+               "Use only the case/case rate when outputting test statistics.");
 
   CLI11_PARSE(app, argc, argv);
 

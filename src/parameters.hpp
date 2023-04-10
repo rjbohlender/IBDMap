@@ -27,6 +27,7 @@ public:
     std::optional<std::string> read_permutations;
     bool swap = false;
     bool contcont = false;
+    bool cscs_only = false;
     double min_dist;
     std::optional<double> rsquared;
     bool verbose = false;

@@ -117,6 +117,8 @@ Statistic<T>::calculate(T &phenotypes_, bool original_) noexcept {
         cscn *= common / static_cast<double>((*indexer).case_cont);
         cncn *= common / static_cast<double>((*indexer).cont_cont);
         statistic = static_cast<double>(cscs - cscn - cncn) / common;
+    } else if(params.cscs_only) {
+        statistic = static_cast<double>(cscs) / static_cast<double>((*indexer).case_case);
     } else {
         arma::uword common = std::lcm((*indexer).case_case, (*indexer).case_cont);
         cscs *= common / static_cast<double>((*indexer).case_case);
