@@ -63,7 +63,7 @@ int main(int argc, char *argv[]) {
 				 params.min_dist,
 				 "Sets the minimum genetic distance between breakpoints. "
 				 "The parser will automatically skip breakpoints that are "
-				 "closer than the given distance. Default value of 0.5 cM.")->default_val(0.5);
+				 "closer than the given distance. Default value of 0.5 cM.")->default_val(0.05);
   app.add_option("--cm",
 				 params.cM,
 				 "Sets the minimum segment length for segments to be included. "
