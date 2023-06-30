@@ -126,7 +126,6 @@ def main():
     parser.add_argument('--print_evd', default=False, action='store_true', help="Print the EVD to stdout.")
     parser.add_argument('--single', default=None, type=int, help="Run only a single chromosome.")
     parser.add_argument('--no_avg', default=False, action='store_true', help="Don't calculate the genomewide average.")
-    parser.add_argument('--single', default=None, type=int, help="Run only a single chromosome.")
     parser.add_argument('--null', default=None, type=int,
                         help="Run an alternate single chromosome for the null distribution. Requires --single. Implies --unweighted.")
     args = parser.parse_args()
