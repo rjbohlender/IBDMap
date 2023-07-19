@@ -128,6 +128,8 @@ def main():
     parser.add_argument('--no_avg', default=False, action='store_true', help="Don't calculate the genomewide average.")
     parser.add_argument('--null', default=None, type=int,
                         help="Run an alternate single chromosome for the null distribution. Requires --single. Implies --unweighted.")
+    parser.add_argument('--fdr', default=False, action='store_true',
+                        help="Control FDR instead of FWE.")
     args = parser.parse_args()
 
     ttotal1 = datetime.now()
@@ -217,12 +219,12 @@ def main():
     # Calculate the empirical p-value.
     succ = np.zeros(breakpoints)
     for i in range(1, args.nperm * args.nruns + 1):
-        succ += data[:, 0] >= data[:, i]
+        succ += data[:, 0] <= data[:, i]
     empp = (succ + 1.) / (args.nperm * args.nruns + 1)
 
     # Generate the evd
     data = data[:, 1:]
-    data = stats.rankdata(data, axis=1) / (args.nperm * args.nruns + 1)
+    data = stats.rankdata(-data, axis=1) / (args.nperm * args.nruns + 1)
     evd = np.min(data, axis=0)
 
     if args.print_evd:
@@ -238,6 +240,24 @@ def main():
     upper = stats.chi2.ppf(0.975, 2 * succ + 2) / 2.
     lower = stats.chi2.ppf(0.025, 2 * succ) / 2.
     lower[np.isnan(lower)] = 0
+
+    if args.fdr:
+        memoize = {}
+        for i, p in enumerate(empp):
+            # Adjusted p-value
+            if p in memoize:
+                Rstar = memoize[p]
+            else:
+                Rstar = np.sum(data <= p, axis=0)
+                memoize[p] = Rstar
+            rp = np.sum(data[i, :] <= p)
+            pm = p * data.shape[0]
+            rb = np.percentile(Rstar, 95)
+            if rp - rb >= pm:
+                adjp[i] = np.mean(Rstar / (Rstar + rp - pm))
+            else:
+                adjp[i] = sum(Rstar >= 1) / len(Rstar)
+
 
     # Generate header information and write results to file.
     opf = open(f'{args.output}', 'w')
