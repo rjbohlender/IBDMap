@@ -320,19 +320,6 @@ def main():
                 f"{bp_ids[i][0]}\t{bp_ids[i][1]}\t{ibdfrac[i]}\t{empp[i]}\t{lower[i]},{upper[i]}\t{adjp[i]}\t{cutoff}\t{succ[i]}\t{args.nperm * args.nruns}\t{delta[i]}\n"
             )
 
-            # print('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(
-            #     bp_ids[i][0],
-            #     bp_ids[i][1],
-            #     ibdfrac[i],
-            #     empp[i],
-            #     '{},{}'.format(lower[i], upper[i]),
-            #     adjp[i],
-            #     cutoff,
-            #     succ[i],
-            #     args.nperm * args.nruns,
-            #     delta[i]
-            # ), file=opf)
-
     ttotal2 = datetime.now()
     print(f"Total runtime: {ttotal2 - ttotal1}")
 
