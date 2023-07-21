@@ -130,7 +130,13 @@ def main():
                         help="Run an alternate single chromosome for the null distribution. Requires --single. Implies --unweighted.")
     parser.add_argument('--fdr', default=False, action='store_true',
                         help="Control FDR instead of FWE.")
+    parser.add_argument('--two_sided', default=False, action='store_true',
+                        help="Conduct a two_sided test.")
     args = parser.parse_args()
+
+    if args.no_avg and args.two_sided:
+        print("Cannot use --no_avg and --two_sided at the same time.", file=sys.stderr)
+        sys.exit(1)
 
     ttotal1 = datetime.now()
     t1 = datetime.now()
@@ -214,6 +220,8 @@ def main():
         return a - avgs
 
     data = np.apply_along_axis(subtract, 1, data)
+    if args.two_sided:
+        data = np.abs(data)
     delta = data[:, 0]
 
     # Calculate the empirical p-value.
