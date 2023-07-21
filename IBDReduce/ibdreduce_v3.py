@@ -23,18 +23,18 @@ def is_compressed(fpath: Path) -> str:
         A str indicating if the file is compressed (zstd, gzip) or not (no)..
     """
 
-    gzip = b'\x1f\x8b'
-    zstd = b'\x28\xb5\x2f\xfd'
+    gzip = b"\x1f\x8b"
+    zstd = b"\x28\xb5\x2f\xfd"
 
-    with fpath.open('rb') as f:
+    with fpath.open("rb") as f:
         magic = f.read(4)
 
     if magic[:2] == gzip:
-        return 'gzip'
+        return "gzip"
     elif magic == zstd:
-        return 'zstd'
+        return "zstd"
     else:
-        return 'no'
+        return "no"
 
 
 def check_and_open(fpath: str):
@@ -49,12 +49,12 @@ def check_and_open(fpath: str):
     file_ = Path(fpath)
 
     compressed = is_compressed(file_)
-    if compressed == 'gzip':
-        f = gzip.open(str(file_), 'rt')
-    elif compressed == 'zstd':
-        f = zstd.open(str(file_), 'rt')
+    if compressed == "gzip":
+        f = gzip.open(str(file_), "rt")
+    elif compressed == "zstd":
+        f = zstd.open(str(file_), "rt")
     else:
-        f = file_.open('r')
+        f = file_.open("r")
     return f
 
 
@@ -74,7 +74,7 @@ def parse_line(line: str) -> Tuple[int, int, np.ndarray]:
     assert len(line) >= 2
 
     line_start = 5
-    if line[0].startswith('chr'):
+    if line[0].startswith("chr"):
         chrom = int(line[0][3:])
     else:
         chrom = int(line[0])
@@ -101,8 +101,9 @@ def ibdlen(fpath: str, gmap: GeneticMap) -> Tuple[int, float]:
                 dis = gmap.gmap[chrom][pos]
             else:
                 close = gmap.find_nearest(chrom, pos)
-                dis = gmap.gmap[chrom][close[0]] + ((int(pos) - close[0]) / (close[1] - close[0])) * (
-                        gmap.gmap[chrom][close[1]] - gmap.gmap[chrom][close[0]])
+                dis = gmap.gmap[chrom][close[0]] + (
+                    (int(pos) - close[0]) / (close[1] - close[0])
+                ) * (gmap.gmap[chrom][close[1]] - gmap.gmap[chrom][close[0]])
             total += float(dis) - float(predis)
             predis = dis
     return breakpoints, total
@@ -140,7 +141,7 @@ def main():
 
     ttotal1 = datetime.now()
     t1 = datetime.now()
-    gmaps = glob.glob(args.gmap + '/*.gmap.gz')
+    gmaps = glob.glob(args.gmap + "/*.gmap.gz")
     gmap = GeneticMap(gmaps)
     t2 = datetime.now()
     print("GMAP time: {}".format(t2 - t1), file=sys.stderr)
@@ -196,13 +197,18 @@ def main():
                             dis = gmap.gmap[chrom][pos]
                         else:
                             close = gmap.find_nearest(chrom, pos)
-                            dis = gmap.gmap[chrom][close[0]] + ((int(pos) - close[0]) / (close[1] - close[0])) * (
-                                    gmap.gmap[chrom][close[1]] - gmap.gmap[chrom][close[0]])
+                            dis = gmap.gmap[chrom][close[0]] + (
+                                (int(pos) - close[0]) / (close[1] - close[0])
+                            ) * (
+                                gmap.gmap[chrom][close[1]] - gmap.gmap[chrom][close[0]]
+                            )
                         ibdfrac[idx] = (float(dis) - float(predis)) / total
                         predis = dis
-                        data[idx, offset:(args.nperm + 1)] = vals
+                        data[idx, offset : (args.nperm + 1)] = vals
                     else:
-                        data[idx, (offset * args.nperm):((offset + 1) * args.nperm)] = vals[1:]
+                        data[
+                            idx, (offset * args.nperm) : ((offset + 1) * args.nperm)
+                        ] = vals[1:]
                     idx += 1
 
     # Calculate the average and subtract it from the data.
@@ -212,7 +218,7 @@ def main():
         avgs = np.mean(data, axis=0)
     else:
         if args.null:
-            avgs = np.mean(data[null_idx:(null_idx + null_breakpoints), :], axis=0)
+            avgs = np.mean(data[null_idx : (null_idx + null_breakpoints), :], axis=0)
         else:
             avgs = np.matmul(data.T, ibdfrac)
 
@@ -228,7 +234,7 @@ def main():
     succ = np.zeros(breakpoints)
     for i in range(1, args.nperm * args.nruns + 1):
         succ += data[:, 0] <= data[:, i]
-    empp = (succ + 1.) / (args.nperm * args.nruns + 1)
+    empp = (succ + 1.0) / (args.nperm * args.nruns + 1)
 
     # Generate the evd
     data = data[:, 1:]
@@ -242,11 +248,11 @@ def main():
     adjp = np.zeros(breakpoints)
     cutoff = np.percentile(evd, 5)
     for i in range(breakpoints):
-        adjp[i] = stats.percentileofscore(evd, empp[i], kind='weak') / 100.
+        adjp[i] = stats.percentileofscore(evd, empp[i], kind="weak") / 100.0
 
     # Calculate the confidence interval.
-    upper = stats.chi2.ppf(0.975, 2 * succ + 2) / 2.
-    lower = stats.chi2.ppf(0.025, 2 * succ) / 2.
+    upper = stats.chi2.ppf(0.975, 2 * succ + 2) / 2.0
+    lower = stats.chi2.ppf(0.025, 2 * succ) / 2.0
     lower[np.isnan(lower)] = 0
 
     if args.fdr:
@@ -266,33 +272,29 @@ def main():
             else:
                 adjp[i] = sum(Rstar >= 1) / len(Rstar)
 
-
     # Generate header information and write results to file.
-    opf = open(f'{args.output}', 'w')
-    print('# {}'.format(' '.join(sys.argv)), file=opf)
-    print('# Genome-wide Average: {}'.format(avgs[0]), file=opf)
-    print('# Total breakpoints: {}'.format(breakpoints), file=opf)
-    print("CHROM\tPOS\tcM\tPVal\tPValCI\tPAdj\tPAdjCutoff\tSuccess\tPermutation\tDelta", file=opf)
+    with open(args.output, "w", encoding="utf-8") as output_file:
+        # opf = open(f'{args.output}', 'w')
+        output_file.write(f"{' '.join(sys.argv)}\n")
+        # print('# {}'.format(' '.join(sys.argv)), file=opf)
+        output_file.write(f"# Genome-wide Average: {avgs[0]}\n")
+        # print('# Genome-wide Average: {}'.format(avgs[0]), file=opf)
+        output_file.write(f"# Total breakpoints: {breakpoints}\n")
+        # print('# Total breakpoints: {}'.format(breakpoints), file=opf)
+        output_file.write(
+            "CHROM\tPOS\tcM\tPVal\tPValCI\tPAdj\tPAdjCutoff\tSuccess\tPermutation\tDelta\n"
+        )
 
-    idx = np.argsort(empp)
+        idx = np.argsort(empp)
 
-    for i in idx:
-        print('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(
-            bp_ids[i][0],
-            bp_ids[i][1],
-            ibdfrac[i],
-            empp[i],
-            '{},{}'.format(lower[i], upper[i]),
-            adjp[i],
-            cutoff,
-            succ[i],
-            args.nperm * args.nruns,
-            delta[i]
-        ), file=opf)
+        for i in idx:
+            output_file.write(
+                f"{bp_ids[i][0]}\t{bp_ids[i][1]}\t{ibdfrac[i]}\t{empp[i]}\t{lower[i]},{upper[i]}\t{adjp[i]}\t{cutoff}\t{succ[i]}\t{args.nperm * args.nruns}\t{delta[i]}\n"
+            )
+
     ttotal2 = datetime.now()
-    print('Total runtime: {}'.format(ttotal2 - ttotal1), file=sys.stderr)
+    print(f"Total runtime: {ttotal2 - ttotal1}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-
