@@ -302,13 +302,9 @@ def main():
 
     # Generate header information and write results to file.
     with open(args.output, "w", encoding="utf-8") as output_file:
-        # opf = open(f'{args.output}', 'w')
-        output_file.write(f"{' '.join(sys.argv)}\n")
-        # print('# {}'.format(' '.join(sys.argv)), file=opf)
+        output_file.write(f"# {' '.join(sys.argv)}\n")
         output_file.write(f"# Genome-wide Average: {avgs[0]}\n")
-        # print('# Genome-wide Average: {}'.format(avgs[0]), file=opf)
         output_file.write(f"# Total breakpoints: {breakpoints}\n")
-        # print('# Total breakpoints: {}'.format(breakpoints), file=opf)
         output_file.write(
             "CHROM\tPOS\tcM\tPVal\tPValCI\tPAdj\tPAdjCutoff\tSuccess\tPermutation\tDelta\n"
         )
