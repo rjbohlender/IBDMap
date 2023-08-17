@@ -256,17 +256,22 @@ def main():
     lower[np.isnan(lower)] = 0
 
     if args.fdr:
+        # Permutation p-values are likely to be repeated so we save on computation at the cost of memory
         memoize = {}
         for i, p in enumerate(empp):
-            # Adjusted p-value
+            # Rstar is the distribution of rejected null hypotheses over permutations
             if p in memoize:
                 Rstar = memoize[p]
             else:
                 Rstar = np.sum(data <= p, axis=0)
                 memoize[p] = Rstar
-            rp = np.sum(data[i, :] <= p)
+            # rp is the number of rejected null hypotheses in the observed set
+            rp = np.sum(data[:, 0] <= p)
+            # pm is the expected number of rejected null hypotheses at a given alpha = p
             pm = p * data.shape[0]
+            # rb is the 95th percentile of the Rstar distribution
             rb = np.percentile(Rstar, 95)
+            # Condition for applying the fdr adjustment
             if rp - rb >= pm:
                 adjp[i] = np.mean(Rstar / (Rstar + rp - pm))
             else:
@@ -274,13 +279,9 @@ def main():
 
     # Generate header information and write results to file.
     with open(args.output, "w", encoding="utf-8") as output_file:
-        # opf = open(f'{args.output}', 'w')
         output_file.write(f"{' '.join(sys.argv)}\n")
-        # print('# {}'.format(' '.join(sys.argv)), file=opf)
         output_file.write(f"# Genome-wide Average: {avgs[0]}\n")
-        # print('# Genome-wide Average: {}'.format(avgs[0]), file=opf)
         output_file.write(f"# Total breakpoints: {breakpoints}\n")
-        # print('# Total breakpoints: {}'.format(breakpoints), file=opf)
         output_file.write(
             "CHROM\tPOS\tcM\tPVal\tPValCI\tPAdj\tPAdjCutoff\tSuccess\tPermutation\tDelta\n"
         )
