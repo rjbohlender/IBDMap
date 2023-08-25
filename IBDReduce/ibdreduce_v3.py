@@ -166,7 +166,7 @@ def main():
     map_args = [(args.prefix + args.suffix.format(i=i, j=args.at), gmap) for i in chrom]
     if args.null:
         null_idx = chrom.index(args.null)
-    with mp.Pool(processes=min(mp.cpu_count, len(map_args))) as pool:
+    with mp.Pool(processes=min(mp.cpu_count(), len(map_args))) as pool:
         results = pool.starmap(ibdlen, map_args)
     for i, result in enumerate(results):
         breakpoints += result[0]
