@@ -1,11 +1,10 @@
 import glob
 import argparse as ap
 import sys
-from itertools import starmap
 import multiprocessing as mp
 import gzip
 import zstandard as zstd
-from typing import Dict, List, Tuple
+from typing import Tuple
 from geneticmap import GeneticMap
 from pathlib import Path
 from datetime import datetime
@@ -20,18 +19,18 @@ def is_compressed(fpath: Path) -> str:
         fpath: The path to the file to check.
 
     Returns:
-        A str indicating if the file is compressed (zstd, gzip) or not (no)..
+        A str indicating if the file is compressed (zstd, gzip) or not (no).
     """
 
-    gzip = b"\x1f\x8b"
-    zstd = b"\x28\xb5\x2f\xfd"
+    gzip_magic = b"\x1f\x8b"
+    zstd_magic = b"\x28\xb5\x2f\xfd"
 
     with fpath.open("rb") as f:
         magic = f.read(4)
 
-    if magic[:2] == gzip:
+    if magic[:2] == gzip_magic:
         return "gzip"
-    elif magic == zstd:
+    elif magic == zstd_magic:
         return "zstd"
     else:
         return "no"
@@ -126,14 +125,19 @@ def main():
     parser.add_argument('--output', required=True, help="Output path.")
     parser.add_argument('--print_evd', default=False, action='store_true', help="Print the EVD to stdout.")
     parser.add_argument('--single', default=None, type=int, help="Run only a single chromosome.")
-    parser.add_argument('--no_avg', default=False, action='store_true', help="Don't calculate the genomewide average.")
+    parser.add_argument('--no_avg', default=False, action='store_true',
+                        help="Don't calculate the genomewide average.")
     parser.add_argument('--null', default=None, type=int,
-                        help="Run an alternate single chromosome for the null distribution. Requires --single. Implies --unweighted.")
+                        help="Run an alternate chromosome for the null dist. Requires --single. Implies --unweighted.")
     parser.add_argument('--fdr', default=False, action='store_true',
                         help="Control FDR instead of FWE.")
     parser.add_argument('--two_sided', default=False, action='store_true',
                         help="Conduct a two_sided test.")
     args = parser.parse_args()
+
+    if args.null and not args.single:
+        print("--null requires --single.", file=sys.stderr)
+        sys.exit(1)
 
     if args.no_avg and args.two_sided:
         print("Cannot use --no_avg and --two_sided at the same time.", file=sys.stderr)
@@ -157,10 +161,12 @@ def main():
     t1 = datetime.now()
     breakpoints = 0
     total = 0
+    null_idx = 0
+    null_breakpoints = 0
     map_args = [(args.prefix + args.suffix.format(i=i, j=args.at), gmap) for i in chrom]
     if args.null:
         null_idx = chrom.index(args.null)
-    with mp.Pool() as pool:
+    with mp.Pool(processes=min(mp.cpu_count, len(map_args))) as pool:
         results = pool.starmap(ibdlen, map_args)
     for i, result in enumerate(results):
         breakpoints += result[0]
@@ -204,10 +210,10 @@ def main():
                             )
                         ibdfrac[idx] = (float(dis) - float(predis)) / total
                         predis = dis
-                        data[idx, offset : (args.nperm + 1)] = vals
+                        data[idx, offset:(args.nperm + 1)] = vals
                     else:
                         data[
-                            idx, (offset * args.nperm) : ((offset + 1) * args.nperm)
+                            idx, (offset * args.nperm):((offset + 1) * args.nperm)
                         ] = vals[1:]
                     idx += 1
 
@@ -218,7 +224,7 @@ def main():
         avgs = np.mean(data, axis=0)
     else:
         if args.null:
-            avgs = np.mean(data[null_idx : (null_idx + null_breakpoints), :], axis=0)
+            avgs = np.mean(data[null_idx:(null_idx + null_breakpoints), :], axis=0)
         else:
             avgs = np.matmul(data.T, ibdfrac)
 
@@ -255,8 +261,11 @@ def main():
     lower = stats.chi2.ppf(0.025, 2 * succ) / 2.0
     lower[np.isnan(lower)] = 0
 
+    upper /= data.shape[1]
+    lower /= data.shape[1]
+
     if args.fdr:
-        # Permutation p-values are likely to be repeated so we save on computation at the cost of memory
+        # Permutation p-values are likely to be repeated, so we save on computation at the cost of memory
         memoize = {}
         for i, p in enumerate(empp):
             # Rstar is the distribution of rejected null hypotheses over permutations
