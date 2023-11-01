@@ -57,7 +57,7 @@ def check_and_open(fpath: str):
     return f
 
 
-def parse_line(line: str) -> Tuple[int, int, np.ndarray]:
+def parse_line(line: str) -> Tuple[int, int, np.ndarray, np.ndarray]:
     """Line parser.
 
     Example line pair:
@@ -78,8 +78,9 @@ def parse_line(line: str) -> Tuple[int, int, np.ndarray]:
     else:
         chrom = int(line[0])
     pos = int(line[1])
+    obs_parts = np.array([float(line[2]), float(line[3]), float(line[4])])
     vals = np.array([float(x) for x in line[line_start:]], dtype=np.float64)
-    return chrom, pos, vals
+    return chrom, pos, obs_parts, vals
 
 
 def ibdlen(fpath: str, gmap: GeneticMap) -> Tuple[int, float]:
@@ -93,7 +94,7 @@ def ibdlen(fpath: str, gmap: GeneticMap) -> Tuple[int, float]:
     predis = 0
     with check_and_open(fpath) as f:
         for line in f:
-            chrom, pos, vals = parse_line(line)
+            chrom, pos, obs, vals = parse_line(line)
             breakpoints += 1
 
             if pos in gmap.gmap[chrom]:
@@ -106,6 +107,22 @@ def ibdlen(fpath: str, gmap: GeneticMap) -> Tuple[int, float]:
             total += float(dis) - float(predis)
             predis = dis
     return breakpoints, total
+
+
+def parse_pheno(ifile):
+    """
+
+    :param ifile:
+    :return:
+    """
+    data = {'0': 0, '1': 0, 'NA': 0}
+    with open(ifile, 'r') as f:
+        for i, l in enumerate(f):
+            if i == 0:
+                continue
+            l = l.strip().split()
+            data[l[1]] += 1
+    return data['1'], data['0']
 
 
 def main():
@@ -133,6 +150,7 @@ def main():
                         help="Control FDR instead of FWE.")
     parser.add_argument('--two_sided', default=False, action='store_true',
                         help="Conduct a two_sided test.")
+    parser.add_argument("--lrt", default=None, help="Calculate likelihood ratio at each breakpoint. Requires phenotype file as argument.")
     args = parser.parse_args()
 
     if args.null and not args.single:
@@ -185,6 +203,7 @@ def main():
 
     # Loop over chromosomes again to fill the arrays.
     idx = 0
+    obs_rates = np.zeros((breakpoints, 3), dtype=np.float64)
     for i in chrom:
         start_idx = idx
         if args.null and i == args.null:
@@ -196,8 +215,9 @@ def main():
             predis = 0
             with check_and_open(fpath) as f:
                 for line in f:
-                    chrom, pos, vals = parse_line(line)
+                    chrom, pos, obs, vals = parse_line(line)
                     if offset == 0:
+                        obs_rates[idx,:] = obs
                         bp_ids.append((chrom, pos))
                         if pos in gmap.gmap[chrom]:
                             dis = gmap.gmap[chrom][pos]
@@ -227,6 +247,34 @@ def main():
             avgs = np.mean(data[null_idx:(null_idx + null_breakpoints), :], axis=0)
         else:
             avgs = np.matmul(data.T, ibdfrac)
+
+    # Likelihood ratio for localization
+    llik_ratio = np.zeros(breakpoints)
+    if args.lrt:
+        ncase, ncontrol = parse_pheno(args.lrt)
+
+        cscs = ncase * (ncase - 1.) / 2.
+        cscn = ncase * ncontrol
+
+        obs_counts = obs_rates[:, 0:2]
+
+        obs_counts[:, 0] *= cscs
+        obs_counts[:, 1] *= cscn
+        obs_counts = obs_counts.astype(np.int64)
+
+        weights = np.array([cscs / (cscs + cscn), cscn / (cscs + cscn)])
+
+        mean_counts = np.sum(obs_counts * weights, 1)
+        mean_counts = mean_counts.astype(np.int64)
+        mean_rates = np.sum(obs_rates[:, 0:2] * weights, 1)
+
+        for i in range(len(mean_rates)):
+            null = stats.poisson.logpmf(obs_counts[i, 0], weights[0] * mean_counts[i])
+            null += stats.poisson.logpmf(obs_counts[i, 1], weights[1] * mean_counts[i])
+            alt = stats.poisson.logpmf(obs_counts[i, 0], obs_counts[i, 0])
+            alt += stats.poisson.logpmf(obs_counts[i, 1], obs_counts[i, 1])
+
+            llik_ratio[i] = -2 * (null - alt)
 
     def subtract(a):
         return a - avgs
@@ -288,19 +336,29 @@ def main():
 
     # Generate header information and write results to file.
     with open(args.output, "w", encoding="utf-8") as output_file:
-        output_file.write(f"{' '.join(sys.argv)}\n")
+        output_file.write(f"#  {' '.join(sys.argv)}\n")
         output_file.write(f"# Genome-wide Average: {avgs[0]}\n")
         output_file.write(f"# Total breakpoints: {breakpoints}\n")
-        output_file.write(
-            "CHROM\tPOS\tcM\tPVal\tPValCI\tPAdj\tPAdjCutoff\tSuccess\tPermutation\tDelta\n"
-        )
+        if args.lrt:
+            output_file.write(
+                "CHROM\tPOS\tcM\tPVal\tPValCI\tPAdj\tPAdjCutoff\tSuccess\tPermutation\tDelta\tLLik\n"
+            )
+        else:
+            output_file.write(
+                "CHROM\tPOS\tcM\tPVal\tPValCI\tPAdj\tPAdjCutoff\tSuccess\tPermutation\tDelta\n"
+            )
 
         idx = np.argsort(empp)
 
         for i in idx:
-            output_file.write(
-                f"{bp_ids[i][0]}\t{bp_ids[i][1]}\t{ibdfrac[i]}\t{empp[i]}\t{lower[i]},{upper[i]}\t{adjp[i]}\t{cutoff}\t{succ[i]}\t{args.nperm * args.nruns}\t{delta[i]}\n"
-            )
+            if args.lrt:
+                output_file.write(
+                    f"{bp_ids[i][0]}\t{bp_ids[i][1]}\t{ibdfrac[i]}\t{empp[i]}\t{lower[i]},{upper[i]}\t{adjp[i]}\t{cutoff}\t{succ[i]}\t{args.nperm * args.nruns}\t{delta[i]}\t{llik_ratio[i]}\n"
+                )
+            else:
+                output_file.write(
+                    f"{bp_ids[i][0]}\t{bp_ids[i][1]}\t{ibdfrac[i]}\t{empp[i]}\t{lower[i]},{upper[i]}\t{adjp[i]}\t{cutoff}\t{succ[i]}\t{args.nperm * args.nruns}\t{delta[i]}\n"
+                )
 
     ttotal2 = datetime.now()
     print(f"Total runtime: {ttotal2 - ttotal1}")
