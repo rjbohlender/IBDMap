@@ -37,11 +37,24 @@ if (UNIX)
 endif()
 
 set(PROJECT_SUPPORT_FILES
+    third_party/stocc/stocc.h
+    third_party/stocc/stoc1.cpp
+    third_party/stocc/stoc2.cpp
+    third_party/stocc/stoc3.cpp
+    third_party/stocc/fnchyppr.cpp
+    third_party/stocc/wnchyppr.cpp
+    third_party/stocc/erfres.cpp
+    third_party/stocc/randomc.h
+    third_party/stocc/mersenne.cpp
+    third_party/stocc/userintf.cpp
+    third_party/stocc/sfmt.h
+    third_party/stocc/sfmt.cpp
     src/jointhreads.hpp
     src/parser.hpp
     src/split.hpp
-        src/iscompressed.hpp
-    src/statistic.cpp src/statistic.hpp
+    src/iscompressed.hpp
+    src/statistic.cpp
+    src/statistic.hpp
     src/threadpool.hpp
     src/parameters.hpp
     src/threadsafequeue.hpp
@@ -58,15 +71,29 @@ set(PROJECT_SUPPORT_FILES
     src/source.cpp
     src/source.hpp
     src/inputvalidator.cpp
-    src/inputvalidator.hpp src/phenotypes.cpp src/phenotypes.hpp)
+    src/inputvalidator.hpp
+    src/phenotypes.cpp
+    src/phenotypes.hpp
+    src/glm.hpp
+    src/permutation.hpp
+    src/permutation.cpp
+    link/family.hpp
+    link/family.cpp
+    link/binomial.hpp
+    link/binomial.cpp
+    link/gaussian.hpp
+    link/gaussian.cpp)
 
 set(IBDLIB_SOURCE_FILES
-        src/ibdlib.hpp
-        src/ibdlib.cpp
-        src/split.hpp
-        src/geneticmap.hpp
-        src/inputvalidator.hpp
-        src/inputvalidator.cpp src/ibdlibclasses.hpp)
+    src/ibdlib.hpp
+    src/ibdlib.cpp
+    src/split.hpp
+    src/geneticmap.hpp
+    src/inputvalidator.hpp
+    src/inputvalidator.cpp src/ibdlibclasses.hpp
+    src/glm.hpp
+    src/permutation.hpp
+    src/permutation.cpp)
 
 include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party")
 include_directories(${ARMADILLO_INCLUDE_DIRS})
@@ -104,5 +131,4 @@ if(benchmark_FOUND)
     target_link_libraries(ibdBench ${ARMADILLO_LIBRARIES})
     target_link_libraries(ibdBench ${Python3_LIBRARIES} ${Boost_LIBRARIES})
     target_link_libraries(ibdBench ${ZLIB_LIBRARIES})
-
 endif()

@@ -19,6 +19,7 @@ public:
     std::string pheno;
     std::string gmap;
     std::optional<std::string> info;
+    std::optional<std::string> cov;
     size_t nperms;
     size_t nthreads;
     std::string output_path;

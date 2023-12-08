@@ -11,6 +11,7 @@
 #include <vector>
 #include <memory>
 #include <pcg_random.hpp>
+#include <stocc/stocc.h>
 
 template <typename T>
 class Phenotypes {
@@ -18,7 +19,13 @@ class Phenotypes {
 
     pcg64 gen;
 
+    std::optional<arma::mat> cov;
+
+    unsigned long cov_lines = 0;
+
     void parse(std::istream &is);
+    void parse_cov();
+    void count_cov();
     void create_indexers();
     void shuffle();
     void pad_phenotypes();

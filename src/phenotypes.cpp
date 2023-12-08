@@ -3,6 +3,9 @@
 //
 
 #include "phenotypes.hpp"
+#include "../link/binomial.hpp"
+#include "glm.hpp"
+#include "permutation.hpp"
 #include "split.hpp"
 #include <SugarPP/include/sugarpp/range/enumerate.hpp>
 #include <armadillo>
@@ -32,7 +35,7 @@ void Phenotypes<T>::parse(std::istream &is) {
             samples->push_back(splitter[iid]);
             (*phenotypes)[0].push_back(static_cast<int8_t>(std::stoi(splitter[phe])));
             lookup[splitter[iid]] = (*phenotypes)[0].back();
-                    // Checking for erroneous (*phenotypes)
+            // Checking for erroneous (*phenotypes)
             if ((*phenotypes)[0].back() < 0 || (*phenotypes)[0].back() > 1) {
                 if (params.verbose) {
                     fmt::print(std::cerr, "{} {}\n", splitter[0], splitter[phe]);
@@ -78,6 +81,9 @@ void Phenotypes<T>::parse(std::istream &is) {
         }
         ifs.close();
     } else {
+        if (params.cov) {
+            parse_cov();
+        }
         shuffle();
     }
 #if 0
@@ -98,7 +104,102 @@ void Phenotypes<T>::parse(std::istream &is) {
     fmt::print(std::cerr, "Time spent generating permutations: {}\n", timer.toc());
 }
 
+template<typename T>
+void Phenotypes<T>::count_cov() {
+    std::ifstream ifs(*params.cov);
+    std::string line;
+    unsigned long lineno = 0;
+    while(std::getline(ifs, line)) {
+        lineno++;
+    }
+    cov_lines = lineno - 1;
+}
+
 /**
+ * @brief Parse covariate file
+ * @tparam T Type of phenotype vector
+ */
+template<typename T>
+void Phenotypes<T>::parse_cov() {
+    using namespace RJBUtil;
+
+    count_cov();
+
+    std::ifstream ifs(*params.cov);
+    std::string line;
+    unsigned long lineno = 0;
+    std::vector<std::string> cov_samples;
+
+    // Parse covariate values
+    while(std::getline(ifs, line)) {
+        lineno++;
+        Splitter<std::string> split(line, " \t");
+        if (lineno == 1) { // Handle header
+            if (static_cast<long>(split.size()) - 1 <= 0) { // Error out for misformatted file
+                throw(std::runtime_error("ERROR: Provided covariate file does not match expected format. sampleID y1 y2 y3 ..."));
+            }
+            cov = arma::mat(cov_lines, split.size() - 1, arma::fill::zeros);
+            continue;
+        }
+
+        unsigned long col = 0;
+        for (const auto &v : split) {
+            if (col == 0) {
+                cov_samples.push_back(v);
+                col++;
+                continue;
+            }
+            (*cov)(lineno - 2, col - 1) = std::stod(v);
+            col++;
+        }
+    }
+
+    // Sort values
+    IndexSort indexsort(cov_samples);
+    indexsort.sort_vector(cov_samples);
+    cov = (*cov)(arma::conv_to<arma::uvec>::from(indexsort.idx));
+
+    // Prune samples that lack covariates or phenotypes
+    int i, j;
+    if (cov_samples.size() > samples->size()) {
+        for (i = 0, j = 0; i < cov_samples.size();) {
+            if (cov_samples[i] == (*samples)[j]) {
+                i++;
+                j++;
+            } else {
+                while (cov_samples[i] != (*samples)[j]) {
+                    cov_samples.erase(cov_samples.begin() + i);
+                    (*cov).shed_row(i);
+                }
+            }
+        }
+    } else if (cov_samples.size() < samples->size()) {
+        for (i = 0, j = 0; i < samples->size();) {
+            if (cov_samples[i] == (*samples)[j]) {
+                i++;
+                j++;
+            } else {
+                while (cov_samples[i] != (*samples)[j]) {
+                    samples->erase(samples->begin() + i);
+                }
+            }
+        }
+    }
+    if (cov_samples.size() != samples->size()) {
+        throw(std::runtime_error("ERROR: Covariate file does not match phenotype file."));
+    }
+    // Check that all cov_samples equal samples
+    for (const auto &[i, v] : Enumerate(cov_samples)) {
+        if (v != (*samples)[i]) {
+            throw(std::runtime_error("ERROR: Covariate file does not match phenotype file."));
+        }
+    }
+}
+
+/**
+ * @brief Pad phenotypes to allow for vectorized reads past the end of the vector
+ * @tparam T Type of phenotype vector
+ *
  * Makes sure that we can do vectorized reads a little bit past the end of phenotypes without a segfault
  * Necessary for a vectorized gather from phenotypes, in Statistic::calculate
  */
@@ -140,12 +241,26 @@ void Phenotypes<T>::create_indexers() {
 
 template<typename T>
 void Phenotypes<T>::shuffle() {
-    for (int i = 1; i < params.nperms + 1; i++) {
-        (*phenotypes)[i] = (*phenotypes)[i - 1];
-        for (int j = (*phenotypes)[0].size() - 1; j > 0; j--) {
-            std::uniform_int_distribution<> dis(0, j);
-            int k = dis(gen);
-            std::swap((*phenotypes)[i][j], (*phenotypes)[i][k]);
+    if (params.cov) {
+        // Fit glm to covariates
+        arma::mat design = arma::join_horiz(arma::ones<arma::mat>(cov->n_rows, 1), *cov);
+        arma::vec Y((*phenotypes)[0].size());
+        for (const auto &[i, v] : Enumerate((*phenotypes)[0])) {
+            Y(i) = v;
+        }
+        Binomial link("logit");
+        GLM glm(design, Y, link, "irls");
+        Permute<T> permute(params.seed);
+        arma::vec odds = arma::exp(glm.mu_);
+        permute.generate_permutations(phenotypes, odds, indexer->case_count, params.nperms, params.nthreads, 0.0001);
+    } else {
+        for (int i = 1; i < params.nperms + 1; i++) {
+            (*phenotypes)[i] = (*phenotypes)[i - 1];
+            for (int j = (*phenotypes)[0].size() - 1; j > 0; j--) {
+                std::uniform_int_distribution<> dis(0, j);
+                int k = dis(gen);
+                std::swap((*phenotypes)[i][j], (*phenotypes)[i][k]);
+            }
         }
     }
 }
@@ -156,6 +271,7 @@ Phenotypes<T>::Phenotypes(Parameters params_, std::seed_seq &seed_source) : para
     phenotypes = std::make_shared<std::vector<T>>();
     std::ifstream ifs(params.pheno);
     parse(ifs);
+
 }
 
 template class Phenotypes<pheno_vector>;

@@ -49,6 +49,9 @@ int main(int argc, char *argv[]) {
   app.add_option("--info",
 				 params.info,
 				 "Path to supporting info file. Expected format is chr segID ...")->check(CLI::ExistingFile);
+  app.add_option("--cov",
+                 params.cov,
+                 "Path to supporting covariates file. Expected format is sampleID cov1 cov2 ...")->check(CLI::ExistingFile);
   app.add_option("-t,--threads",
 				 params.nthreads,
 				 "Number of threads used in execution. 2 threads are reserved for parsing and output.")->default_val(std::thread::hardware_concurrency() - 1);
