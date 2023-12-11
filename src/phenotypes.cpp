@@ -162,7 +162,7 @@ void Phenotypes<T>::parse_cov() {
     // Prune samples that lack covariates or phenotypes
     int i, j;
     if (cov_samples.size() > samples->size()) {
-        for (i = 0, j = 0; i < cov_samples.size();) {
+        for (i = 0, j = 0; i < cov_samples.size() && j < (*samples).size();) {
             if (cov_samples[i] == (*samples)[j]) {
                 i++;
                 j++;
@@ -173,8 +173,12 @@ void Phenotypes<T>::parse_cov() {
                 }
             }
         }
+        while (i < cov_samples.size()) {
+            cov_samples.erase(cov_samples.begin() + i);
+            (*cov).shed_row(i);
+        }
     } else if (cov_samples.size() < samples->size()) {
-        for (i = 0, j = 0; i < samples->size();) {
+        for (i = 0, j = 0; i < cov_samples.size() && j < samples->size();) {
             if (cov_samples[i] == (*samples)[j]) {
                 i++;
                 j++;
@@ -183,6 +187,9 @@ void Phenotypes<T>::parse_cov() {
                     samples->erase(samples->begin() + i);
                 }
             }
+        }
+        while (j < (*samples).size()) {
+            samples->erase(samples->begin() + j);
         }
     }
     if (cov_samples.size() != samples->size()) {
