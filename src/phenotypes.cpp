@@ -18,6 +18,7 @@ void Phenotypes<T>::parse(std::istream &is) {
     int phe = params.pheno_col;
     std::string line;
     arma::uword lineno = 0;
+    std::set<std::string> sample_set;
 
     // column 0 is the original (*phenotypes)
     (*phenotypes).resize(params.nperms + 1);
@@ -32,6 +33,10 @@ void Phenotypes<T>::parse(std::istream &is) {
         if (splitter[phe] == "NA" || splitter[phe] == "-9") {
             continue;
         } else {
+            if (sample_set.find(splitter[iid]) != sample_set.end()) {
+                throw(std::runtime_error(fmt::format("Duplicate sample ID: {}", splitter[iid])));
+            }
+            sample_set.insert(splitter[iid]);
             samples->push_back(splitter[iid]);
             (*phenotypes)[0].push_back(static_cast<int8_t>(std::stoi(splitter[phe])));
             lookup[splitter[iid]] = (*phenotypes)[0].back();
@@ -159,8 +164,26 @@ void Phenotypes<T>::parse_cov() {
     indexsort.sort_vector(cov_samples);
     cov = (*cov)(arma::conv_to<arma::uvec>::from(indexsort.idx));
 
-    // Prune samples that lack covariates or phenotypes
+    // Verify that samples are present. If not, throw an error
     int i, j;
+    if (cov_samples.size() >= samples->size()) {
+        std::set<std::string> cov_set(cov_samples.begin(), cov_samples.end());
+        for (const auto &s : *samples) {
+            if (cov_set.find(s) == cov_set.end()) {
+                throw(std::runtime_error(fmt::format("ERROR: Sample {} not found in covariate file.", s)));
+            }
+        }
+    } else {
+        std::set<std::string> sample_set(samples->begin(), samples->end());
+        for (const auto &s : cov_samples) {
+            if (sample_set.find(s) == sample_set.end()) {
+                throw(std::runtime_error(fmt::format("ERROR: Sample {} not found in phenotype file.", s)));
+            }
+        }
+    }
+
+    // Prune samples that lack covariates or phenotypes
+    int deleted = 0;
     if (cov_samples.size() > samples->size()) {
         for (i = 0, j = 0; i < cov_samples.size() && j < (*samples).size();) {
             if (cov_samples[i] == (*samples)[j]) {
@@ -170,6 +193,7 @@ void Phenotypes<T>::parse_cov() {
                 while (cov_samples[i] != (*samples)[j]) {
                     cov_samples.erase(cov_samples.begin() + i);
                     (*cov).shed_row(i);
+                    deleted++;
                 }
             }
         }
