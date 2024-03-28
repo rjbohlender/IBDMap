@@ -282,7 +282,29 @@ void Phenotypes<T>::shuffle() {
         Binomial link("logit");
         GLM glm(design, Y, link, "irls");
         Permute<T> permute(params.seed);
-        arma::vec odds = arma::exp(glm.mu_);
+        arma::vec odds = arma::exp(glm.eta_);
+        std::cerr << glm.beta_;
+        // Find unique values in odds
+        std::map<double, int> unique_odds;
+        for (const auto &o : odds) {
+            unique_odds[o]++;
+        }
+        std::cerr << "Unique odds: " << unique_odds.size() << std::endl;
+        for (const auto &[k, v] : unique_odds) {
+            std::cerr << k << " " << v << std::endl;
+        }
+        arma::vec prob = arma::exp(glm.eta_) / (1 + arma::exp(glm.eta_));
+        // Find unique values in probabilities
+        std::map<double, int> unique_prob;
+        for (const auto &p : prob) {
+            unique_prob[p]++;
+        }
+        std::cerr << "Unique prob: " << unique_prob.size() << std::endl;
+        for (const auto &[k, v] : unique_prob) {
+            std::cerr << k << " " << v << std::endl;
+        }
+
+
         permute.generate_permutations(phenotypes, odds, indexer->case_count, params.nperms, params.nthreads, 0.0);
     } else {
         for (int i = 1; i < params.nperms + 1; i++) {
@@ -302,7 +324,6 @@ Phenotypes<T>::Phenotypes(Parameters params_, std::seed_seq &seed_source) : para
     phenotypes = std::make_shared<std::vector<T>>();
     std::ifstream ifs(params.pheno);
     parse(ifs);
-
 }
 
 template class Phenotypes<pheno_vector>;

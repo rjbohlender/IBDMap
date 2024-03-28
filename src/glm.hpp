@@ -118,8 +118,8 @@ template <typename LinkT>
 auto GLM<LinkT>::gradient_descent(arma::mat &X, arma::colvec &Y) -> arma::vec {
   // std::cerr << "Running gradient descent.\n";
   auto iterations = 0ull;
-  const auto max_iter = 1000000ull;
-  auto alpha = 0.0005; // Learning rate
+  const auto max_iter = 100000ull;
+  auto alpha = 0.5; // Learning rate
   auto tol = 1e-8;
   auto m = static_cast<double>(X.n_rows);
   arma::mat &A = X;
@@ -387,7 +387,7 @@ auto GLM<LinkT>::irls_qr_R(arma::mat &X, arma::colvec &Y) -> arma::vec {
 
 template <typename LinkT>
 auto GLM<LinkT>::irls(arma::mat &X, arma::colvec &Y) -> arma::vec {
-  const auto tol = 1e-8;
+  const auto tol = 1e-25;
   const auto max_iter = 25;
   auto iter = 0;
 
@@ -424,6 +424,9 @@ auto GLM<LinkT>::irls(arma::mat &X, arma::colvec &Y) -> arma::vec {
     if (std::abs(dev_ - devold) / (0.1 + std::abs(dev_)) < tol) {
       break;
     }
+  }
+  if (iter == max_iter) {
+    std::cerr << "IRLS failed to converge." << std::endl;
   }
   return beta_;
 }
