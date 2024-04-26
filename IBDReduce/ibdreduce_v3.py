@@ -121,7 +121,9 @@ def parse_pheno(ifile):
             if i == 0:
                 continue
             l = l.strip().split()
-            data[l[1]] += 1
+            if l[1] == 'NA':
+                continue
+            data[str(int(float(l[1])))] += 1
     return data['1'], data['0']
 
 
