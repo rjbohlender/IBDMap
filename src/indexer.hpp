@@ -5,8 +5,6 @@
 #ifndef CARVAIBD_SRC_INDEXER_HPP
 #define CARVAIBD_SRC_INDEXER_HPP
 
-#define ARMA_DONT_USE_WRAPPER
-
 #include "types.hpp"
 #include "indexsort.hpp"
 #include <armadillo>

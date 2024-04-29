@@ -5,8 +5,6 @@
 #ifndef PERMUTE_ASSOCIATE_PERMUTATION_HPP
 #define PERMUTE_ASSOCIATE_PERMUTATION_HPP
 
-#define ARMA_DONT_USE_WRAPPER
-
 #include <armadillo>
 #include <memory>
 #include <stocc/stocc.h>

@@ -130,7 +130,8 @@ T Permute<T>::unpack(int successes, int bin_size, bool shuffle,
     if (shuffle) {
         for (int i = r.size() - 1; i >= 1; --i) {
             auto j = rng.IRandom(0, i);
-            std::swap(r[i], r[j]);
+            using std::swap;
+            swap(r[i], r[j]);
         }
     }
     assert(std::accumulate(r.begin(), r.end(), 0) == successes);
