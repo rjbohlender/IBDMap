@@ -119,6 +119,8 @@ void Parser<T>::parse_input(std::istream &is) {
             tok_it++;
             boost::tokenizer<boost::char_separator<char>> deletions {*tok_it, inner_sep};
             update_data(data, indices["singleton"], deletions, bp, -1, false);
+            std::cerr << "Max: " << arma::max(data) << " ";
+            std::cerr << "Min: " << arma::min(data) << std::endl;
         }
 
         // Must follow data update -- Data format is just change from previous breakpoint so skipping update is impossible
@@ -304,7 +306,7 @@ void Parser<T>::update_data(arma::SpCol<int32_t> &data,
                          int value,
                          bool cluster) {
     std::string iid_key;
-    std::unordered_set<std::string> seen;
+    // std::unordered_set<std::string> seen;
     if (params.dash) {
         if (cluster) {
             iid_key = "IIDs";
@@ -362,11 +364,11 @@ void Parser<T>::update_data(arma::SpCol<int32_t> &data,
             arma::sword row_idx = (*pheno.indexer).translate(pairs[0], pairs[1]);
 
             auto ids = fmt::format("{},{}", pairs[0], pairs[1]);
-            if (seen.find(ids) == seen.end()) {
-                seen.insert(ids);
-            } else {
-                continue;
-            }
+            // if (seen.find(ids) == seen.end()) {
+            //     seen.insert(ids);
+            // } else {
+            //     continue;
+            // }
             if (row_idx < 0) {
                 continue;
             } else {
