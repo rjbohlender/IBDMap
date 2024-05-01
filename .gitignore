@@ -306,3 +306,6 @@ dkms.conf
 /data/
 /genetic_maps.b37/
 test.cpp
+
+# Editor specific directories
+.vscode/
