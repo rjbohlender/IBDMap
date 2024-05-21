@@ -12,7 +12,7 @@ import multiprocessing as mp
 import gzip
 import zstandard as zstd
 from typing import Dict, List, Tuple
-from geneticmap import GeneticMap
+from IBDReduce.geneticmap.geneticmap import GeneticMap
 from pathlib import Path
 from datetime import datetime
 import numpy as np

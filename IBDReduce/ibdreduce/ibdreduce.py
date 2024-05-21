@@ -5,7 +5,7 @@ import multiprocessing as mp
 import gzip
 import zstandard as zstd
 from typing import Tuple
-from geneticmap import GeneticMap
+from ibdreduce.geneticmap import GeneticMap
 from pathlib import Path
 from datetime import datetime
 import numpy as np

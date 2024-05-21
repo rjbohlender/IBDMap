@@ -1,0 +1,31 @@
+[tool.poetry]
+name = "ibdreduce"
+version = "0.3.0"
+description = "Second step to the tool IBDMap. This program is used to collapse all output across chromosomes into one result file."
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+classifiers = [
+    "Operating System :: Unix",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+
+packages = [
+    {include = "ibdreduce"}
+]
+
+[tool.poetry.scripts]
+ibdreduce = "ibdreduce.ibdreduce:main"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+numpy = "^1.26.4"
+scipy = "^1.13.0"
+zstandard = "^0.22.0"
+
+
+[build-system]
+requires = ["poetry-core>=1.8.3"]
+build-backend = "poetry.core.masonry.api"
