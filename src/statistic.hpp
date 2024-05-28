@@ -5,8 +5,6 @@
 #ifndef CARVAIBD_STATISTIC_HPP
 #define CARVAIBD_STATISTIC_HPP
 
-#define ARMA_DONT_USE_WRAPPER
-
 #include "breakpoint.hpp"
 #include "indexer.hpp"
 #include "parameters.hpp"

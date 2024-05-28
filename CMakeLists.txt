@@ -110,11 +110,12 @@ target_link_libraries(ibdlib ${Python3_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBR
 
 add_executable(carvaIBD main.cpp ${PROJECT_SUPPORT_FILES})
 
+target_compile_definitions(carvaIBD PRIVATE ARMA_DONT_USE_WRAPPER=1)
+
 target_link_libraries(carvaIBD fmt::fmt-header-only)
 target_link_libraries(carvaIBD pthread)
 target_link_libraries(carvaIBD ${LAPACK_LIBRARIES})
 target_link_libraries(carvaIBD ${BLAS_LIBRARIES})
-target_link_libraries(carvaIBD ${ARMADILLO_LIBRARIES})
 target_link_libraries(carvaIBD ${Python3_LIBRARIES} ${Boost_LIBRARIES})
 target_link_libraries(carvaIBD ${ZLIB_LIBRARIES})
 if(Gperftools_FOUND)
@@ -125,10 +126,13 @@ target_compile_definitions(carvaIBD PRIVATE MAXCOLORS=10000000)
 
 if(benchmark_FOUND)
     add_executable(ibdBench bench_main.cpp ${PROJECT_SUPPORT_FILES})
+    target_compile_definitions(ibdBench PRIVATE ARMA_DONT_USE_WRAPPER=1)
+
     target_link_libraries(ibdBench benchmark)
     target_link_libraries(ibdBench fmt::fmt-header-only)
     target_link_libraries(ibdBench pthread)
-    target_link_libraries(ibdBench ${ARMADILLO_LIBRARIES})
+    target_link_libraries(ibdBench ${BLAS_LIBRARIES})
+    target_link_libraries(ibdBench ${LAPACK_LIBRARIES})
     target_link_libraries(ibdBench ${Python3_LIBRARIES} ${Boost_LIBRARIES})
     target_link_libraries(ibdBench ${ZLIB_LIBRARIES})
 endif()
