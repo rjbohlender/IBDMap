@@ -39,7 +39,7 @@ int main(int argc, char *argv[]) {
   app.add_option("-p,--pheno",
 				 params.pheno,
 				 "Path to file containing sample phenotype pairs. 1 for "
-				 "affected, 0 for unaffected, NA for sample to be skipped. "
+				 "affected, 0 for unaffected, 'NA' for sample to be skipped. "
 				 "Header line is required.")->required()->check(CLI::ExistingFile);
   app.add_option("-g,--gmap",
 				 params.gmap,
@@ -51,7 +51,7 @@ int main(int argc, char *argv[]) {
 				 "Path to supporting info file. Expected format is chr segID ...")->check(CLI::ExistingFile);
   app.add_option("--cov",
                  params.cov,
-                 "Path to supporting covariates file. Expected format is sampleID cov1 cov2 ...")->check(CLI::ExistingFile);
+                 "Path to tab separated covariates file. Expected format is sampleID cov1 cov2 ...")->check(CLI::ExistingFile);
   app.add_option("-t,--threads",
 				 params.nthreads,
 				 "Number of threads used in execution. 2 threads are reserved for parsing and output.")->default_val(std::thread::hardware_concurrency() - 1);
@@ -107,7 +107,7 @@ int main(int argc, char *argv[]) {
                  "The number of ibd segments that a breakpoint must have to be tested.")->default_val(0);
   app.add_option("-o,--output",
 				 params.output_path,
-				 "Output to a specified file. Default output is is ./output/{date-time}.results.gz.");
+				 "Output to a specified file. Default output is is ./output/{date-time}.results.zst.");
   app.add_option("--pheno_col",
                  params.pheno_col,
                  "The column to read from the phenotype file. Column 0 should be sample ID and column 1+ should be 0, 1, NA.")->default_val(1);
@@ -155,9 +155,9 @@ int main(int argc, char *argv[]) {
     char cur_time[100];
     std::time_t t = std::time(nullptr);
     std::strftime(cur_time, 99, "%F-%T", std::localtime(&t));
-	std::stringstream default_output;
-	default_output << out_dir << "/" << cur_time << ".results.gz";
-	params.output_path = default_output.str();
+    std::stringstream default_output;
+    default_output << out_dir << "/" << cur_time << ".results.zst";
+    params.output_path = default_output.str();
   }
 
   // Have to handle this way because optional wrapped vector arguments don't seem to be supported.

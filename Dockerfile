@@ -3,8 +3,6 @@ FROM ubuntu:22.04 AS carva-build-container
 
 # libboost-python on Ubuntu 22.04 is python 3.10
 # liboost-python-dev includes python3.10-dev with it
-# We don't need intel-mkl or any other specific BLAS lib because carvaIBD only uses Armadillo headers
-# No actual BLAS functions are called
 RUN apt-get update &&  \
     apt-get dist-upgrade -y && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
@@ -86,10 +84,12 @@ RUN apt-get update &&  \
 
 WORKDIR /app
 
-COPY --from=carva-build-container /app/build/IBDMap IBDMap
-COPY --from=carva-build-container /app/build/*.so .
+COPY --from=carva-build-container /app/build/ibdmap ibdmap
+# COPY --from=carva-build-container /app/build/*.so .
 COPY --from=python-build-container /opt/venv /opt/venv
 
+# lets add IBDMap and /opt/venv/ to the path
+ENV PATH="/app:$PATH"
 ENV PATH="/opt/venv/bin:$PATH"
 
 
