@@ -41,12 +41,12 @@ jobs:
 
     - name: Test
       working-directory: ${{github.workspace}}/build
-      run: ./carvaIBD --help
+      run: ./ibdmap --help
       
     - name: Upload artifact
       uses: actions/upload-artifact@v2.2.4
       with:
-        name: carvaIBD
+        name: ibdmap
         path: |
-          ${{github.workspace}}/build/carvaIBD
-          ${{github.workspace}}/build/carvaIBD.static
+          ${{github.workspace}}/build/ibdmap
+          ${{github.workspace}}/build/ibdmap.static
