@@ -118,6 +118,7 @@ target_link_libraries(ibdmap ${LAPACK_LIBRARIES})
 target_link_libraries(ibdmap ${BLAS_LIBRARIES})
 target_link_libraries(ibdmap ${Python3_LIBRARIES} ${Boost_LIBRARIES})
 target_link_libraries(ibdmap ${ZLIB_LIBRARIES})
+
 if(Gperftools_FOUND)
   target_link_libraries(ibdmap ${Gperftools_LIBRARIES})
 endif()
