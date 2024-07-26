@@ -5,8 +5,6 @@
 #ifndef CARVAIBD_PARSER_HPP
 #define CARVAIBD_PARSER_HPP
 
-#define ARMA_DONT_USE_WRAPPER
-
 #include <armadillo>
 #include <optional>
 #include <set>

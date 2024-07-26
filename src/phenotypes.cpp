@@ -291,7 +291,8 @@ void Phenotypes<T>::shuffle() {
             for (int j = (*phenotypes)[0].size() - 1; j > 0; j--) {
                 std::uniform_int_distribution<> dis(0, j);
                 int k = dis(gen);
-                std::swap((*phenotypes)[i][j], (*phenotypes)[i][k]);
+                using std::swap;
+                swap((*phenotypes)[i][j], (*phenotypes)[i][k]);
             }
         }
     }
