@@ -22,6 +22,7 @@ public:
     std::optional<std::string> cov;
     size_t nperms;
     size_t nthreads;
+    double epsilon;
     std::string output_path;
     unsigned seed = std::random_device{}();
     std::optional<arma::uword> lower_bound;

@@ -114,6 +114,9 @@ int main(int argc, char *argv[]) {
   app.add_option("--read_permutations",
                  params.read_permutations,
                  "Read the set of permutations from a pre-generated TSV file at the given path.")->check(CLI::ExistingFile);
+  app.add_option("--epsilon",
+                 params.epsilon,
+                 "Set the value of epsilon for bin creation in covariate adjusted permutation. Larger values increase bin size and reduce number of bins, improving speed with loss of accuracy.")->default_val(0.0);
   app.add_flag("--swap_pheno",
 			   params.swap,
 			   "Swap case-control status of individuals. Useful for "

@@ -119,8 +119,6 @@ void Parser<T>::parse_input(std::istream &is) {
             tok_it++;
             boost::tokenizer<boost::char_separator<char>> deletions {*tok_it, inner_sep};
             update_data(data, indices["singleton"], deletions, bp, -1, false);
-            std::cerr << "Max: " << arma::max(data) << " ";
-            std::cerr << "Min: " << arma::min(data) << std::endl;
         }
 
         // Must follow data update -- Data format is just change from previous breakpoint so skipping update is impossible
