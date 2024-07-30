@@ -284,7 +284,7 @@ void Phenotypes<T>::shuffle() {
         Permute<T> permute(params.seed);
         arma::vec odds = arma::exp(glm.eta_);
 
-        permute.generate_permutations(phenotypes, odds, indexer->case_count, params.nperms, params.nthreads, 0.0);
+        permute.generate_permutations(phenotypes, odds, indexer->case_count, params.nperms, params.nthreads, params.epsilon);
     } else {
         for (int i = 1; i < params.nperms + 1; i++) {
             (*phenotypes)[i] = (*phenotypes)[i - 1];
