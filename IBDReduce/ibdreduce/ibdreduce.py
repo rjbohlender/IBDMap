@@ -218,25 +218,29 @@ def main():
             with check_and_open(fpath) as f:
                 for line in f:
                     chrom, pos, obs, vals = parse_line(line)
-                    if offset == 0:
-                        obs_rates[idx,:] = obs
-                        bp_ids.append((chrom, pos))
-                        if pos in gmap.gmap[chrom]:
-                            dis = gmap.gmap[chrom][pos]
+                    try:
+                        if offset == 0:
+                            obs_rates[idx,:] = obs
+                            bp_ids.append((chrom, pos))
+                            if pos in gmap.gmap[chrom]:
+                                dis = gmap.gmap[chrom][pos]
+                            else:
+                                close = gmap.find_nearest(chrom, pos)
+                                dis = gmap.gmap[chrom][close[0]] + (
+                                    (int(pos) - close[0]) / (close[1] - close[0])
+                                ) * (
+                                    gmap.gmap[chrom][close[1]] - gmap.gmap[chrom][close[0]]
+                                )
+                            ibdfrac[idx] = (float(dis) - float(predis)) / total
+                            predis = dis
+                            data[idx, offset:(args.nperm + 1)] = vals
                         else:
-                            close = gmap.find_nearest(chrom, pos)
-                            dis = gmap.gmap[chrom][close[0]] + (
-                                (int(pos) - close[0]) / (close[1] - close[0])
-                            ) * (
-                                gmap.gmap[chrom][close[1]] - gmap.gmap[chrom][close[0]]
-                            )
-                        ibdfrac[idx] = (float(dis) - float(predis)) / total
-                        predis = dis
-                        data[idx, offset:(args.nperm + 1)] = vals
-                    else:
-                        data[
-                            idx, (offset * args.nperm):((offset + 1) * args.nperm)
-                        ] = vals[1:]
+                            data[
+                                idx, (offset * args.nperm):((offset + 1) * args.nperm)
+                            ] = vals[1:]
+                    except ValueError as e:
+                        print(f"Error at {i} {j} {idx} {offset} {fpath}", file=sys.stderr)
+                        raise e
                     idx += 1
 
     # Calculate the average and subtract it from the data.

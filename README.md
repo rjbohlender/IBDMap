@@ -138,10 +138,6 @@ segments. Reasonable defaults are provided for the corresponding --cm and --af o
 Both file formats can be created with scripts provided in the tools directory. They take data from GERMLINE, hap-ibd,
 iLASH, or any of the three that have been passed through DASH, and generate our input format.
 
-## Major Changes
-
-3/16/2021: Output files are gzipped by default now.
-
 ## Running a fully static build
 A script exists at `build-scripts/static-build-on-focal.sh` that should be able to prepare
 the environment, and do a statically linked build on Ubuntu 20.04.
