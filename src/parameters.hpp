@@ -24,6 +24,7 @@ public:
     size_t nthreads;
     double epsilon;
     std::string output_path;
+    std::string algorithm;
     unsigned seed = std::random_device{}();
     std::optional<arma::uword> lower_bound;
     std::optional<std::string> read_permutations;

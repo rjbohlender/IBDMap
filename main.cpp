@@ -117,6 +117,9 @@ int main(int argc, char *argv[]) {
   app.add_option("--epsilon",
                  params.epsilon,
                  "Set the value of epsilon for bin creation in covariate adjusted permutation. Larger values increase bin size and reduce number of bins, improving speed with loss of accuracy.")->default_val(0.0);
+  app.add_option("--algorithm",
+                 params.algorithm,
+                 "Set the optimizer for fitting the GLM prior to covariate adjustment. Options are: irls, irls_svdnewton, irls_qr, irls_qr_R, gradient_descent.")->default_val("irls");
   app.add_flag("--swap_pheno",
 			   params.swap,
 			   "Swap case-control status of individuals. Useful for "

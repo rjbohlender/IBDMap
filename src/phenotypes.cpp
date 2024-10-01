@@ -280,7 +280,7 @@ void Phenotypes<T>::shuffle() {
             Y(i) = v;
         }
         Binomial link("logit");
-        GLM glm(design, Y, link, "irls");
+        GLM glm(design, Y, link, params.algorithm);
         Permute<T> permute(params.seed);
         arma::vec odds = arma::exp(glm.eta_);
 
