@@ -88,6 +88,7 @@ void Phenotypes<T>::parse(std::istream &is) {
     } else {
         if (params.cov) {
             parse_cov();
+            create_indexers();
         }
         shuffle();
     }
@@ -136,6 +137,7 @@ void Phenotypes<T>::parse_cov() {
     std::vector<std::string> cov_samples;
 
     // Parse covariate values
+    std::map<unsigned long, std::vector<std::pair<unsigned long, std::string>>> failed_conversion;
     while(std::getline(ifs, line)) {
         lineno++;
         Splitter<std::string> split(line, " \t");
@@ -147,15 +149,56 @@ void Phenotypes<T>::parse_cov() {
             continue;
         }
 
-        unsigned long col = 0;
-        for (const auto &v : split) {
+        for (const auto &[col, v] : Enumerate(split)) {
             if (col == 0) {
                 cov_samples.push_back(v);
-                col++;
                 continue;
             }
-            (*cov)(lineno - 2, col - 1) = std::stod(v);
-            col++;
+            try {
+                (*cov)(lineno - 2, col - 1) = std::stod(v);
+            } catch (std::invalid_argument &e) {
+                failed_conversion[col - 1].push_back({lineno, v});
+            }
+        }
+    }
+    // Convert failed conversions to a levels and then dummy variables
+    std::vector<unsigned long> non_numeric_columns;
+    std::map<unsigned long, std::unordered_map<std::string, unsigned long>> levels;
+    for (const auto &[col, vec] : failed_conversion) {
+        if (std::find(non_numeric_columns.begin(), non_numeric_columns.end(), col) == non_numeric_columns.end()) {
+            non_numeric_columns.push_back(col);
+        }
+        for (const auto &[lineno, v] : vec) {
+            levels[col].insert({v, 0});
+        }
+    }
+
+    // Shed non-numeric columns
+    auto nnc = arma::conv_to<arma::uvec>::from(non_numeric_columns);
+    nnc.print("Non-numeric columns");
+    cov->shed_cols(nnc);
+
+    // Insert levels[col].size() - 1 dummy columns for each non-numeric column
+    for (const auto &[col, level] : levels) {
+        // Insert level.size() columns
+        for (const auto &[i, l] : Enumerate(level)) {
+            // remove the last column
+            if(i == level.size() - 1) {
+                levels[col].erase(l.first);
+                break;
+            }
+            std::cerr << fmt::format("Adding column for level: {}\n", l.first);
+            levels[col][l.first] = cov->n_cols;
+            std::cerr << fmt::format("Column index: {}\n", l.second);
+            cov->insert_cols(cov->n_cols, 1);
+            std::cerr << fmt::format("Current number of columns: {}\n", cov->n_cols);
+        }
+        for (const auto &[lineno, v] : failed_conversion[col]) {
+            if (levels[col].find(v) == levels[col].end()) {
+                continue;
+            } else {
+                (*cov)(lineno - 2, levels[col][v]) = 1;
+            }
         }
     }
 
@@ -164,61 +207,38 @@ void Phenotypes<T>::parse_cov() {
     indexsort.sort_vector(cov_samples);
     cov = (*cov)(arma::conv_to<arma::uvec>::from(indexsort.idx));
 
-    // Verify that samples are present. If not, throw an error
-    int i, j;
-    if (cov_samples.size() >= samples->size()) {
-        std::set<std::string> cov_set(cov_samples.begin(), cov_samples.end());
-        for (const auto &s : *samples) {
-            if (cov_set.find(s) == cov_set.end()) {
-                throw(std::runtime_error(fmt::format("ERROR: Sample {} not found in covariate file.", s)));
+    // Verify that samples are present. If not, remove and count the number of cases and controls removed
+    // Prune samples that lack covariates or phenotypes
+    unsigned long cases_removed = 0;
+    unsigned long controls_removed = 0;
+    std::set<std::string> cov_set(cov_samples.begin(), cov_samples.end());
+    std::set<std::string> pheno_set(samples->begin(), samples->end());
+    if (cov_set.size() != pheno_set.size()) {
+        std::vector<std::string> diff;
+        std::set_symmetric_difference(cov_set.begin(), cov_set.end(), pheno_set.begin(), pheno_set.end(), std::back_inserter(diff));
+        // Remove samples that are not in both files and count the number of cases and controls removed
+        for (const auto &d : diff) {
+            auto it = std::find(cov_samples.begin(), cov_samples.end(), d);
+            if (it != cov_samples.end()) {
+                auto idx = std::distance(cov_samples.begin(), it);
+                cov_samples.erase(cov_samples.begin() + idx);
+                (*cov).shed_row(idx);
+                cases_removed += (*phenotypes)[0][idx];
+                controls_removed += 1 - (*phenotypes)[0][idx];
             }
-        }
-    } else {
-        std::set<std::string> sample_set(samples->begin(), samples->end());
-        for (const auto &s : cov_samples) {
-            if (sample_set.find(s) == sample_set.end()) {
-                throw(std::runtime_error(fmt::format("ERROR: Sample {} not found in phenotype file.", s)));
+            it = std::find(samples->begin(), samples->end(), d);
+            if (it != samples->end()) {
+                auto idx = std::distance(samples->begin(), it);
+                samples->erase(samples->begin() + idx);
+                (*phenotypes)[0].erase((*phenotypes)[0].begin() + idx);
             }
         }
     }
 
-    // Prune samples that lack covariates or phenotypes
-    int deleted = 0;
-    if (cov_samples.size() > samples->size()) {
-        for (i = 0, j = 0; i < cov_samples.size() && j < (*samples).size();) {
-            if (cov_samples[i] == (*samples)[j]) {
-                i++;
-                j++;
-            } else {
-                while (cov_samples[i] != (*samples)[j]) {
-                    cov_samples.erase(cov_samples.begin() + i);
-                    (*cov).shed_row(i);
-                    deleted++;
-                }
-            }
-        }
-        while (i < cov_samples.size()) {
-            cov_samples.erase(cov_samples.begin() + i);
-            (*cov).shed_row(i);
-        }
-    } else if (cov_samples.size() < samples->size()) {
-        for (i = 0, j = 0; i < cov_samples.size() && j < samples->size();) {
-            if (cov_samples[i] == (*samples)[j]) {
-                i++;
-                j++;
-            } else {
-                while (cov_samples[i] != (*samples)[j]) {
-                    samples->erase(samples->begin() + i);
-                }
-            }
-        }
-        while (j < (*samples).size()) {
-            samples->erase(samples->begin() + j);
-        }
-    }
-    if (cov_samples.size() != samples->size()) {
-        throw(std::runtime_error("ERROR: Covariate file does not match phenotype file."));
-    }
+    // Report the number of removed cases and controls
+    fmt::print(std::cerr, "Cases removed: {}\n", cases_removed);
+    fmt::print(std::cerr, "Controls removed: {}\n", controls_removed);
+
     // Check that all cov_samples equal samples
     for (const auto &[i, v] : Enumerate(cov_samples)) {
         if (v != (*samples)[i]) {
