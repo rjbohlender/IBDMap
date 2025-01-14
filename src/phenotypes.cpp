@@ -176,7 +176,9 @@ void Phenotypes<T>::parse_cov() {
     // Shed non-numeric columns
     auto nnc = arma::conv_to<arma::uvec>::from(non_numeric_columns);
     nnc.print("Non-numeric columns");
-    cov->shed_cols(nnc);
+    for(int i = nnc.n_elem; i > 0; i--) {
+        cov->shed_col(nnc(i - 1));
+    }
 
     // Insert levels[col].size() - 1 dummy columns for each non-numeric column
     for (const auto &[col, level] : levels) {
