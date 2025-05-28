@@ -124,7 +124,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef SFMT_H
 #define SFMT_H
 
-#include <emmintrin.h>                 // Define SSE2 intrinsics
+#ifdef __SSE2__
+  #include <emmintrin.h>
+#else
+  #ifdef __aarch64__
+    #include "sse2neon.h"
+  #else
+    #warning SSE2 support is not available. Code will not compile
+  #endif
+#endif
+// #include <emmintrin.h>                 // Define SSE2 intrinsics
 #include "randomc.h"                   // Define integer types etc
 
 // Choose one of the possible Mersenne exponents.
