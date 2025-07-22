@@ -1,6 +1,7 @@
 import os, sys
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 
 '''
 Check if a given IBDMap/IBDReduce analysis has a genome-wide significant signal
@@ -125,3 +126,50 @@ def build_signal_windows(ibdreduce_file, significance_threshold=0.05):
     df.to_csv(ibdreduce_file+'.windows', sep='\t', index=None)
     
     return(len(overall_windows))
+
+'''
+Generate a Manhattan plot from IBDReduce results file.
+'''
+
+def manhattan_plot(ibdreduce_file):
+
+    df = pd.read_csv(ibdreduce_file, sep='\t', skiprows=3)
+    df['log_p'] = -np.log10(df['PVal'])
+    sig_line = df['PAdjCutoff'].iloc[0]
+   
+    plt.figure(figsize=(10, 5))
+    
+    # Convert chromosomes to numeric and sort
+    df['CHROM'] = pd.to_numeric(df['CHROM'])
+    chromosomes = sorted(df['CHROM'].unique())
+    colors = ['#1f77b4', '#2ca02c']
+    
+    x_pos = 0
+    x_ticks = []
+    x_labels = []
+   
+    for idx, chrom in enumerate(chromosomes):
+        chrom_data = df[df['CHROM'] == chrom]
+        plt.scatter(chrom_data['POS'] + x_pos, 
+                    chrom_data['log_p'],
+                    c=colors[idx % 2],
+                    s=1,
+                    alpha=0.7)
+        
+        x_ticks.append(x_pos + (chrom_data['POS'].max() - chrom_data['POS'].min())/2)
+        x_labels.append(str(int(chrom)))
+        x_pos += chrom_data['POS'].max()
+    
+    if sig_line:
+        plt.axhline(y=-np.log10(sig_line), color='red', linestyle='--')
+    
+    plt.xlabel('Chromosome')
+    plt.ylabel('-log10(p-value)')
+    plt.title('Example Manhattan plot')
+    plt.xticks(x_ticks, x_labels)
+    plt.ylim(0,7)
+    plt.grid(False)
+    
+    plt.tight_layout()
+    plt.savefig('manhattan_plot.png', dpi=300, bbox_inches='tight')
+    plt.show()
