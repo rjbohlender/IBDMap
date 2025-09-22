@@ -142,7 +142,7 @@ We recommend installing dependencies and running IBDReduce inside a [venv](https
 IBDMap requires several input files:
 
 1. **Phenotype information** for each sample (case/control/exclusion status). This statuses are represented as 1/0/NA, respectively. Samples lacking phenotype information are automatically dropped from analysis. This file is expected to be tab separated and the first line is expected to have a header. first column of this file is expected to be titled “GRID”. Flag: `--pheno <FILE>`
-2. **IBD segments** identified using an outside program (e.g., GERMLINE, iLASH, or hap-IBD) processed into IBDMap's input format. The output from this segment detection programs must first be converted to the proper format using the “[convert_ilash.py](https://github.com/rjbohlender/carvaIBD/blob/master/tools/convert_ilash.py)” python script. Flag: `--input <FILE>`
+2. **IBD segments** identified using an outside program (e.g., GERMLINE, iLASH, or hap-IBD) processed into IBDMap's input format. The output from this segment detection programs must first be converted to the proper format using the “[convert_ilash.py](https://github.com/rjbohlender/ibdmap/blob/master/tools/convert_ilash.py)” python script. Flag: `--input <FILE>`
 3. **Genetic map file** for positioning breakpoints. Ensure that this is in the same build as your IBD segments. Flag: `--gmap <FILE>`
 4. **Optional:**
     1. **DASH-processed data**. Only needed if DASH was run on the pairwise IBD data.  Flag(s): `--info <FILE>` (and `--dash`)
@@ -221,11 +221,9 @@ Reasonable defaults are provided for the corresponding `--cm <NUM>` and `--af <N
 
 ---
 
-This is where we can briefly describe the format of the IBDMap and IBDReduce output files, as well as explaining the two helper functions in `ibdreduce_analysis.py` and what they do
-
 #### IBDMap
 
-IBDMap returns zstd-compressed files, one per chromosome, containing breakpoint-specific test statistic and permutation results. Each file contains the following tab-separated columns (no header):
+IBDMap returns zstandard-compressed files, one per chromosome, containing breakpoint-specific test statistic and permutation results. Each file contains the following tab-separated columns (no header):
 
 ```bash
 chr pos cscs-rate cscn-rate cncn-rate test-statistic perm1 perm2 ... permN
@@ -235,16 +233,24 @@ The first six columns are present for all runs, and the remaining columns repres
 
 #### IBDReduce
 
-IBDReduce returns one file per phenotype with adjusted p-value computations per breakpoint. Each file contains the following tab-separated columns (header shown):
+IBDReduce returns one file per phenotype with adjusted p-value computations per breakpoint. Each file contains the following tab-separated columns (info lines and header shown):
 
-```bash
+```
+# your IBDReduce command string that was executed goes here
+# Genome-wide Average: XXX
+# Total breakpoints: YYY
 CHROM	POS	cM	PVal	PValCI	PAdj	PAdjCutoff	Success	Permutation	Delta	LLik
 ```
+
+The IBDReduce
+
 
 ## Citation
 
 If you use IBDMap in your research, please cite:
 
 ```
-Bohlender RJ, Evans GF, Baker JT, Landman JM, Frankel EG, Morrow AR, Petty LE, Petty AS, Bastarache L, Chen HH, Samuels DC, Below JE, Huff CD. IBDMap: biobank scale identity-by-descent mapping software for binary traits. [Publication details forthcoming]
+Bohlender RJ, Evans GF, Baker JT, Landman JM, Frankel EG, Morrow AR, Petty LE, Petty AS, Bastarache L,
+Chen HH, Zawistowski M, Samuels DC, Below JE, Huff CD. IBDMap: biobank scale identity-by-descent
+mapping software for binary traits. [Publication details forthcoming]
 ```
