@@ -258,7 +258,7 @@ void Phenotypes<T>::parse_cov() {
  */
 template<typename T>
 void Phenotypes<T>::pad_phenotypes() {
-    for (auto p : *phenotypes) {
+    for (auto &p : *phenotypes) {
         if (p.capacity() < p.size() + 3) {
             p.resize(p.size() + 3);
         }

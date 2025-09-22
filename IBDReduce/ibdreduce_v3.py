@@ -270,13 +270,14 @@ def main():
 
         weights = np.array([cscs / (cscs + cscn), cscn / (cscs + cscn)])
 
-        mean_counts = np.sum(obs_counts * weights, 1)
-        mean_counts = mean_counts.astype(np.int64)
+        total_counts = np.sum(obs_counts * weights, 1)
+        total_counts = total_counts.astype(np.int64)
         mean_rates = np.sum(obs_rates[:, 0:2] * weights, 1)
 
         for i in range(len(mean_rates)):
-            null = stats.poisson.logpmf(obs_counts[i, 0], weights[0] * mean_counts[i])
-            null += stats.poisson.logpmf(obs_counts[i, 1], weights[1] * mean_counts[i])
+            # Null is Pois(obs_cscs, Expected_counts[cscs]) * Pois(obs_cscn, Expected_counts[cscn])
+            null = stats.poisson.logpmf(obs_counts[i, 0], weights[0] * total_counts[i])
+            null += stats.poisson.logpmf(obs_counts[i, 1], weights[1] * total_counts[i])
             alt = stats.poisson.logpmf(obs_counts[i, 0], obs_counts[i, 0])
             alt += stats.poisson.logpmf(obs_counts[i, 1], obs_counts[i, 1])
 
@@ -292,13 +293,18 @@ def main():
 
     # Calculate the empirical p-value.
     succ = np.zeros(breakpoints)
+    # The total number of permutations is nperm * nruns, where +1 is from the observed value.
     for i in range(1, args.nperm * args.nruns + 1):
+        # Add each success across breakpoints.
         succ += data[:, 0] <= data[:, i]
     empp = (succ + 1.0) / (args.nperm * args.nruns + 1)
 
     # Generate the evd
+    # Drop the first column, which contains the observed values.
     data = data[:, 1:]
+    # Rank the data in descending order, so that the smallest values are ranked highest.
     data = stats.rankdata(-data, axis=1) / (args.nperm * args.nruns + 1)
+    # Calculate the extreme value distribution (EVD) by taking the minimum across permutations.
     evd = np.min(data, axis=0)
 
     if args.print_evd:
@@ -306,6 +312,7 @@ def main():
 
     # Calculate the adjusted p-value.
     adjp = np.zeros(breakpoints)
+    # FWE p-value cutoff is the 5th percentile of the EVD.
     cutoff = np.percentile(evd, 5)
     for i in range(breakpoints):
         adjp[i] = stats.percentileofscore(evd, empp[i], kind="weak") / 100.0
@@ -326,6 +333,8 @@ def main():
             if p in memoize:
                 Rstar = memoize[p]
             else:
+                # Count how many times each permutation has a value less than or equal to p
+                # This is the distribution of the count of rejected true null hypotheses in permutation
                 Rstar = np.sum(data <= p, axis=0)
                 memoize[p] = Rstar
             # rp is the number of rejected null hypotheses in the observed set
@@ -334,7 +343,10 @@ def main():
             pm = p * data.shape[0]
             # rb is the 95th percentile of the Rstar distribution
             rb = np.percentile(Rstar, 95)
-            # Condition for applying the fdr adjustment
+            # The condition for applying the FDR adjustment.
+            # If the number of rejected null hypotheses in the observed set, minus the 95th percentile of rejected null
+            # hypotheses at alpha = p, is greather than or equal to the expected.
+            # The term rp - pm estimates the number of true positives at alpha = p.
             if rp - rb >= pm:
                 adjp[i] = np.mean(Rstar / (Rstar + rp - pm))
             else:
