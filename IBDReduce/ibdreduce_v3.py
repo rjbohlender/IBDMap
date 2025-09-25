@@ -83,6 +83,40 @@ def parse_line(line: str) -> Tuple[int, int, np.ndarray, np.ndarray]:
     return chrom, pos, obs_parts, vals
 
 
+def compute_fdr_adjusted_pvalues(empp: np.ndarray, permutation_pvalues: np.ndarray) -> np.ndarray:
+    """Calculate FDR-adjusted p-values from permutation p-values.
+
+    Args:
+        empp: Empirical p-values derived from the observed statistics.
+        permutation_pvalues: Ranked permutation-derived p-values for each breakpoint.
+
+    Returns:
+        Array of FDR-adjusted p-values corresponding to ``empp``.
+    """
+
+    memoize = {}
+    adjp = np.zeros_like(empp, dtype=float)
+    num_breakpoints = permutation_pvalues.shape[0]
+
+    for i, p in enumerate(empp):
+        if p in memoize:
+            Rstar = memoize[p]
+        else:
+            Rstar = np.sum(permutation_pvalues <= p, axis=0)
+            memoize[p] = Rstar
+
+        rp = np.sum(empp <= p)
+        pm = p * num_breakpoints
+        rb = np.percentile(Rstar, 95)
+
+        if rp - rb >= pm:
+            adjp[i] = np.mean(Rstar / (Rstar + rp - pm))
+        else:
+            adjp[i] = np.sum(Rstar >= 1) / len(Rstar)
+
+    return adjp
+
+
 def ibdlen(fpath: str, gmap: GeneticMap) -> Tuple[int, float]:
     """Calculate the IBD length for a single chromosome and permutation set.
     :param fpath: The file path to the IBDmap file.
@@ -301,11 +335,11 @@ def main():
 
     # Generate the evd
     # Drop the first column, which contains the observed values.
-    data = data[:, 1:]
+    permutation_values = data[:, 1:]
     # Rank the data in descending order, so that the smallest values are ranked highest.
-    data = stats.rankdata(-data, axis=1) / (args.nperm * args.nruns + 1)
+    permutation_pvalues = stats.rankdata(-permutation_values, axis=1) / (args.nperm * args.nruns + 1)
     # Calculate the extreme value distribution (EVD) by taking the minimum across permutations.
-    evd = np.min(data, axis=0)
+    evd = np.min(permutation_pvalues, axis=0)
 
     if args.print_evd:
         print("EVD:\n{}".format("\t".join(str(x) for x in evd)))
@@ -322,35 +356,11 @@ def main():
     lower = stats.chi2.ppf(0.025, 2 * succ) / 2.0
     lower[np.isnan(lower)] = 0
 
-    upper /= data.shape[1]
-    lower /= data.shape[1]
+    upper /= permutation_pvalues.shape[1]
+    lower /= permutation_pvalues.shape[1]
 
     if args.fdr:
-        # Permutation p-values are likely to be repeated, so we save on computation at the cost of memory
-        memoize = {}
-        for i, p in enumerate(empp):
-            # Rstar is the distribution of rejected null hypotheses over permutations
-            if p in memoize:
-                Rstar = memoize[p]
-            else:
-                # Count how many times each permutation has a value less than or equal to p
-                # This is the distribution of the count of rejected true null hypotheses in permutation
-                Rstar = np.sum(data <= p, axis=0)
-                memoize[p] = Rstar
-            # rp is the number of rejected null hypotheses in the observed set
-            rp = np.sum(data[:, 0] <= p)
-            # pm is the expected number of rejected null hypotheses at a given alpha = p
-            pm = p * data.shape[0]
-            # rb is the 95th percentile of the Rstar distribution
-            rb = np.percentile(Rstar, 95)
-            # The condition for applying the FDR adjustment.
-            # If the number of rejected null hypotheses in the observed set, minus the 95th percentile of rejected null
-            # hypotheses at alpha = p, is greather than or equal to the expected.
-            # The term rp - pm estimates the number of true positives at alpha = p.
-            if rp - rb >= pm:
-                adjp[i] = np.mean(Rstar / (Rstar + rp - pm))
-            else:
-                adjp[i] = sum(Rstar >= 1) / len(Rstar)
+        adjp = compute_fdr_adjusted_pvalues(empp, permutation_pvalues)
 
     # Generate header information and write results to file.
     with open(args.output, "w", encoding="utf-8") as output_file:
