@@ -83,6 +83,30 @@ def parse_line(line: str) -> Tuple[int, int, np.ndarray, np.ndarray]:
     return chrom, pos, obs_parts, vals
 
 
+def write_permutation_values(
+    data: np.ndarray, idx: int, offset: int, vals: np.ndarray, nperm: int
+) -> None:
+    """Insert observed and permutation statistics into the shared matrix.
+
+    Args:
+        data: The matrix tracking observed and permutation statistics for all
+            breakpoints.
+        idx: Row index of the breakpoint being updated.
+        offset: Zero-based permutation run offset.
+        vals: Array containing the observed value followed by permutation
+            statistics for the current run.
+        nperm: Number of permutations produced per run.
+    """
+
+    if offset == 0:
+        data[idx, 0] = vals[0]
+        data[idx, 1 : (nperm + 1)] = vals[1:]
+    else:
+        start = 1 + offset * nperm
+        end = 1 + (offset + 1) * nperm
+        data[idx, start:end] = vals[1:]
+
+
 def compute_fdr_adjusted_pvalues(empp: np.ndarray, permutation_pvalues: np.ndarray) -> np.ndarray:
     """Calculate FDR-adjusted p-values from permutation p-values.
 
@@ -267,11 +291,7 @@ def main():
                                 )
                             ibdfrac[idx] = (float(dis) - float(predis)) / total
                             predis = dis
-                            data[idx, offset:(args.nperm + 1)] = vals
-                        else:
-                            data[
-                                idx, (offset * args.nperm):((offset + 1) * args.nperm)
-                            ] = vals[1:]
+                        write_permutation_values(data, idx, offset, vals, args.nperm)
                     except ValueError as e:
                         print(f"Error at {i} {j} {idx} {offset} {fpath}", file=sys.stderr)
                         raise e
