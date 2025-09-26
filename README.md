@@ -1,7 +1,5 @@
 # IBDMap
 
----
-
 IBDMap is a multithreaded scalable application for IBD (Identity By Descent) mapping of binary traits. IBDMap implements a test statistic developed by Browning & Thompson et al., 2012 [cite] that detects regions where IBD sharing is statistically enriched among case-case pairs than among case-control pairs.
 
 IBDMap addresses key challenges in IBD mapping by using a map-reduce approach to analyze genome-wide relative IBD segment enrichment, making it tractable for biobank-scale analysis. IBDMap’s computational flexibility enables execution in a wide array of compute environments.
@@ -15,8 +13,6 @@ The genome is conveniently broken into 22 autosomal components. Further, each jo
 The seed should be specified and different for each job on a chromosome. However, the seeds should be identical between chromosomes. so if you have five jobs for chromosome one, and your seeds are {1, 2, 3, 4, 5} for each job, then they should also be the same for chromosomes 2-22 as well. Results can be combined using IBDReduce, a complementary Python script designed to use a small amount of memory to collapse all the results from across chromosomes, and across permutation sets within a chromosome.
 
 ## Key features of IBDMap
-
----
 
 - Implements flexible multiple testing correction options (FWER and FDR approaches)
 - Includes supplementary statistical assessments, such as:
@@ -183,7 +179,15 @@ If you are in a compute environment that prevents you from running containers as
 singularity pull ibdmap.sif docker:jtb114/ibdmap:latest
 ```
 
-This command will create a new singularity image called `ibdmap.sif`
+This command will create a new singularity image called `ibdmap.sif`. The tool can then be run using the following command to view the help menu:
+
+```bash
+# Docker image
+docker run --rm {image ID/tag} ibdmap -h
+
+# Singularity image
+singularity exec ibdmap.sif ibdmap -h
+```
 
 ## Data Formatting
 
