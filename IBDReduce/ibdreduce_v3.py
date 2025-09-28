@@ -4,7 +4,7 @@ import sys
 import multiprocessing as mp
 import gzip
 import zstandard as zstd
-from typing import Tuple
+from typing import Tuple, Optional
 from geneticmap import GeneticMap
 from pathlib import Path
 from datetime import datetime
@@ -167,7 +167,7 @@ def ibdlen(fpath: str, gmap: GeneticMap) -> Tuple[int, float]:
     return breakpoints, total
 
 
-def parse_pheno(ifile):
+def parse_pheno(ifile: str, phenotype: Optional[str] = None) -> Tuple[int, int]:
     """
 
     :param ifile:
@@ -176,12 +176,29 @@ def parse_pheno(ifile):
     data = {'0': 0, '1': 0, 'NA': 0}
     with open(ifile, 'r') as f:
         for i, l in enumerate(f):
-            if i == 0:
+            # we need to have specific logic for if the user passes a phenotype
+            if phenotype and i == 0: # This line only occurs if there is a phenotype string and we are at the header
+                header_list = l.strip().split() # We want to pass the header line and the determine where in the list the phenotype column is
+                phenotype_indx = header_list.index(phenotype)
                 continue
+            else: # If no phenotype string then we skip the header
+                phenotype_indx = 1 # If no phenotype name is passed then we are going to treat this like a 2 column file where the first column are the ids and the second column is the phenotype status
+                if i == 0:
+                    continue
+
             l = l.strip().split()
-            if l[1] == 'NA':
-                continue
-            data[str(int(float(l[1])))] += 1
+            try:
+                data[l[phenotype_indx]] += 1
+            except KeyError: 
+                if l[phenotype_indx] in ["N/A", "-1"]: # This case will be hit if the phenotype value is not 0, 1, or NA.
+                    data["NA"] += 1 # We can assume the user is meaning for these values to be excluded so just increase the count
+                else: # This case account for if the user has float values as the phenotype. Ex: 1.0 or 0.0. This could error if the user gave a different string than NA or -1
+                    try:
+                        data[str(int(float(l[phenotype_indx])))] += 1
+                    except ValueError: # This except allows the propgram to close if it encounters anything else
+                        print(f"unrecognized value of {l[phenotype_indx]} at line {i+1}. Acceptable values are 1/0 for cases and controls and NA, N/A, or -1 for exclusions. Please format your data correctly and rerun the program.")
+                        sys.exit(1)
+    print(f"Using the provided phenotype: {phenotype}, {data['1']} cases were identified, {data['0']} were controls were identified, and {data['NA']} exclusions were identified.")
     return data['1'], data['0']
 
 
@@ -211,6 +228,8 @@ def main():
     parser.add_argument('--two_sided', default=False, action='store_true',
                         help="Conduct a two_sided test.")
     parser.add_argument("--lrt", default=None, help="Calculate likelihood ratio at each breakpoint. Requires phenotype file as argument.")
+    parser.add_argument("--phenotype-name", default=None, help="Name of the phenotype column in the phenotype file that the user wishes to use in ibdreduce. This option only needs to be used if the user wishes to use a phenotype matrix with multiple phenotypes, otherwise te program assumes that the phenotype is in the second columns and the ids are in the first column") 
+
     args = parser.parse_args()
 
     if args.null and not args.single:
@@ -311,7 +330,7 @@ def main():
     # Likelihood ratio for localization
     llik_ratio = np.zeros(breakpoints)
     if args.lrt:
-        ncase, ncontrol = parse_pheno(args.lrt)
+        ncase, ncontrol = parse_pheno(args.lrt, args.phenotype_name)
 
         cscs = ncase * (ncase - 1.) / 2.
         cscn = ncase * ncontrol
