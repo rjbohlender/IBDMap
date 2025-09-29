@@ -111,7 +111,7 @@ cmake -DCMAKE_BUILD_TYPE=Release -DLAPACK_LIBRARIES=/usr/lib/x86_64-linux-gnu/op
 
 ---
 
-The "reduce" step of IBDMap is done by the `ibdreduce.py` script. This script is built for Python >=3.9 and <4.0. 
+The "reduce" step of IBDMap is done by the `ibdreduce.py` script. This script is built for Python >=3.9. 
 
 IBDReduce requires the following Python packages:
 
@@ -119,15 +119,20 @@ IBDReduce requires the following Python packages:
 * `scipy` (>=1.13.0 and <2.0.0)
 * `zstandard` (>=0.22.0 and <1.0.0)
 
-These dependencies are listed in the `pyproject.toml` file within the IBDReduce subdirectory.  You can use`pip` to install dependencies directly from this file with the following command:
+These dependencies are listed in a requirements.txt file with the IBDReduce sub directory. It is recommend that you install the dependencies into a virtualenv such as conda or venv. The requirements.txt file was made from a python3.11 environment to be consistent with the docker environment so it is recommend that you use python3.11
 
 ```bash
-cd ./IBDReduce && pip install .
+# virtual environment creation (python3.11 must be install)
+python3.11 -m venv venv
+# activate environment
+source venv/bin/activate
+# use pip to install required packages
+pip install --upgrade pip && pip install -r IBDReduce/requirements.txt
 ```
+Before running IBDReduce, make sure that this environment is activate otherwise you will get an error saying the dependencies are not installed.
 
+*note on virtual environments:*
 We recommend installing dependencies and running IBDReduce inside a [venv](https://docs.python.org/3/library/venv.html) or [conda](https://docs.conda.io/projects/conda/en/stable/user-guide/tasks/manage-environments.html) environment. All Python dependencies are also installed automatically if using the Docker build steps.
-
-
 
 ## Execution
 
@@ -165,7 +170,7 @@ IBDReduce requires several inputs:
 
 ---
 
-We have provided a Dockerfile in the top level IBDMap folder for streamlined building and execution. The same Docker image is additionally available at Dockerhub here: https://hub.docker.com/r/jtb114/ibdmap 
+We have provided a Dockerfile in the top level IBDMap folder for streamlined building and execution. The same Docker image is additionally available at Dockerhub here: https://hub.docker.com/r/jtb114/ibdmap. This image includes both the ibdmap executable and the ibdreduce script
 
 #### Pulling from Dockerhub
 
@@ -184,10 +189,14 @@ This command will create a new singularity image called `ibdmap.sif`. The tool c
 ```bash
 # Docker image
 docker run --rm {image ID/tag} ibdmap -h
+docker run --rm {image ID/tag} python3 /app/ibdreduce_v3.py -h
 
 # Singularity image
 singularity exec ibdmap.sif ibdmap -h
+singularity exec ibdmap.sif python3 /app/ibdreduce_v3.py -h
 ```
+
+*note:* the ibdreduce script is kept in the /app/ folder of the image so it is required to specify the full path as shown above otherwise you will get an error
 
 ## Data Formatting
 
