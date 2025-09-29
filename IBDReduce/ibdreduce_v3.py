@@ -57,7 +57,7 @@ def check_and_open(fpath: str):
     return f
 
 
-def parse_line(line: str) -> Tuple[int, int, np.ndarray, np.ndarray]:
+def parse_line(raw_line: str) -> Tuple[int, int, np.ndarray, np.ndarray]:
     """Line parser.
 
     Example line pair:
@@ -69,7 +69,7 @@ def parse_line(line: str) -> Tuple[int, int, np.ndarray, np.ndarray]:
     Returns:
         Tuple of useful values from the line.
     """
-    line = line.strip().split()
+    line = raw_line.strip().split()
     assert len(line) >= 2
 
     line_start = 5
