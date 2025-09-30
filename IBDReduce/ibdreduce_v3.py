@@ -182,8 +182,8 @@ def parse_pheno(ifile: str, phenotype: Optional[str] = None) -> Tuple[int, int]:
                 phenotype_indx = header_list.index(phenotype)
                 continue
             else: # If no phenotype string then we skip the header
-                phenotype_indx = 1 # If no phenotype name is passed then we are going to treat this like a 2 column file where the first column are the ids and the second column is the phenotype status
                 if i == 0:
+                    phenotype_indx = 1 # If no phenotype name is passed then we are going to treat this like a 2 column file where the first column are the ids and the second column is the phenotype status
                     continue
 
             l = l.strip().split()
