@@ -167,6 +167,41 @@ def ibdlen(fpath: str, gmap: GeneticMap) -> Tuple[int, float]:
     return breakpoints, total
 
 
+def compute_likelihood_ratio(obs_rates: np.ndarray, ncase: int, ncontrol: int) -> np.ndarray:
+    """Compute per-breakpoint likelihood ratios for the localization test.
+
+    Args:
+        obs_rates: Observed rates for the breakpoint, with case-case and case-control
+            rates stored in the first two columns.
+        ncase: Number of cases in the phenotype.
+        ncontrol: Number of controls in the phenotype.
+
+    Returns:
+        An array of likelihood ratios corresponding to the supplied breakpoints.
+    """
+
+    cscs = ncase * (ncase - 1.0) / 2.0
+    cscn = ncase * ncontrol
+
+    obs_counts = obs_rates[:, 0:2].copy()
+    obs_counts[:, 0] *= cscs
+    obs_counts[:, 1] *= cscn
+    obs_counts = np.rint(obs_counts).astype(np.int64)
+
+    weights = np.array([cscs / (cscs + cscn), cscn / (cscs + cscn)], dtype=np.float64)
+    total_counts = np.sum(obs_counts * weights, axis=1)
+
+    llik_ratio = np.zeros(obs_counts.shape[0], dtype=np.float64)
+    for idx in range(obs_counts.shape[0]):
+        null = stats.poisson.logpmf(obs_counts[idx, 0], weights[0] * total_counts[idx])
+        null += stats.poisson.logpmf(obs_counts[idx, 1], weights[1] * total_counts[idx])
+        alt = stats.poisson.logpmf(obs_counts[idx, 0], obs_counts[idx, 0])
+        alt += stats.poisson.logpmf(obs_counts[idx, 1], obs_counts[idx, 1])
+        llik_ratio[idx] = -2 * (null - alt)
+
+    return llik_ratio
+
+
 def parse_pheno(ifile: str, phenotype: Optional[str] = None) -> Tuple[int, int]:
     """
 
@@ -332,29 +367,7 @@ def main():
     if args.lrt:
         ncase, ncontrol = parse_pheno(args.lrt, args.phenotype_name)
 
-        cscs = ncase * (ncase - 1.) / 2.
-        cscn = ncase * ncontrol
-
-        obs_counts = obs_rates[:, 0:2]
-
-        obs_counts[:, 0] *= cscs
-        obs_counts[:, 1] *= cscn
-        obs_counts = obs_counts.astype(np.int64)
-
-        weights = np.array([cscs / (cscs + cscn), cscn / (cscs + cscn)])
-
-        total_counts = np.sum(obs_counts * weights, 1)
-        total_counts = total_counts.astype(np.int64)
-        mean_rates = np.sum(obs_rates[:, 0:2] * weights, 1)
-
-        for i in range(len(mean_rates)):
-            # Null is Pois(obs_cscs, Expected_counts[cscs]) * Pois(obs_cscn, Expected_counts[cscn])
-            null = stats.poisson.logpmf(obs_counts[i, 0], weights[0] * total_counts[i])
-            null += stats.poisson.logpmf(obs_counts[i, 1], weights[1] * total_counts[i])
-            alt = stats.poisson.logpmf(obs_counts[i, 0], obs_counts[i, 0])
-            alt += stats.poisson.logpmf(obs_counts[i, 1], obs_counts[i, 1])
-
-            llik_ratio[i] = -2 * (null - alt)
+        llik_ratio = compute_likelihood_ratio(obs_rates, ncase, ncontrol)
 
     def subtract(a):
         return a - avgs
