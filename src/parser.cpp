@@ -172,9 +172,7 @@ void Parser<T>::parse_input(std::istream &is) {
         threadpool.submit(std::move(stat));
         submitted++;
     }
-    while (threadpool.ntasks > 0) {
-        std::this_thread::sleep_for(std::chrono::nanoseconds(100000000));
-    }
+    threadpool.wait_for_completion();
 }
 
 template <typename T>
@@ -362,36 +360,30 @@ void Parser<T>::update_data(arma::SpCol<int32_t> &data,
             arma::sword row_idx = (*pheno.indexer).translate(pairs[0], pairs[1]);
 
             auto ids = fmt::format("{},{}", pairs[0], pairs[1]);
-            // if (seen.find(ids) == seen.end()) {
-            //     seen.insert(ids);
-            // } else {
-            //     continue;
-            // }
-            if (row_idx < 0) {
-                continue;
-            } else {
-                auto test = (*pheno.indexer).back_translate(row_idx);
-                if ((*pheno.samples)[test.first] != pairs[0] || (*pheno.samples)[test.second] != pairs[1]) {
-                    fmt::print(std::cerr, "Failed to map back. {} == {} ; {} == {}\n", (*pheno.samples)[test.first], pairs[0], (*pheno.samples)[test.second], pairs[1]);
-                }
-                if (params.cM) {
-                    try {
-                        double test_val = std::stod(vals[indices["cM"]]);
-                        if (test_val < params.cM) {
-                            continue;
-                        }
-                    } catch (std::invalid_argument &e) {
-                        throw(std::runtime_error("Attempted to filter on segment length, in data that lacks segment lengths."));
+
+            if (row_idx < 0) continue;
+
+            auto test = (*pheno.indexer).back_translate(row_idx);
+            if ((*pheno.samples)[test.first] != pairs[0] || (*pheno.samples)[test.second] != pairs[1]) {
+                fmt::print(std::cerr, "Failed to map back. {} == {} ; {} == {}\n", (*pheno.samples)[test.first], pairs[0], (*pheno.samples)[test.second], pairs[1]);
+            }
+            if (params.cM) {
+                try {
+                    double test_val = std::stod(vals[indices["cM"]]);
+                    if (test_val < params.cM) {
+                        continue;
                     }
+                } catch (std::invalid_argument &e) {
+                    throw(std::runtime_error("Attempted to filter on segment length, in data that lacks segment lengths."));
                 }
-                if (value > 0) {
-                    try {
-                        bp.segment_lengths.push_back(std::stod(vals[indices["cM"]]));
-                    } catch (std::invalid_argument &e) {
-                        bp.segment_lengths.push_back(nan("1"));
-                    }
-                    bp.ibd_pairs.emplace_back(pairs[0], pairs[1]);
+            }
+            if (value > 0) {
+                try {
+                    bp.segment_lengths.push_back(std::stod(vals[indices["cM"]]));
+                } catch (std::invalid_argument &e) {
+                    bp.segment_lengths.push_back(nan("1"));
                 }
+                bp.ibd_pairs.emplace_back(pairs[0], pairs[1]);
             }
             data(row_idx) += value;
         }

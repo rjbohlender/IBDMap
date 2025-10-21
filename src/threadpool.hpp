@@ -33,6 +33,7 @@ class ThreadPool {
     mutable std::mutex mut;
     std::condition_variable not_empty;
     std::condition_variable not_full;
+    std::condition_variable all_tasks_done;
     std::queue<Stat> work_queue;
     std::vector<std::thread> threads;
     JoinThreads joiner;
@@ -49,9 +50,16 @@ class ThreadPool {
                 lk.unlock();
                 not_full.notify_one();
                 task.run();
+
+                // Re-acquire lock before modifying ntasks and notifying
+                lk.lock();
                 ntasks--;
 
-                lk.lock();
+                // Notify if all tasks are complete
+                if (ntasks == 0) {
+                    all_tasks_done.notify_all();
+                }
+                // Lock will be reacquired at top of loop
             }
         }
     }
@@ -60,7 +68,7 @@ public:
     std::atomic<bool> done;
     std::atomic<int> ntasks;
     explicit ThreadPool(Parameters params_) : done(false), ntasks(0), nsubmitted(0), joiner(threads), params(std::move(params_)) {
-        unsigned const thread_count = params.nthreads - 2;
+        unsigned const thread_count = params.nthreads > 2 ? params.nthreads - 2 : 1;
         try {
             for (unsigned i = 0; i < thread_count; ++i) {
                 threads.emplace_back(
@@ -74,9 +82,7 @@ public:
     ~ThreadPool() {
         done = true;
         not_empty.notify_all();
-        while (!work_queue.empty() || ntasks > 0) {
-            std::this_thread::sleep_for(std::chrono::nanoseconds(100000000));
-        }
+        wait_for_completion();
     }
 
     void submit(Stat &&f) {
@@ -87,6 +93,11 @@ public:
         nsubmitted++;
         lk.unlock();
         not_empty.notify_one();
+    }
+
+    void wait_for_completion() {
+        std::unique_lock<std::mutex> lk(mut);
+        all_tasks_done.wait(lk, [this]() { return work_queue.empty() && ntasks == 0; });
     }
 };
 
