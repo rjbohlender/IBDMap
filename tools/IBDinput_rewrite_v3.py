@@ -3,9 +3,7 @@
 import os
 import sys
 import gzip
-import multiprocessing as mp
 import argparse as ap
-from functools import partial
 from bisect import bisect_left
 
 
@@ -33,7 +31,7 @@ class Indices:
             self.cM_indx = 7
         else:
             if f.lower().split(':')[0] in ['other','others']:
-                indx = in_format.lower().split(':')[1].split(';')
+                indx = f.lower().split(':')[1].split(';')
                 self.id1_indx = int(indx[0]) - 1
                 self.id2_indx = int(indx[1]) - 1
                 self.chr_indx = int(indx[2]) - 1
@@ -76,6 +74,8 @@ def get_phenotypes(ipf):
     for line in pheno_file:
         line = line.strip()
         line = line.split()
+        if len(line) < 2:
+            continue
         if line[1] == 'NA':
             continue
         elif str(line[0]) in uniqID:
@@ -131,7 +131,7 @@ def IBDsumm(args, idx, uniqID, dupID):
         start = min(int(line[idx.str_indx]), int(line[idx.end_indx]))
         end = max(int(line[idx.str_indx]), int(line[idx.end_indx]))
         cM = str(line[idx.cM_indx])
-        if id1 not in uniqID or id2 not in uniqID or float(cM) < args.min or ( 'unit' in vars() and str(line[unit]) != 'cM'):
+        if id1 not in uniqID or id2 not in uniqID or float(cM) < args.min or (hasattr(idx, 'unit') and str(line[idx.unit]) != 'cM'):
             continue
         else:
             if uniqID[id1] < uniqID[id2]:
@@ -174,13 +174,13 @@ def IBDsumm(args, idx, uniqID, dupID):
 def main():
     """Entrypoint."""
     parser = ap.ArgumentParser()
-    parser.add_argument('-i', '--input', type=str, help='Input IBD segment file.')
-    parser.add_argument('-p', '--pheno', type=str, help='Input pheotype file.')
-    parser.add_argument('-o', '--output', type=str, help='Prefix to the output file.')
-    parser.add_argument('-f', '--format', type=str, help='Which program is the input derived from? May be GERMLINE, iLASH, RaPID, hap-ibd, or other.')
-    parser.add_argument('-m', '--min', type=float, help='Minimum centimorgan length of segments to be considered.')
-    parser.add_argument('-c', '--chrom', type=str, help='The current chromosome.')
-    parser.add_argument('-T', '--temp', type=str, help='Path to the temporary file storage directory.')
+    parser.add_argument('-i', '--input', type=str, required=True, help='Input IBD segment file.')
+    parser.add_argument('-p', '--pheno', type=str, required=True, help='Input pheotype file.')
+    parser.add_argument('-o', '--output', type=str, required=True, help='Prefix to the output file.')
+    parser.add_argument('-f', '--format', type=str, required=True, help='Which program is the input derived from? May be GERMLINE, iLASH, RaPID, hap-ibd, or other.')
+    parser.add_argument('-m', '--min', type=float, required=True, help='Minimum centimorgan length of segments to be considered.')
+    parser.add_argument('-c', '--chrom', type=str, required=True, help='The current chromosome.')
+    parser.add_argument('-T', '--temp', type=str, required=True, help='Path to the temporary file storage directory.')
     args = parser.parse_args()
 
     idx = Indices(args.format)
@@ -193,7 +193,3 @@ def main():
     uniqID, dupID = get_phenotypes(args.pheno)
 
     IBDsumm(args, idx, uniqID, dupID)
-
-
-if __name__ == "__main__":
-    main()
