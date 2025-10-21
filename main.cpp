@@ -107,7 +107,7 @@ int main(int argc, char *argv[]) {
                  "The number of ibd segments that a breakpoint must have to be tested.")->default_val(0);
   app.add_option("-o,--output",
 				 params.output_path,
-				 "Output to a specified file. Default output is is ./output/{date-time}.results.gz.");
+				 "Output to a specified file. Default output is is ./output/{date-time}.results.zst.");
   app.add_option("--pheno_col",
                  params.pheno_col,
                  "The column to read from the phenotype file. Column 0 should be sample ID and column 1+ should be 0, 1, NA.")->default_val(1);
@@ -162,7 +162,7 @@ int main(int argc, char *argv[]) {
     std::time_t t = std::time(nullptr);
     std::strftime(cur_time, 99, "%F-%T", std::localtime(&t));
 	std::stringstream default_output;
-	default_output << out_dir << "/" << cur_time << ".results.gz";
+	default_output << out_dir << "/" << cur_time << ".results.zst";
 	params.output_path = default_output.str();
   }
 
