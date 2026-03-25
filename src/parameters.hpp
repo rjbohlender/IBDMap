@@ -16,9 +16,10 @@
 class Parameters {
 public:
     std::string input;
+    std::string samples;
+    std::string chromosome;
     std::string pheno;
     std::string gmap;
-    std::optional<std::string> info;
     std::optional<std::string> cov;
     size_t nperms;
     size_t nthreads;
@@ -36,24 +37,19 @@ public:
     bool verbose = false;
     bool compressed_memory = false;
     bool enable_testing = false;
-    bool dash = false;
-    bool oldformat = false;
     bool print_debug = false;
     int pheno_col;
     std::optional<std::vector<int>> range;
     std::optional<std::vector<std::pair<int, int>>> exclude;
     double cM;
-    double AF;
     double threshold;
-    std::optional<std::set<std::string>> sample_list;
 
     void print(std::ostream &os) {
         fmt::print(os, "Input: {}\n", input);
+        fmt::print(os, "Samples: {}\n", samples);
+        fmt::print(os, "Chromosome: {}\n", chromosome);
         fmt::print(os, "Pheno: {}\n", pheno);
         fmt::print(os, "Gmap: {}\n", gmap);
-        if (info) {
-            fmt::print(os, "Info: {}\n", *info);
-        }
         fmt::print(os, "Output: {}\n", output_path);
         fmt::print(os, "Nperms: {}\n", nperms);
         fmt::print(os, "Nthreads: {}\n", nthreads);
@@ -73,10 +69,6 @@ public:
             fmt::print(os, "Range: {}\n", fmt::join(*range, "-"));
         }
         fmt::print(os, "cM: {}\n", cM);
-        fmt::print(os, "AF: {}\n", AF);
-        if (sample_list) {
-            fmt::print(os, "Samples: {}\n", fmt::join(*sample_list, ","));
-        }
     };
 };
 #endif//CARVAIBD_PARAMETERS_HPP

@@ -3,7 +3,6 @@
 #include "src/parameters.hpp"
 #include "src/parser.hpp"
 #include "src/phenotypes.hpp"
-#include "src/reporter.hpp"
 #include <fmt/include/fmt/ostream.h>
 #include <iostream>
 #include <optional>
@@ -29,13 +28,18 @@ int main(int argc, char *argv[]) {
   Parameters params;
   std::vector<int> tmp_range_vec;
   std::vector<std::string> tmp_exclude_vec;
-  std::vector<std::string> tmp_sample_vec;
 
   CLI::App app{"IBDMap is an IBD mapping tool for large scale IBD datasets."};
 
   app.add_option("-i,--input",
 				 params.input,
-				 "Unified IBD input file.")->required()->check(CLI::ExistingFile);
+				 "IBDF v3 binary input file.")->required()->check(CLI::ExistingFile);
+  app.add_option("-s,--samples",
+				 params.samples,
+				 "Companion .samples file mapping numeric IDs to sample names.")->required()->check(CLI::ExistingFile);
+  app.add_option("-c,--chromosome",
+				 params.chromosome,
+				 "Chromosome label for the input file (e.g. chr1).")->required();
   app.add_option("-p,--pheno",
 				 params.pheno,
 				 "Path to file containing sample phenotype pairs. 1 for "
@@ -46,9 +50,6 @@ int main(int argc, char *argv[]) {
 				 "Recombination map files. Assumed to be three columns, "
 				 "position, chromosome, cM. Header line is required. "
 	 			 "Expected format is physical_pos\tchromosome\tgenetic_position")->required()->check(CLI::ExistingFile);
-  app.add_option("--info",
-				 params.info,
-				 "Path to supporting info file. Expected format is chr segID ...")->check(CLI::ExistingFile);
   app.add_option("--cov",
                  params.cov,
                  "Path to supporting covariates file. Expected format is sampleID cov1 cov2 ...")->check(CLI::ExistingFile);
@@ -72,11 +73,6 @@ int main(int argc, char *argv[]) {
 				 "Sets the minimum segment length for segments to be included. "
 				 "The parser will automatically skip segments that are smaller "
 				 "than the given length. Default value of 3.0.")->default_val(3.0);
-  app.add_option("--af",
-				 params.AF,
-				 "Sets the maximum allele frequency for segments to be "
-				 "included. The parser will automatically skip segments that "
-				 "are more frequent than the given cutoff. Default value of 0.01")->default_val(0.01);
   app.add_option("-r,--rsquared",
 				 params.rsquared,
 				 "Sets the maximum correlation between sites. The parser will "
@@ -93,11 +89,6 @@ int main(int argc, char *argv[]) {
                "A series of ranges of the form 123-456,457-900 to exclude from the analyzed chromosome."
                "All breakpoints within the range (inclusive) will be dropped.")
         ->delimiter(',');
-  app.add_option("--sample_list,-l",
-				 tmp_sample_vec,
-				 "Comma-separated list of samples to include in analysis. All "
-				 "pairs not including one of these samples will be dropped.")
-	 ->delimiter(',');
   app.add_option("--seed",
 				 params.seed,
 				 "Specify the seed to be shared by all breakpoints for "
@@ -133,15 +124,9 @@ int main(int argc, char *argv[]) {
   app.add_flag("--enable_testing",
 			   params.enable_testing,
 			   "Enable testing functions for Statistic class.");
-  app.add_flag("--dash",
-			   params.dash,
-			   "Expect input to be formatted by DASH.");
   app.add_flag("--print_debug",
                params.print_debug,
                "Print statistic component information to a text file.");
-  app.add_flag("--old",
-               params.oldformat,
-               "Expect non-DASH input to include the npairs and nsegments columns.");
   app.add_flag("--compressed-memory",
                params.compressed_memory,
                "Use significantly less memory at the cost of 3x-5x longer runtime.");
@@ -150,6 +135,12 @@ int main(int argc, char *argv[]) {
                "Use only the case/case rate when outputting test statistics.");
 
   CLI11_PARSE(app, argc, argv);
+
+  // Normalize chromosome to "chr" prefix
+  if (!params.chromosome.empty() &&
+      params.chromosome.substr(0, 3) != "chr") {
+      params.chromosome = "chr" + params.chromosome;
+  }
 
   // Default output location
   if (params.output_path.empty()) {
@@ -162,8 +153,19 @@ int main(int argc, char *argv[]) {
     std::time_t t = std::time(nullptr);
     std::strftime(cur_time, 99, "%F-%T", std::localtime(&t));
 	std::stringstream default_output;
-	default_output << out_dir << "/" << cur_time << ".results.zst";
+	default_output << out_dir << "/" << cur_time << "." << params.chromosome << ".results.zst";
 	params.output_path = default_output.str();
+  } else {
+    // Strip .zst suffix if present, we'll re-add it
+    if (params.output_path.size() >= 4 &&
+        params.output_path.substr(params.output_path.size() - 4) == ".zst") {
+        params.output_path.resize(params.output_path.size() - 4);
+    }
+    // Add chromosome if not already in the name
+    if (params.output_path.find(params.chromosome) == std::string::npos) {
+        params.output_path += "." + params.chromosome;
+    }
+    params.output_path += ".zst";
   }
 
   // Have to handle this way because optional wrapped vector arguments don't seem to be supported.
@@ -178,29 +180,12 @@ int main(int argc, char *argv[]) {
       }
       params.exclude = exclude_vec;
   }
-  if (!tmp_sample_vec.empty()) {
-	params.sample_list = std::set<std::string>(tmp_sample_vec.begin(), tmp_sample_vec.end());
-  }
-
-  if (params.info && !params.dash) {
-    fmt::print(std::cerr, "Info files are only supported with the --dash option.");
-    std::exit(-1);
-  }
-
-  if (params.info && !params.dash) {
-    fmt::print(std::cerr, "Info files are only supported with the --dash option.");
-    std::exit(-1);
-  }
-
   params.print(std::cerr);
   GeneticMap gmap(params.gmap);
 
   if (params.verbose) {
 	fmt::print(std::cerr, "Constructing parameters.\n");
   }
-
-  // Initialize reporter
-  auto reporter = std::make_shared<Reporter>(params.output_path, params.print_debug);
 
   if (params.verbose) {
 	fmt::print(std::cerr, "Running parser.\n");
@@ -214,23 +199,10 @@ int main(int argc, char *argv[]) {
 
   if (params.compressed_memory) {
       Phenotypes<compressed_pheno_vector> pheno(params, seed_source);
-      Parser<compressed_pheno_vector> parser(
-              params,
-              reporter,
-              gmap,
-              pheno);
+      Parser<compressed_pheno_vector> parser(params, gmap, pheno);
   } else {
       Phenotypes<pheno_vector> pheno(params, seed_source);
-      Parser<pheno_vector> parser(
-              params,
-              reporter,
-              gmap,
-              pheno);
+      Parser<pheno_vector> parser(params, gmap, pheno);
   }
-
-  // Sort output
-  fmt::print(std::cerr, "Sorting output.\n");
-  reporter->sort();
-  reporter.reset();  // Ensure output is complete
   fmt::print(std::cerr, "Total runtime: {}\n", timer.toc());
 }

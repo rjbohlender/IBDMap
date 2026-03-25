@@ -43,17 +43,22 @@ class ThreadPool {
         while (!done || ntasks > 0) {
             not_empty.wait_for(lk, std::chrono::seconds(1), [this] { return !work_queue.empty() || done; });
             if (!work_queue.empty()) {
-                Stat task = std::move(work_queue.front());
-                work_queue.pop();
+                {
+                    Stat task = std::move(work_queue.front());
+                    work_queue.pop();
 
-                // Done with queue; unlock
-                lk.unlock();
-                not_full.notify_one();
-                task.run();
+                    // Done with queue; unlock
+                    lk.unlock();
+                    not_full.notify_one();
+                    task.run();
+                }
+                // task is destroyed here (outside the lock) so any shared_ptr
+                // cleanup (e.g. Reporter destructor) won't block other workers.
 
                 // Re-acquire lock before modifying ntasks and notifying
                 lk.lock();
                 ntasks--;
+                not_full.notify_one();
 
                 // Notify if all tasks are complete
                 if (ntasks == 0) {
@@ -68,7 +73,7 @@ public:
     std::atomic<bool> done;
     std::atomic<int> ntasks;
     explicit ThreadPool(Parameters params_) : done(false), ntasks(0), nsubmitted(0), joiner(threads), params(std::move(params_)) {
-        unsigned const thread_count = params.nthreads > 2 ? params.nthreads - 2 : 1;
+        unsigned const thread_count = std::max(1u, static_cast<unsigned>(params.nthreads));
         try {
             for (unsigned i = 0; i < thread_count; ++i) {
                 threads.emplace_back(
@@ -87,7 +92,7 @@ public:
 
     void submit(Stat &&f) {
         std::unique_lock lk(mut);
-        not_full.wait(lk, [this]() { return ntasks < params.nthreads + 5; });
+        not_full.wait(lk, [this]() { return ntasks < static_cast<int>(params.nthreads) * 2; });
         work_queue.push(std::move(f));
         ntasks++;
         nsubmitted++;

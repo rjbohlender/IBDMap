@@ -18,6 +18,7 @@
 #include <boost/iostreams/filtering_streambuf.hpp>
 #include <fmt/include/fmt/ostream.h>
 #include <iostream>
+#include <map>
 #include <mutex>
 #include <queue>
 #include <thread>
@@ -57,7 +58,8 @@ class Reporter {
     std::string out_path;
     std::thread print_thread;
     std::thread debug_thread;
-    std::queue<std::string> string_queue;
+    std::map<uint64_t, std::string> reorder_buf;
+    uint64_t next_seq = 0;
     std::queue<std::string> debug_queue;
     mutable std::mutex mut;
     mutable std::mutex deb;
@@ -67,7 +69,6 @@ class Reporter {
 
     void print() {
         std::unique_lock<std::mutex> lk(mut);
-        std::string s;
 
         boost::iostreams::filtering_ostream os;
         boost::iostreams::file_sink sink{out_path};
@@ -75,20 +76,22 @@ class Reporter {
         os.push(sink);
 
         while (!done || nstrings > 0) {
-            data_cond.wait_for(lk, std::chrono::seconds(1), [this] { return !string_queue.empty() || done; });
-            if (!string_queue.empty()) {
-                s = std::move(string_queue.front());
-                string_queue.pop();
+            data_cond.wait_for(lk, std::chrono::seconds(1), [this] {
+                return reorder_buf.count(next_seq) || done;
+            });
+            while (reorder_buf.count(next_seq)) {
+                auto node = reorder_buf.extract(next_seq);
                 lk.unlock();
                 if (!out_path.empty()) {
-                    fmt::print(os, s);
+                    fmt::print(os, node.mapped());
                     os.flush();
                 } else {
-                    fmt::print(s);
+                    fmt::print(node.mapped());
                 }
                 nstrings--;
                 nwritten++;
                 lk.lock();
+                next_seq++;
             }
         }
     }
@@ -138,8 +141,8 @@ public:
      * Ensure all output is written before exiting, and thread is joined.
      */
     ~Reporter() {
-        while (!string_queue.empty() || nstrings > 0) {
-            fmt::print(std::cerr, "queue size: {} nstrings: {}\n", string_queue.size(), nstrings);
+        while (!reorder_buf.empty() || nstrings > 0) {
+            fmt::print(std::cerr, "queue size: {} nstrings: {}\n", reorder_buf.size(), nstrings);
             std::this_thread::sleep_for(std::chrono::nanoseconds(100000000));
         }
         done = true;
@@ -158,7 +161,7 @@ public:
      * @param s The string to be printed.
      * @param dbg_str Whether the string is a debug string or not.
      */
-    void submit(const std::string &s, bool dbg_str) {
+    void submit(uint64_t seq, const std::string &s, bool dbg_str) {
         if (dbg_str) {
             std::unique_lock<std::mutex> lk(deb);
             debug_queue.push(s);
@@ -167,7 +170,7 @@ public:
             return;
         } else {
             std::unique_lock<std::mutex> lk(mut);
-            string_queue.push(s);
+            reorder_buf[seq] = s;
             nstrings++;
             nsubmitted++;
             lk.unlock();
@@ -185,8 +188,8 @@ public:
      */
     void sort() {
         // Ensure printing is completed and print thread is terminated before sorting.
-        while (!string_queue.empty() || nstrings > 0) {
-            fmt::print(std::cerr, "queue size: {} nstrings: {}\n", string_queue.size(), nstrings);
+        while (!reorder_buf.empty() || nstrings > 0) {
+            fmt::print(std::cerr, "queue size: {} nstrings: {}\n", reorder_buf.size(), nstrings);
             std::this_thread::sleep_for(std::chrono::nanoseconds(100000000));
         }
         done = true;

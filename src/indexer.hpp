@@ -70,7 +70,7 @@ struct Indexer {
         }
 
         for (const auto &s : samples) {
-            switch (phenotypes[current]) {
+            switch (static_cast<int>(phenotypes[current])) {
                 case 1:
                     ordered_positions[s] = current;
                     ordered_cc_positions[s] = case_idx;

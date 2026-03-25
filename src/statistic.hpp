@@ -23,6 +23,7 @@ class Statistic {
     arma::SpCol<int32_t> data;
     std::shared_ptr<Indexer<T>> indexer;
     std::shared_ptr<Reporter> reporter;
+    uint64_t seq;
     Parameters params;
     std::shared_ptr<std::vector<T>> phenotypes;
 
@@ -49,6 +50,7 @@ public:
               Breakpoint bp_,
               std::shared_ptr<Indexer<T>> indexer_,
               std::shared_ptr<Reporter> reporter_,
+              uint64_t seq_,
               Parameters params_,
               std::shared_ptr<std::vector<T>> phenotypes_);
 

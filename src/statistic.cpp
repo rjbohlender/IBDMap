@@ -16,8 +16,10 @@ Statistic<T>::Statistic(arma::SpCol<int32_t> data_,
                         Breakpoint bp_,
                         std::shared_ptr<Indexer<T>> indexer_,
                         std::shared_ptr<Reporter> reporter_,
+                        uint64_t seq_,
                         Parameters params_,
                         std::shared_ptr<std::vector<T>> phenotypes_) : data(std::move(data_)), indexer(std::move(indexer_)),
+                                                                       seq(seq_),
                                                                        params(std::move(params_)),
                                                                        bp(std::move(bp_)), reporter(std::move(reporter_)),
                                                                        phenotypes(std::move(phenotypes_)) {
@@ -97,7 +99,7 @@ Statistic<T>::calculate(T &phenotypes_, bool original_) noexcept {
     }
 
     if (params.print_debug) {
-        reporter->submit(fmt::format("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+        reporter->submit(seq, fmt::format("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
                                      bp.breakpoint.first,
                                      bp.breakpoint.second,
                                      (*indexer).case_case,
@@ -151,7 +153,7 @@ void Statistic<T>::run() {
         fmt::print(std::cerr, "Finished {}\t{}\n", bp.breakpoint.first, bp.breakpoint.second);
     }
 
-    reporter->submit(ss.str(), false);
+    reporter->submit(seq, ss.str(), false);
     cleanup();
     done = true;
 }

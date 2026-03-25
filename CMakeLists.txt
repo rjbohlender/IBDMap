@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.11) # A newer version of cmake will let us stat
 set(CMAKE_OSX_DEPLOYMENT_TARGET 12.3) # Otherwise it will pull an older SDK, which breaks linking against homebrew packages
 project(carvaIBD)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 add_subdirectory(third_party/SugarPP/)
 add_subdirectory(third_party/fmt/ EXCLUDE_FROM_ALL)
@@ -52,7 +52,6 @@ set(PROJECT_SUPPORT_FILES
     src/jointhreads.hpp
     src/parser.hpp
     src/split.hpp
-    src/iscompressed.hpp
     src/statistic.cpp
     src/statistic.hpp
     src/threadpool.hpp
@@ -63,13 +62,9 @@ set(PROJECT_SUPPORT_FILES
     src/indexsort.hpp
     src/breakpoint.hpp
     src/indexer.hpp
-    src/info.cpp
-    src/info.hpp
     src/math.hpp
     src/math.cpp
     src/parser.cpp
-    src/source.cpp
-    src/source.hpp
     src/inputvalidator.cpp
     src/inputvalidator.hpp
     src/phenotypes.cpp
@@ -93,8 +88,12 @@ set(IBDLIB_SOURCE_FILES
     src/inputvalidator.cpp src/ibdlibclasses.hpp
     src/glm.hpp
     src/permutation.hpp
-    src/permutation.cpp)
+    src/permutation.cpp
+        binary_format/ibd_format.hpp
+        binary_format/ibd_reader.hpp
+        binary_format/mapped_file.hpp)
 
+include_directories("${CMAKE_CURRENT_LIST_DIR}/binary_format")
 include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party")
 include_directories(${ARMADILLO_INCLUDE_DIRS})
 include_directories(${Python3_INCLUDE_DIRS})
@@ -108,7 +107,10 @@ include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party/pcg-cpp-0.98/include"
 add_library(ibdlib MODULE ${IBDLIB_SOURCE_FILES})
 target_link_libraries(ibdlib ${Python3_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} fmt::fmt-header-only ${ARMADILLO_LIBRARIES})
 
-add_executable(ibdmap main.cpp ${PROJECT_SUPPORT_FILES})
+add_executable(ibdmap main.cpp ${PROJECT_SUPPORT_FILES}
+        binary_format/ibd_format.hpp
+        binary_format/ibd_reader.hpp
+        binary_format/mapped_file.hpp)
 
 target_compile_definitions(ibdmap PRIVATE ARMA_DONT_USE_WRAPPER=1)
 

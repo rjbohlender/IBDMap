@@ -89,33 +89,12 @@ def get_phenotypes(ipf):
     return uniqID, dupID
 
 
-def write_temp(args, fh, pos, pair, add):
-    """Open the temporary file, write our the addition or removal, then close."""
-    if pos not in fh:
-        fh[pos] = open(args.temp + '/{}'.format(pos), 'w')
-    print('{}\t{}'.format('add' if add else 'rm', pair), file=fh[pos])
-
-
-def read_temp(args, pos):
-    """Parse the position and update"""
-    data = {'add': [], 'rm': []}
-    with open(args.temp + '/{}'.format(pos), 'r') as f:
-        for l in f:
-            l = l.strip().split()
-            data[l[0]].append(l[1])
-    for k in data.keys():
-        if len(data[k]) == 0:
-            data[k].append('NA')
-    return data
-
-
-
 def IBDsumm(args, idx, uniqID, dupID):
     """Read and format IBD data."""
     IBDdata = {}
     IBDindex = {}
     allpos = []
-    fh = {}
+    events = {}
 
     ipf = args.input
     if is_gzipped(ipf):
@@ -152,21 +131,18 @@ def IBDsumm(args, idx, uniqID, dupID):
             elif allpos[end_pos] != end:
                 allpos.insert(end_pos, end)
 
-            # Add the pair
-            write_temp(args, fh, start, pair, True)
-            # Remove the pair
-            write_temp(args, fh, end, pair, False)
-
-    for k, v in fh.items():
-        v.close()
+            events.setdefault(start, {"add": [], "rm": []})["add"].append(pair)
+            events.setdefault(end, {"add": [], "rm": []})["rm"].append(pair)
 
     print('Identified {} breakpoints on chr{}'.format(len(allpos), args.chrom))
     out = open('{}.chr{}.small.txt'.format(args.output, args.chrom), 'w')
     # Header
     out.write('chr\tpos\tadd\tdel\n')
     for pos in allpos:
-        data = read_temp(args, pos)
-        out.write('{}\t{}\t{}\t{}\n'.format(args.chrom, str(pos), ' '.join(data['add']), ' '.join(data['rm'])))
+        data = events[pos]
+        add = ' '.join(data['add']) if data['add'] else 'NA'
+        rm = ' '.join(data['rm']) if data['rm'] else 'NA'
+        out.write('{}\t{}\t{}\t{}\n'.format(args.chrom, str(pos), add, rm))
     out.close()
     os.system('gzip '+ args.output + '.chr' + str(args.chrom) + '.small.txt')
 
@@ -180,7 +156,6 @@ def main():
     parser.add_argument('-f', '--format', type=str, required=True, help='Which program is the input derived from? May be GERMLINE, iLASH, RaPID, hap-ibd, or other.')
     parser.add_argument('-m', '--min', type=float, required=True, help='Minimum centimorgan length of segments to be considered.')
     parser.add_argument('-c', '--chrom', type=str, required=True, help='The current chromosome.')
-    parser.add_argument('-T', '--temp', type=str, required=True, help='Path to the temporary file storage directory.')
     args = parser.parse_args()
 
     idx = Indices(args.format)
@@ -193,3 +168,6 @@ def main():
     uniqID, dupID = get_phenotypes(args.pheno)
 
     IBDsumm(args, idx, uniqID, dupID)
+
+if __name__ == "__main__":
+    main()

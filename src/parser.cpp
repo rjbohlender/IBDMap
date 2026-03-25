@@ -3,125 +3,120 @@
 //
 
 #include "parser.hpp"
-#include "inputvalidator.hpp"
-#include <unordered_set>
+#include <atomic>
+#include <cstdio>
+#include <fstream>
+#include <random>
+#include <thread>
+#include <boost/iostreams/device/file.hpp>
+#include <boost/iostreams/filter/zstd.hpp>
+#include <boost/iostreams/filtering_stream.hpp>
+#include <fmt/include/fmt/ostream.h>
 
 template <typename T>
-void Parser<T>::parse_input(std::istream &is) {
+std::vector<std::string> Parser<T>::load_sample_names(const std::string &samples_path) {
+    std::vector<std::string> names;
+    std::ifstream ifs(samples_path);
+    if (!ifs.is_open()) {
+        throw std::runtime_error("Failed to open samples file: " + samples_path);
+    }
     std::string line;
-    unsigned long submitted = 0;
-    double cur_dist = 0;
-    double last_dist = 0;
+    while (std::getline(ifs, line)) {
+        if (!line.empty()) {
+            names.push_back(line);
+        }
+    }
+    return names;
+}
 
-    // Initialize ThreadPool
-    ThreadPool<Statistic<T>> threadpool(params);
-
-    // Maintain a single vector that we just update with each line
-    arma::SpCol<int32_t> last(pheno.samples->size() * (pheno.samples->size() - 1) / 2.);
-    arma::SpCol<int32_t> data(pheno.samples->size() * (pheno.samples->size() - 1) / 2.);
-
-    arma::wall_clock timer;
-    long lineno = -1;
-    std::map<std::string, std::map<std::string, int>> indices;
-    while (std::getline(is, line)) {
-        if (params.dash && boost::starts_with(line, "##")) {
-            // Processing Header
-            // Example:
-            // ####cluster: clusterID:IIDs:hapIDs
-            // ##singleton: IID1-IID2:hapID1-hapID2:cM
-            size_t header_chars = 0;
-            for (const auto c : line) {
-                if (c == '#') {
-                    header_chars++;
-                }
-            }
-            line = line.substr(header_chars, line.size());// Strip the leading header characters.
-
-            RJBUtil::Splitter<std::string> hsplit(line, ": ");
-
-            // There are two breakpoint classes to handle. cluster and singleton.
-            // IDs that are expected to be present:
-            // clusterID, IIDs, hapIDs, IID1-IID2, hapID1-hapID2, cM
-            for (auto it = hsplit.begin() + 1; it != hsplit.end(); it++) {
-                indices[hsplit[0]][*it] = std::distance(hsplit.begin() + 1, it);
-            }
-
+template <typename T>
+void Parser<T>::apply_checkpoint_to_sparse(arma::SpCol<int32_t> &data,
+                                           const std::vector<ibdf::Segment> &active,
+                                           const std::vector<std::string> &sample_names) {
+    data.zeros();
+    for (const auto &seg : active) {
+        if (params.cM > 0 && seg.cm < params.cM) {
             continue;
         }
+        const auto &name1 = sample_names[seg.p1];
+        const auto &name2 = sample_names[seg.p2];
+        arma::sword row_idx = (*pheno.indexer).translate(name1, name2);
+        if (row_idx >= 0) {
+            data(row_idx) = 1;
+        }
+    }
+}
 
-        // Legacy format handling
-        lineno++;
-        if (!params.dash) {
-            if (indices.find("singleton") == indices.end()) {
-                indices["singleton"] = std::map<std::string, int>();
+template <typename T>
+void Parser<T>::apply_delta_to_sparse(arma::SpCol<int32_t> &data,
+                                      const ibdf::DeltaView &dv,
+                                      const std::vector<std::string> &sample_names,
+                                      int value) {
+    uint32_t n = (value > 0) ? dv.n_adds() : dv.n_dels();
+    const auto cm_arr  = (value > 0) ? dv.add_cm : dv.del_cm;
+    const auto p1_arr  = (value > 0) ? dv.add_p1 : dv.del_p1;
+    const auto p2_arr  = (value > 0) ? dv.add_p2 : dv.del_p2;
+
+    for (uint32_t i = 0; i < n; ++i) {
+        if (params.cM > 0 && cm_arr[i] < params.cM) {
+            continue;
+        }
+        const auto &name1 = sample_names[p1_arr[i]];
+        const auto &name2 = sample_names[p2_arr[i]];
+        arma::sword row_idx = (*pheno.indexer).translate(name1, name2);
+        if (row_idx >= 0) {
+            data(row_idx) += value;
+        }
+    }
+}
+
+template <typename T>
+std::vector<Chunk> Parser<T>::find_chunks(const IbdfReader &reader) {
+    std::vector<Chunk> chunks;
+    for (uint64_t i = 0; i < reader.n_positions(); ++i) {
+        if (reader.index()[i].is_checkpoint()) {
+            if (!chunks.empty()) {
+                chunks.back().end = i;
             }
-            if (lineno == 0) {// Skip the header
-                if (indices["singleton"].find("ID1-ID2") == indices["singleton"].end()) {
-                    indices["singleton"]["ID1-ID2"] = 1;
-                }
-                if (indices["singleton"].find("cM") == indices["singleton"].end()) {
-                    indices["singleton"]["cM"] = 0;
-                }
-                continue;
-            }
+            chunks.push_back({i, reader.n_positions()});
+        }
+    }
+    return chunks;
+}
+
+template <typename T>
+void Parser<T>::parse_chunk(const IbdfReader &reader,
+                            const std::vector<std::string> &sample_names,
+                            const Chunk &chunk,
+                            std::shared_ptr<Reporter> chunk_reporter,
+                            ThreadPool<Statistic<T>> &threadpool) {
+    arma::uword n_pairs = pheno.samples->size() * (pheno.samples->size() - 1) / 2;
+    arma::SpCol<int32_t> data(n_pairs);
+    arma::SpCol<int32_t> last(n_pairs);
+
+    double cur_dist = 0;
+    double last_dist = 0;
+    uint64_t seq = 0;
+
+    std::vector<ibdf::Segment> active;
+
+    for (uint64_t i = chunk.start; i < chunk.end; ++i) {
+        const auto &idx_entry = reader.index()[i];
+        uint64_t bp_pos = idx_entry.bp_pos;
+        int pos = static_cast<int>(bp_pos);
+
+        const auto *hdr = ibdf::peek_header(reader.block_ptr(i));
+        if (hdr->block_type == ibdf::BLOCK_CHECKPOINT) {
+            auto cp = ibdf::decode_checkpoint(reader.block_ptr(i));
+            ibdf::load_checkpoint(active, cp);
+            apply_checkpoint_to_sparse(data, active, sample_names);
         } else {
-            if(lineno == 0) {
-                continue;
-            }
+            auto dv = ibdf::decode_delta(reader.block_ptr(i));
+            apply_delta_to_sparse(data, dv, sample_names, -1);
+            apply_delta_to_sparse(data, dv, sample_names, 1);
         }
 
-        boost::char_separator<char> sep{"\t"};
-        boost::tokenizer<boost::char_separator<char>> tok{line, sep};
-        auto tok_it = tok.begin();
-
-        std::string chrom = *(tok_it);
-        tok_it++;
-
-        if (!boost::starts_with(chrom, "chr")) {
-            chrom = std::string("chr") + chrom;
-        }
-
-        int pos = std::stoi(*tok_it);
-
-        // Initialize breakpoint
-        Breakpoint bp{};
-        bp.breakpoint = std::make_pair(chrom, *tok_it);
-        tok_it++;
-
-        if (params.dash) {
-            // chr pos n.cluster n.cluster.haplotype n.cluster.pair n.singleton.pair cluster.add cluster.del singleton.add singleton.del
-            for (int i = 0; i < 4; i++) {
-                tok_it++;
-            }
-            boost::char_separator<char> inner_sep {" "};
-            RJBUtil::Splitter<std::string> cluster_add(*tok_it, " ");
-            tok_it++;
-            RJBUtil::Splitter<std::string> cluster_del(*tok_it, " ");
-            tok_it++;
-            RJBUtil::Splitter<std::string> singleton_add(*tok_it, " ");
-            tok_it++;
-            RJBUtil::Splitter<std::string> singleton_del(*tok_it, " ");
-
-            update_data(data, indices["cluster"], cluster_del, bp, -1, true);
-            update_data(data, indices["singleton"], singleton_del, bp, -1, false);
-            update_data(data, indices["cluster"], cluster_add, bp, 1, true);
-            update_data(data, indices["singleton"], singleton_add, bp, 1, false);
-        } else {
-            // chr     pos  npairs  nsegments   add     del
-            if (params.oldformat) {
-                tok_it++;
-                tok_it++;
-            }
-            // chr     pos     add     del
-            boost::char_separator<char> inner_sep {" "};
-            boost::tokenizer<boost::char_separator<char>> additions {*tok_it, inner_sep};
-            update_data(data, indices["singleton"], additions, bp, 1, false);
-            tok_it++;
-            boost::tokenizer<boost::char_separator<char>> deletions {*tok_it, inner_sep};
-            update_data(data, indices["singleton"], deletions, bp, -1, false);
-        }
-
-        // Must follow data update -- Data format is just change from previous breakpoint so skipping update is impossible
+        std::string chrom = params.chromosome;
         std::pair<std::pair<int, double>, std::pair<int, double>> nearest = gmap.find_nearest(chrom, pos);
         if (nearest.first.first != nearest.second.first) {
             cur_dist = (pos - nearest.first.first) * (nearest.second.second - nearest.first.second) / (nearest.second.first - nearest.first.first) + nearest.first.second;
@@ -146,7 +141,7 @@ void Parser<T>::parse_input(std::istream &is) {
         }
 
         if (params.rsquared) {
-            if(check_r2(data, last)) {
+            if (check_r2(data, last)) {
                 continue;
             }
         }
@@ -154,31 +149,96 @@ void Parser<T>::parse_input(std::istream &is) {
             continue;
         }
 
-#ifndef NDEBUG
-        if (params.verbose) {
-            std::cerr << "dist: " << cur_dist - last_dist << std::endl;
-            std::cerr << "fill rate: " << arma::accu(data) / data.n_elem << std::endl;
-        }
-#endif
         last_dist = cur_dist;
         last = data;
+
+        Breakpoint bp{};
+        bp.breakpoint = std::make_pair(chrom, std::to_string(pos));
 
         Statistic stat(data,
                        bp,
                        pheno.indexer,
-                       reporter,
+                       chunk_reporter,
+                       seq++,
                        params,
                        pheno.phenotypes);
         threadpool.submit(std::move(stat));
-        submitted++;
     }
-    threadpool.wait_for_completion();
 }
 
 template <typename T>
-bool Parser<T>::check_sample_list(const std::string &sample_pair) {
-    RJBUtil::Splitter<std::string_view> vals(sample_pair, ":");
-    return params.sample_list->find(vals[0]) == params.sample_list->end() && params.sample_list->find(vals[1]) == params.sample_list->end();
+void Parser<T>::concatenate_chunk_files(const std::vector<std::string> &chunk_paths) {
+    boost::iostreams::filtering_ostream os;
+    boost::iostreams::file_sink sink(params.output_path);
+    os.push(boost::iostreams::zstd_compressor());
+    os.push(sink);
+
+    for (const auto &path : chunk_paths) {
+        boost::iostreams::filtering_istream is;
+        boost::iostreams::file_source source(path);
+        is.push(boost::iostreams::zstd_decompressor());
+        is.push(source);
+
+        std::string line;
+        while (std::getline(is, line)) {
+            fmt::print(os, "{}\n", line);
+        }
+
+        std::remove(path.c_str());
+    }
+}
+
+template <typename T>
+void Parser<T>::parse_binary(IbdfReader &reader, const std::vector<std::string> &sample_names) {
+    auto chunks = find_chunks(reader);
+    if (chunks.empty()) return;
+
+    unsigned n_parse_threads = std::min(
+        static_cast<unsigned>(chunks.size()),
+        std::max(1u, static_cast<unsigned>(params.nthreads) / 4));
+
+    ThreadPool<Statistic<T>> threadpool(params);
+
+    // Generate unique temp file paths per chunk
+    std::random_device rd;
+    uint32_t job_id = rd();
+    std::vector<std::string> chunk_paths(chunks.size());
+    for (size_t i = 0; i < chunks.size(); ++i) {
+        chunk_paths[i] = fmt::format("{}.chunk_{}_{:08x}.zst",
+                                     params.output_path, i, job_id);
+    }
+
+    // Create reporters up front so they're alive for the duration of parsing
+    std::vector<std::shared_ptr<Reporter>> chunk_reporters(chunks.size());
+    for (size_t i = 0; i < chunks.size(); ++i) {
+        chunk_reporters[i] = std::make_shared<Reporter>(chunk_paths[i], false);
+    }
+
+    std::atomic<size_t> next_chunk{0};
+    std::vector<std::thread> parse_threads;
+
+    for (unsigned t = 0; t < n_parse_threads; ++t) {
+        parse_threads.emplace_back([&]() {
+            while (true) {
+                size_t ci = next_chunk.fetch_add(1);
+                if (ci >= chunks.size()) break;
+                parse_chunk(reader, sample_names, chunks[ci],
+                            chunk_reporters[ci], threadpool);
+            }
+        });
+    }
+
+    for (auto &t : parse_threads) {
+        t.join();
+    }
+    threadpool.wait_for_completion();
+
+    // Flush and close all chunk reporters after all stats have completed
+    chunk_reporters.clear();
+
+    if (!params.output_path.empty()) {
+        concatenate_chunk_files(chunk_paths);
+    }
 }
 
 template <typename T>
@@ -205,208 +265,23 @@ bool Parser<T>::check_r2(const arma::SpCol<int32_t> &data, const arma::SpCol<int
 }
 
 template <typename T>
-void Parser<T>::update_data(arma::SpCol<int32_t> &data,
-                         std::map<std::string, int> &indices,
-                         RJBUtil::Splitter<std::string> &changes,
-                         Breakpoint &bp,
-                         int value,
-                         bool cluster) {
-    std::string iid_key;
-    if (params.dash) {
-        if (cluster) {
-            iid_key = "IIDs";
-        } else {
-            iid_key = "IID1-IID2";
-        }
-    } else {
-        iid_key = "ID1-ID2";
-    }
-    for (auto &entry : changes) {
-        if (entry == "NA") {
-            break;
-        }
-        if (params.sample_list) {
-            if (check_sample_list(entry)) {
-                continue;
-            }
-        }
+Parser<T>::Parser(Parameters params_, GeneticMap &gmap_, Phenotypes<T> &pheno_)
+    : params(std::move(params_)), gmap(std::move(gmap_)), pheno(pheno_) {
 
-        if (params.dash && cluster) {
-            RJBUtil::Splitter<std::string> vals(entry, ":");
-            if (info) {
-                if ((*info).filter_segment(vals[indices["clusterID"]], params)) {
-                    continue;
-                }
-            }
+    std::string samples_path = params.samples;
+    std::vector<std::string> sample_names = load_sample_names(samples_path);
 
-            RJBUtil::Splitter<std::string> iids(vals[indices[iid_key]], ",");
-
-            std::sort(iids.begin(), iids.end());
-
-            for (auto it1 = iids.begin(); it1 != iids.end(); it1++) {
-                for (auto it2 = it1 + 1; it2 != iids.end(); it2++) {
-                    arma::sword row_idx = (*pheno.indexer).translate(*it1, *it2);
-
-                    int id_idx = indices["clusterID"];
-                    auto ids = fmt::format("{},{}", *it1, *it2);
-                    if (row_idx < 0) {
-                        continue;
-                    } else {
-                        if (value > 0) {
-                            bp.ibd_pairs.emplace_back(*it1, *it2);
-                        }
-                    }
-                    data(row_idx) += value;
-                }
-            }
-        } else {
-            RJBUtil::Splitter<std::string_view> vals(entry, ":");
-            RJBUtil::Splitter<std::string> pairs(vals[indices[iid_key]], "-");
-
-            std::sort(pairs.begin(), pairs.end());
-            arma::sword row_idx = (*pheno.indexer).translate(pairs[0], pairs[1]);
-
-            auto ids = fmt::format("{},{}", pairs[0], pairs[1]);
-            if (row_idx < 0) {
-                continue;
-            } else {
-                if (params.cM > 0) {
-                    try {
-                        double test_val = std::stod(vals[indices["cM"]]);
-                        if (test_val < params.cM) {
-                            continue;
-                        }
-                    } catch (std::invalid_argument &e) {
-                        throw(std::runtime_error("Attempted to filter on segment length, in data that lacks segment lengths."));
-                    }
-                }
-                if (value > 0) {
-                    try {
-                        bp.segment_lengths.push_back(std::stod(vals[indices["cM"]]));
-                    } catch (std::invalid_argument &e) {
-                        bp.segment_lengths.push_back(nan("1"));
-                    }
-                    bp.ibd_pairs.emplace_back(pairs[0], pairs[1]);
-                }
-            }
-            data(row_idx) += value;
-        }
-    }
-}
-
-template <typename T>
-void Parser<T>::update_data(arma::SpCol<int32_t> &data,
-                         std::map<std::string, int> &indices,
-                         boost::tokenizer<boost::char_separator<char>> &changes,
-                         Breakpoint &bp,
-                         int value,
-                         bool cluster) {
-    std::string iid_key;
-    // std::unordered_set<std::string> seen;
-    if (params.dash) {
-        if (cluster) {
-            iid_key = "IIDs";
-        } else {
-            iid_key = "IID1-IID2";
-        }
-    } else {
-        iid_key = "ID1-ID2";
-    }
-    for (auto &entry : changes) {
-        if (entry == "NA") {
-            break;
-        }
-        if (params.sample_list) {
-            if (check_sample_list(entry)) {
-                continue;
-            }
-        }
-
-        if (params.dash && cluster) {
-            RJBUtil::Splitter<std::string> vals(entry, ":");
-            RJBUtil::Splitter<std::string> iids(vals[indices[iid_key]], ",");
-
-            std::sort(iids.begin(), iids.end());
-
-            for (auto it1 = iids.begin(); it1 != iids.end(); it1++) {
-                for (auto it2 = it1 + 1; it2 != iids.end(); it2++) {
-                    arma::sword row_idx = (*pheno.indexer).translate(*it1, *it2);
-
-                    int id_idx = indices["clusterID"];
-                    auto ids = fmt::format("{},{}", *it1, *it2);
-                    if (row_idx < 0) {
-                        continue;
-                    } else {
-                        if (info) {
-                            if ((*info).filter_segment(vals[indices["clusterID"]], params)) {
-                                continue;
-                            }
-                        }
-                        if (value > 0) {
-                            bp.ibd_pairs.emplace_back(*it1, *it2);
-                        }
-                    }
-                    data(row_idx) += value;
-                }
-            }
-        } else {
-            RJBUtil::Splitter<std::string_view> vals(entry, ":");
-            RJBUtil::Splitter<std::string> pairs(vals[indices[iid_key]], "-");
-
-            std::sort(pairs.begin(), pairs.end());
-            if (pheno.lookup.find(pairs[0]) == pheno.lookup.end() || pheno.lookup.find(pairs[1]) == pheno.lookup.end()) {
-                continue;
-            }
-            arma::sword row_idx = (*pheno.indexer).translate(pairs[0], pairs[1]);
-
-            auto ids = fmt::format("{},{}", pairs[0], pairs[1]);
-
-            if (row_idx < 0) continue;
-
-            auto test = (*pheno.indexer).back_translate(row_idx);
-            if ((*pheno.samples)[test.first] != pairs[0] || (*pheno.samples)[test.second] != pairs[1]) {
-                fmt::print(std::cerr, "Failed to map back. {} == {} ; {} == {}\n", (*pheno.samples)[test.first], pairs[0], (*pheno.samples)[test.second], pairs[1]);
-            }
-            if (params.cM) {
-                try {
-                    double test_val = std::stod(vals[indices["cM"]]);
-                    if (test_val < params.cM) {
-                        continue;
-                    }
-                } catch (std::invalid_argument &e) {
-                    throw(std::runtime_error("Attempted to filter on segment length, in data that lacks segment lengths."));
-                }
-            }
-            if (value > 0) {
-                try {
-                    bp.segment_lengths.push_back(std::stod(vals[indices["cM"]]));
-                } catch (std::invalid_argument &e) {
-                    bp.segment_lengths.push_back(nan("1"));
-                }
-                bp.ibd_pairs.emplace_back(pairs[0], pairs[1]);
-            }
-            data(row_idx) += value;
-        }
-    }
-}
-
-template <typename T>
-Parser<T>::Parser(Parameters params_, std::shared_ptr<Reporter> reporter_, GeneticMap &gmap_, Phenotypes<T> &pheno_)
-    : params(std::move(params_)), reporter(std::move(reporter_)), gmap(std::move(gmap_)), pheno(pheno_) {
-    // Default construct shared ptrs
-    if (params.info) {
-        Source info_source(*params.info);
-        std::istream info_stream(&(*info_source.streambuf));
-        info = Info(info_stream, params);
-    }
-
-    Source input_source(params.input);
-    std::istream input_s(&(*input_source.streambuf));
+    IbdfReader reader(params.input.c_str());
 
     if (params.verbose) {
-        std::cerr << "Parsing data\n";
+        fmt::print(std::cerr, "IBDF v3: {} positions, {} samples, ckpt every {}\n",
+                   reader.n_positions(), reader.n_samples(), reader.checkpoint_interval());
     }
-    parse_input(input_s);
+
+    if (params.verbose) {
+        std::cerr << "Parsing binary data\n";
+    }
+    parse_binary(reader, sample_names);
 }
 
 template class Parser<pheno_vector>;
