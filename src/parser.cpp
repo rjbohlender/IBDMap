@@ -161,7 +161,8 @@ void Parser<T>::parse_chunk(const IbdfReader &reader,
                        chunk_reporter,
                        seq++,
                        params,
-                       pheno.phenotypes);
+                       pheno.phenotypes,
+                       pheno.transposed);
         threadpool.submit(std::move(stat));
     }
 }

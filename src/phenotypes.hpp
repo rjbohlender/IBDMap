@@ -7,6 +7,7 @@
 
 #include "indexer.hpp"
 #include "parameters.hpp"
+#include "transposed_phenotypes.hpp"
 #include <istream>
 #include <vector>
 #include <memory>
@@ -32,6 +33,7 @@ class Phenotypes {
 public:
     std::shared_ptr<std::vector<std::string>> samples;
     std::shared_ptr<std::vector<T>> phenotypes;
+    std::shared_ptr<TransposedPhenotypes> transposed;
     std::shared_ptr<Indexer<T>> indexer;
     std::unordered_map<std::string, int8_t> lookup;
 

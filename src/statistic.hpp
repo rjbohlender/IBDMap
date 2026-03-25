@@ -9,6 +9,7 @@
 #include "indexer.hpp"
 #include "parameters.hpp"
 #include "reporter.hpp"
+#include "transposed_phenotypes.hpp"
 #include "types.hpp"
 #include <armadillo>
 #include <boost/optional.hpp>
@@ -23,15 +24,25 @@ class Statistic {
     arma::SpCol<int32_t> data;
     std::shared_ptr<Indexer<T>> indexer;
     std::shared_ptr<Reporter> reporter;
+    std::shared_ptr<TransposedPhenotypes> transposed;
     uint64_t seq;
     Parameters params;
     std::shared_ptr<std::vector<T>> phenotypes;
 
 
     std::pair<std::vector<int32_t>, std::vector<int32_t>> pairs;
+    std::vector<uint8_t> left_phenos;
+    std::vector<uint8_t> right_phenos;
 
+    int64_t lcm_common = 0;
+    int64_t lcm_cscs_scale = 0;
+    int64_t lcm_cscn_scale = 0;
+    int64_t lcm_cncn_scale = 0;
+
+    void setup_lcm();
     void initialize();
     void permute();
+    void permute_bulk();
     void build_output(std::stringstream &ss);
 
 public:
@@ -52,9 +63,10 @@ public:
               std::shared_ptr<Reporter> reporter_,
               uint64_t seq_,
               Parameters params_,
-              std::shared_ptr<std::vector<T>> phenotypes_);
+              std::shared_ptr<std::vector<T>> phenotypes_,
+              std::shared_ptr<TransposedPhenotypes> transposed_ = nullptr);
 
-    double calculate(T &phenotypes_, bool original_ = false) noexcept;
+    double calculate(T &phenotypes_, bool original_ = false);
 
     void run();
     void cleanup();
