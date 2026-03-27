@@ -109,6 +109,7 @@ void Phenotypes<T>::parse(std::istream &is) {
     pad_phenotypes();
     if constexpr (std::is_same_v<T, pheno_vector>) {
         transposed = std::make_shared<TransposedPhenotypes>(*phenotypes, samples->size());
+        bitpacked = std::make_shared<BitPackedPhenotypes>(*phenotypes, samples->size());
     }
     fmt::print(std::cerr, "Time spent generating permutations: {}\n", timer.toc());
 }

@@ -162,7 +162,8 @@ void Parser<T>::parse_chunk(const IbdfReader &reader,
                        seq++,
                        params,
                        pheno.phenotypes,
-                       pheno.transposed);
+                       pheno.transposed,
+                       pheno.bitpacked);
         threadpool.submit(std::move(stat));
     }
 }

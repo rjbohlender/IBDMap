@@ -25,6 +25,7 @@ class Statistic {
     std::shared_ptr<Indexer<T>> indexer;
     std::shared_ptr<Reporter> reporter;
     std::shared_ptr<TransposedPhenotypes> transposed;
+    std::shared_ptr<BitPackedPhenotypes> bitpacked;
     uint64_t seq;
     Parameters params;
     std::shared_ptr<std::vector<T>> phenotypes;
@@ -43,6 +44,7 @@ class Statistic {
     void initialize();
     void permute();
     void permute_bulk();
+    void permute_bulk_bitpacked();
     void build_output(std::stringstream &ss);
 
 public:
@@ -64,7 +66,8 @@ public:
               uint64_t seq_,
               Parameters params_,
               std::shared_ptr<std::vector<T>> phenotypes_,
-              std::shared_ptr<TransposedPhenotypes> transposed_ = nullptr);
+              std::shared_ptr<TransposedPhenotypes> transposed_ = nullptr,
+              std::shared_ptr<BitPackedPhenotypes> bitpacked_ = nullptr);
 
     double calculate(T &phenotypes_, bool original_ = false);
 

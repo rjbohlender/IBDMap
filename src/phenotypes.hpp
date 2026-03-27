@@ -34,6 +34,7 @@ public:
     std::shared_ptr<std::vector<std::string>> samples;
     std::shared_ptr<std::vector<T>> phenotypes;
     std::shared_ptr<TransposedPhenotypes> transposed;
+    std::shared_ptr<BitPackedPhenotypes> bitpacked;
     std::shared_ptr<Indexer<T>> indexer;
     std::unordered_map<std::string, int8_t> lookup;
 
