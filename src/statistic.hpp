@@ -74,6 +74,8 @@ public:
     void run();
     void cleanup();
     static void test_statistic();
+
+    friend void test_permutation_equivalence();
 };
 
 #endif//CARVAIBD_STATISTIC_HPP

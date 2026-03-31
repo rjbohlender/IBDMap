@@ -126,6 +126,11 @@ endif()
 
 target_compile_definitions(ibdmap PRIVATE MAXCOLORS=10000000)
 
+add_executable(test_permutation_equivalence tests/test_permutation_equivalence.cpp ${PROJECT_SUPPORT_FILES})
+target_compile_definitions(test_permutation_equivalence PRIVATE ARMA_DONT_USE_WRAPPER=1)
+target_include_directories(test_permutation_equivalence PRIVATE ${CMAKE_CURRENT_LIST_DIR}/src)
+target_link_libraries(test_permutation_equivalence fmt::fmt-header-only pthread ${LAPACK_LIBRARIES} ${BLAS_LIBRARIES} ${Python3_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
+
 if(benchmark_FOUND)
     add_executable(ibdBench bench_main.cpp ${PROJECT_SUPPORT_FILES})
     target_compile_definitions(ibdBench PRIVATE ARMA_DONT_USE_WRAPPER=1)

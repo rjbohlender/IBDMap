@@ -4,8 +4,11 @@
 
 #include "statistic.hpp"
 #include "split.hpp"
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <fmt/include/fmt/ostream.h>
+#include <random>
 #include <utility>
 
 #if defined(__AVX512F__) || defined(__AVX2__)
@@ -814,6 +817,152 @@ void Statistic<T>::test_statistic() {
                tindexer.case_case,
                tindexer.case_cont,
                tindexer.cont_cont);
+}
+
+void test_permutation_equivalence() {
+    constexpr size_t n_cases = 10;
+    constexpr size_t n_controls = 10;
+    constexpr size_t n_samples = n_cases + n_controls;
+    constexpr size_t n_perms = 200;
+
+    // Sample names (zero-padded so they sort correctly for Indexer::translate)
+    std::vector<std::string> samples;
+    for (size_t i = 0; i < n_samples; ++i) {
+        char buf[8];
+        snprintf(buf, sizeof(buf), "s%02zu", i);
+        samples.emplace_back(buf);
+    }
+
+    // Original phenotypes: first n_cases are cases (1), rest controls (0)
+    pheno_vector original_pheno(n_samples, 0);
+    for (size_t i = 0; i < n_cases; ++i) original_pheno[i] = 1;
+
+    // Generate permutations with fixed seed
+    std::mt19937 rng(42);
+    std::vector<pheno_vector> all_perms;
+    all_perms.push_back(original_pheno);
+    for (size_t p = 0; p < n_perms; ++p) {
+        pheno_vector perm = original_pheno;
+        std::shuffle(perm.begin(), perm.end(), rng);
+        all_perms.push_back(perm);
+    }
+
+    // Create indexer
+    auto indexer = std::make_shared<Indexer<pheno_vector>>(n_cases, n_controls, samples, original_pheno);
+
+    // Create IBD data with a mix of pair types
+    arma::SpCol<int32_t> ibd_data(n_samples * (n_samples - 1) / 2);
+    // Case-case pairs (s00-s09 are cases)
+    ibd_data(indexer->translate("s00", "s01")) = 1;
+    ibd_data(indexer->translate("s00", "s02")) = 1;
+    ibd_data(indexer->translate("s03", "s04")) = 1;
+    ibd_data(indexer->translate("s05", "s06")) = 1;
+    // Case-control pairs (s10-s19 are controls)
+    ibd_data(indexer->translate("s00", "s10")) = 1;
+    ibd_data(indexer->translate("s01", "s11")) = 1;
+    ibd_data(indexer->translate("s02", "s12")) = 1;
+    ibd_data(indexer->translate("s03", "s13")) = 1;
+    // Control-control pairs
+    ibd_data(indexer->translate("s10", "s11")) = 1;
+    ibd_data(indexer->translate("s12", "s13")) = 1;
+    ibd_data(indexer->translate("s14", "s15")) = 1;
+
+    // Build all three phenotype storage formats
+    auto phenotypes_ptr = std::make_shared<std::vector<pheno_vector>>(all_perms);
+    auto tp = std::make_shared<TransposedPhenotypes>(all_perms, n_samples);
+    auto bp_packed = std::make_shared<BitPackedPhenotypes>(all_perms, n_samples);
+
+    // Reporter (writes to /dev/null, no debug output)
+    auto reporter = std::make_shared<Reporter>("/dev/null", false);
+
+    Breakpoint bp{{"chr1", "100"}};
+
+    // Test each statistic mode
+    struct TestMode {
+        bool contcont;
+        bool cscs_only;
+        const char* name;
+    };
+    TestMode modes[] = {
+        {false, false, "default (cscs/CC - cscn/Cc)"},
+        {true,  false, "contcont (cscs/CC - cscn/Cc - cncn/cc)"},
+        {false, true,  "cscs_only (cscs/CC)"},
+    };
+
+    int total_failures = 0;
+
+    for (const auto& mode : modes) {
+        Parameters params{};
+        params.nperms = n_perms;
+        params.contcont = mode.contcont;
+        params.cscs_only = mode.cscs_only;
+        params.enable_testing = false;
+        params.print_debug = false;
+        params.verbose = false;
+
+        // Path 1: standard permute (one-at-a-time via calculate())
+        Statistic<pheno_vector> stat1(arma::SpCol<int32_t>(ibd_data), bp, indexer, reporter, 0, params, phenotypes_ptr);
+        stat1.setup_lcm();
+        stat1.initialize();
+        stat1.permute();
+
+        // Path 2: transposed bulk permutation
+        Statistic<pheno_vector> stat2(arma::SpCol<int32_t>(ibd_data), bp, indexer, reporter, 1, params, phenotypes_ptr, tp);
+        stat2.setup_lcm();
+        stat2.permute_bulk();
+
+        // Path 3: bit-packed bulk permutation
+        Statistic<pheno_vector> stat3(arma::SpCol<int32_t>(ibd_data), bp, indexer, reporter, 2, params, phenotypes_ptr, nullptr, bp_packed);
+        stat3.setup_lcm();
+        stat3.permute_bulk_bitpacked();
+
+        fmt::print(std::cerr, "Mode: {}\n", mode.name);
+        fmt::print(std::cerr, "  Original: permute={:.10f}  bulk={:.10f}  bitpacked={:.10f}\n",
+                   stat1.original, stat2.original, stat3.original);
+
+        int failures = 0;
+        constexpr double tol = 1e-10;
+
+        // Compare original statistics
+        if (std::abs(stat1.original - stat2.original) > tol) {
+            fmt::print(std::cerr, "  FAIL original: permute={:.10f} vs bulk={:.10f}\n",
+                       stat1.original, stat2.original);
+            failures++;
+        }
+        if (std::abs(stat1.original - stat3.original) > tol) {
+            fmt::print(std::cerr, "  FAIL original: permute={:.10f} vs bitpacked={:.10f}\n",
+                       stat1.original, stat3.original);
+            failures++;
+        }
+
+        // Compare every permutation
+        for (size_t i = 0; i < n_perms; ++i) {
+            if (std::abs(stat1.permuted[i] - stat2.permuted[i]) > tol) {
+                fmt::print(std::cerr, "  FAIL perm {}: permute={:.10f} vs bulk={:.10f}\n",
+                           i, stat1.permuted[i], stat2.permuted[i]);
+                failures++;
+            }
+            if (std::abs(stat1.permuted[i] - stat3.permuted[i]) > tol) {
+                fmt::print(std::cerr, "  FAIL perm {}: permute={:.10f} vs bitpacked={:.10f}\n",
+                           i, stat1.permuted[i], stat3.permuted[i]);
+                failures++;
+            }
+        }
+
+        if (failures == 0) {
+            fmt::print(std::cerr, "  PASS ({} permutations matched)\n", n_perms);
+        } else {
+            fmt::print(std::cerr, "  {} failures\n", failures);
+        }
+        total_failures += failures;
+    }
+
+    if (total_failures > 0) {
+        fmt::print(std::cerr, "\nTEST FAILED: {} total mismatches\n", total_failures);
+        std::exit(1);
+    } else {
+        fmt::print(std::cerr, "\nALL TESTS PASSED\n");
+    }
 }
 
 template class Statistic<pheno_vector>;
