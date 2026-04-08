@@ -9,6 +9,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 
@@ -103,6 +104,13 @@ class Parser {
                      Breakpoint &bp,
                      int value,
                      bool cluster);
+    // Sample IDs in hapibd output may themselves contain '-' (e.g.
+    // "jYoung_WGS-CLP_1000"), so a naive split on the first '-' is wrong.
+    // Walks every dash position and accepts the first split where both
+    // halves resolve in the phenotype lookup table.  Returns false if no
+    // valid split exists, in which case the token should be skipped.
+    bool split_iid_pair(std::string_view iid_field,
+                        std::string &s1, std::string &s2) const;
 
 public:
     Parameters params;

@@ -205,6 +205,28 @@ bool Parser<T>::check_r2(const arma::SpCol<int32_t> &data, const arma::SpCol<int
 }
 
 template <typename T>
+bool Parser<T>::split_iid_pair(std::string_view iid_field,
+                               std::string &s1, std::string &s2) const {
+    // Sample IDs may themselves contain '-' (e.g. "jYoung_WGS-CLP_1000"),
+    // so splitting on the first '-' is incorrect.  Try every dash position
+    // and accept the first split whose halves both exist in the phenotype
+    // lookup table.
+    for (size_t pos = iid_field.find('-');
+         pos != std::string_view::npos;
+         pos = iid_field.find('-', pos + 1)) {
+        std::string a(iid_field.substr(0, pos));
+        std::string b(iid_field.substr(pos + 1));
+        if (pheno.lookup.find(a) != pheno.lookup.end() &&
+            pheno.lookup.find(b) != pheno.lookup.end()) {
+            s1 = std::move(a);
+            s2 = std::move(b);
+            return true;
+        }
+    }
+    return false;
+}
+
+template <typename T>
 void Parser<T>::update_data(arma::SpCol<int32_t> &data,
                          std::map<std::string, int> &indices,
                          RJBUtil::Splitter<std::string> &changes,
@@ -261,33 +283,31 @@ void Parser<T>::update_data(arma::SpCol<int32_t> &data,
             }
         } else {
             RJBUtil::Splitter<std::string_view> vals(entry, ":");
-            RJBUtil::Splitter<std::string> pairs(vals[indices[iid_key]], "-");
-
-            std::sort(pairs.begin(), pairs.end());
-            arma::sword row_idx = (*pheno.indexer).translate(pairs[0], pairs[1]);
-
-            auto ids = fmt::format("{},{}", pairs[0], pairs[1]);
+            std::string s1, s2;
+            if (!split_iid_pair(std::string_view(vals[indices[iid_key]]), s1, s2)) {
+                continue;
+            }
+            arma::sword row_idx = (*pheno.indexer).translate(s1, s2);
             if (row_idx < 0) {
                 continue;
-            } else {
-                if (params.cM > 0) {
-                    try {
-                        double test_val = std::stod(vals[indices["cM"]]);
-                        if (test_val < params.cM) {
-                            continue;
-                        }
-                    } catch (std::invalid_argument &e) {
-                        throw(std::runtime_error("Attempted to filter on segment length, in data that lacks segment lengths."));
+            }
+            if (params.cM > 0) {
+                try {
+                    double test_val = std::stod(std::string(vals[indices["cM"]]));
+                    if (test_val < params.cM) {
+                        continue;
                     }
+                } catch (std::invalid_argument &e) {
+                    throw(std::runtime_error("Attempted to filter on segment length, in data that lacks segment lengths."));
                 }
-                if (value > 0) {
-                    try {
-                        bp.segment_lengths.push_back(std::stod(vals[indices["cM"]]));
-                    } catch (std::invalid_argument &e) {
-                        bp.segment_lengths.push_back(nan("1"));
-                    }
-                    bp.ibd_pairs.emplace_back(pairs[0], pairs[1]);
+            }
+            if (value > 0) {
+                try {
+                    bp.segment_lengths.push_back(std::stod(std::string(vals[indices["cM"]])));
+                } catch (std::invalid_argument &e) {
+                    bp.segment_lengths.push_back(nan("1"));
                 }
+                bp.ibd_pairs.emplace_back(s1, s2);
             }
             data(row_idx) += value;
         }
@@ -351,25 +371,16 @@ void Parser<T>::update_data(arma::SpCol<int32_t> &data,
             }
         } else {
             RJBUtil::Splitter<std::string_view> vals(entry, ":");
-            RJBUtil::Splitter<std::string> pairs(vals[indices[iid_key]], "-");
-
-            std::sort(pairs.begin(), pairs.end());
-            if (pheno.lookup.find(pairs[0]) == pheno.lookup.end() || pheno.lookup.find(pairs[1]) == pheno.lookup.end()) {
+            std::string s1, s2;
+            if (!split_iid_pair(std::string_view(vals[indices[iid_key]]), s1, s2)) {
                 continue;
             }
-            arma::sword row_idx = (*pheno.indexer).translate(pairs[0], pairs[1]);
-
-            auto ids = fmt::format("{},{}", pairs[0], pairs[1]);
-
+            arma::sword row_idx = (*pheno.indexer).translate(s1, s2);
             if (row_idx < 0) continue;
 
-            auto test = (*pheno.indexer).back_translate(row_idx);
-            if ((*pheno.samples)[test.first] != pairs[0] || (*pheno.samples)[test.second] != pairs[1]) {
-                fmt::print(std::cerr, "Failed to map back. {} == {} ; {} == {}\n", (*pheno.samples)[test.first], pairs[0], (*pheno.samples)[test.second], pairs[1]);
-            }
             if (params.cM) {
                 try {
-                    double test_val = std::stod(vals[indices["cM"]]);
+                    double test_val = std::stod(std::string(vals[indices["cM"]]));
                     if (test_val < params.cM) {
                         continue;
                     }
@@ -379,11 +390,11 @@ void Parser<T>::update_data(arma::SpCol<int32_t> &data,
             }
             if (value > 0) {
                 try {
-                    bp.segment_lengths.push_back(std::stod(vals[indices["cM"]]));
+                    bp.segment_lengths.push_back(std::stod(std::string(vals[indices["cM"]])));
                 } catch (std::invalid_argument &e) {
                     bp.segment_lengths.push_back(nan("1"));
                 }
-                bp.ibd_pairs.emplace_back(pairs[0], pairs[1]);
+                bp.ibd_pairs.emplace_back(s1, s2);
             }
             data(row_idx) += value;
         }
