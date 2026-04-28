@@ -9,6 +9,9 @@ import pyarrow.parquet as pq
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT / "IBDReduce"))
 
+sys.path.append(str(PROJECT_ROOT / "tools"))
+
+from ibdmap_text_to_parquet import convert
 from ibdreduce_v3 import ibdlen, iter_result_rows, parse_line, write_permutation_values
 
 
@@ -87,3 +90,17 @@ def test_parquet_ibdlen_reads_positions(tmp_path):
 
     assert breakpoints == 2
     assert total == 2.5
+
+
+def test_convert_text_output_to_parquet(tmp_path):
+    text_path = PROJECT_ROOT / "tests" / "data" / "sample_chr1_run0.txt"
+    parquet_path = tmp_path / "converted.parquet"
+
+    rows_written = convert(text_path, parquet_path, batch_size=2, compression="zstd")
+
+    assert rows_written == 3
+    rows = list(iter_result_rows(str(parquet_path)))
+    assert rows[0][0:2] == (1, 1000)
+    np.testing.assert_allclose(rows[0][2], np.array([0.1, 0.2, 0.3]))
+    np.testing.assert_allclose(rows[0][3], np.array([0.3, 0.4, 0.1]), rtol=1e-6)
+    assert rows[-1][0:2] == (1, 3000)
