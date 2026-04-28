@@ -16,7 +16,8 @@ RUN apt-get update &&  \
     libarmadillo-dev \
     libboost-iostreams-dev \
     libboost-numpy-dev \
-    libboost-python-dev
+    libboost-python-dev \
+    libzstd-dev
 
 WORKDIR /app
 COPY . .
