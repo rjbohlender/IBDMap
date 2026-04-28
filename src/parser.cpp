@@ -42,7 +42,7 @@ void Parser<T>::apply_checkpoint_to_sparse(arma::SpCol<int32_t> &data,
         const auto &name2 = sample_names[seg.p2];
         arma::sword row_idx = (*pheno.indexer).translate(name1, name2);
         if (row_idx >= 0) {
-            data(row_idx) = 1;
+            data(row_idx) += 1;
         }
     }
 }
