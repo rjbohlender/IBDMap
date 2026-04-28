@@ -11,6 +11,11 @@ from datetime import datetime
 import numpy as np
 import scipy.stats as stats
 
+try:
+    import pyarrow.parquet as pq
+except ImportError:
+    pq = None
+
 
 def is_compressed(fpath: Path) -> str:
     """Check if the provided file is compressed with gzip or zstd or not.
@@ -57,6 +62,40 @@ def check_and_open(fpath: str):
     return f
 
 
+def is_parquet_path(fpath: str) -> bool:
+    """Return whether the input path should be read as Parquet."""
+    return Path(fpath).suffix.lower() == ".parquet"
+
+
+def require_pyarrow() -> None:
+    if pq is None:
+        raise RuntimeError(
+            "Parquet input requires pyarrow. Install it with `pip install pyarrow` "
+            "or use text/zstd IBDMap output."
+        )
+
+
+def normalize_chrom(chrom) -> int:
+    """Normalize chromosome labels from either text or Parquet rows to an integer."""
+    if isinstance(chrom, bytes):
+        chrom = chrom.decode("utf-8")
+    if isinstance(chrom, str):
+        if chrom.startswith("chr"):
+            chrom = chrom[3:]
+        return int(chrom)
+    return int(chrom)
+
+
+def genetic_distance(gmap: GeneticMap, chrom: int, pos: int) -> float:
+    """Interpolate genetic distance for a chromosome/position pair."""
+    if pos in gmap.gmap[chrom]:
+        return gmap.gmap[chrom][pos]
+    close = gmap.find_nearest(chrom, pos)
+    return gmap.gmap[chrom][close[0]] + (
+        (int(pos) - close[0]) / (close[1] - close[0])
+    ) * (gmap.gmap[chrom][close[1]] - gmap.gmap[chrom][close[0]])
+
+
 def parse_line(raw_line: str) -> Tuple[int, int, np.ndarray, np.ndarray]:
     """Line parser.
 
@@ -73,14 +112,68 @@ def parse_line(raw_line: str) -> Tuple[int, int, np.ndarray, np.ndarray]:
     assert len(line) >= 2
 
     line_start = 5
-    if line[0].startswith("chr"):
-        chrom = int(line[0][3:])
-    else:
-        chrom = int(line[0])
+    chrom = normalize_chrom(line[0])
     pos = int(line[1])
     obs_parts = np.array([float(line[2]), float(line[3]), float(line[4])])
     vals = np.array([float(x) for x in line[line_start:]], dtype=np.float64)
     return chrom, pos, obs_parts, vals
+
+
+def iter_text_rows(fpath: str):
+    """Yield normalized IBDMap rows from legacy text/zstd output."""
+    with check_and_open(fpath) as f:
+        for line in f:
+            yield parse_line(line)
+
+
+def iter_parquet_position_batches(fpath: str, batch_size: int = 65536):
+    """Yield chromosome and position arrays from Parquet without reading statistics."""
+    require_pyarrow()
+    parquet_file = pq.ParquetFile(fpath)
+    for batch in parquet_file.iter_batches(columns=["chrom", "pos"], batch_size=batch_size):
+        chroms = [normalize_chrom(v) for v in batch.column("chrom").to_pylist()]
+        positions = batch.column("pos").to_numpy(zero_copy_only=False)
+        yield chroms, positions
+
+
+def iter_parquet_rows(fpath: str, batch_size: int = 8192):
+    """Yield normalized IBDMap rows from Parquet output."""
+    require_pyarrow()
+    columns = [
+        "chrom",
+        "pos",
+        "orig_cscs_rate",
+        "orig_cscn_rate",
+        "orig_cncn_rate",
+        "original",
+        "permutations",
+    ]
+    parquet_file = pq.ParquetFile(fpath)
+    for batch in parquet_file.iter_batches(columns=columns, batch_size=batch_size):
+        chroms = [normalize_chrom(v) for v in batch.column("chrom").to_pylist()]
+        positions = batch.column("pos").to_numpy(zero_copy_only=False)
+        orig_cscs = batch.column("orig_cscs_rate").to_numpy(zero_copy_only=False)
+        orig_cscn = batch.column("orig_cscn_rate").to_numpy(zero_copy_only=False)
+        orig_cncn = batch.column("orig_cncn_rate").to_numpy(zero_copy_only=False)
+        original = batch.column("original").to_numpy(zero_copy_only=False)
+        permutations = batch.column("permutations").to_pylist()
+
+        for chrom, pos, cscs, cscn, cncn, orig, perms in zip(
+            chroms, positions, orig_cscs, orig_cscn, orig_cncn, original, permutations
+        ):
+            obs = np.array([cscs, cscn, cncn], dtype=np.float64)
+            vals = np.empty(len(perms) + 1, dtype=np.float64)
+            vals[0] = orig
+            vals[1:] = perms
+            yield chrom, int(pos), obs, vals
+
+
+def iter_result_rows(fpath: str):
+    """Yield normalized rows from either legacy text output or Parquet output."""
+    if is_parquet_path(fpath):
+        yield from iter_parquet_rows(fpath)
+    else:
+        yield from iter_text_rows(fpath)
 
 
 def write_permutation_values(
@@ -150,18 +243,17 @@ def ibdlen(fpath: str, gmap: GeneticMap) -> Tuple[int, float]:
     breakpoints = 0
     total = 0
     predis = 0
-    with check_and_open(fpath) as f:
-        for line in f:
-            chrom, pos, obs, vals = parse_line(line)
+    if is_parquet_path(fpath):
+        for chroms, positions in iter_parquet_position_batches(fpath):
+            for chrom, pos in zip(chroms, positions):
+                breakpoints += 1
+                dis = genetic_distance(gmap, chrom, int(pos))
+                total += float(dis) - float(predis)
+                predis = dis
+    else:
+        for chrom, pos, _obs, _vals in iter_text_rows(fpath):
             breakpoints += 1
-
-            if pos in gmap.gmap[chrom]:
-                dis = gmap.gmap[chrom][pos]
-            else:
-                close = gmap.find_nearest(chrom, pos)
-                dis = gmap.gmap[chrom][close[0]] + (
-                    (int(pos) - close[0]) / (close[1] - close[0])
-                ) * (gmap.gmap[chrom][close[1]] - gmap.gmap[chrom][close[0]])
+            dis = genetic_distance(gmap, chrom, pos)
             total += float(dis) - float(predis)
             predis = dis
     return breakpoints, total
@@ -327,29 +419,19 @@ def main():
             fpath = args.prefix + args.suffix.format(i=i, j=j)
             offset = j - args.at
             predis = 0
-            with check_and_open(fpath) as f:
-                for line in f:
-                    chrom, pos, obs, vals = parse_line(line)
-                    try:
-                        if offset == 0:
-                            obs_rates[idx,:] = obs
-                            bp_ids.append((chrom, pos))
-                            if pos in gmap.gmap[chrom]:
-                                dis = gmap.gmap[chrom][pos]
-                            else:
-                                close = gmap.find_nearest(chrom, pos)
-                                dis = gmap.gmap[chrom][close[0]] + (
-                                    (int(pos) - close[0]) / (close[1] - close[0])
-                                ) * (
-                                    gmap.gmap[chrom][close[1]] - gmap.gmap[chrom][close[0]]
-                                )
-                            ibdfrac[idx] = (float(dis) - float(predis)) / total
-                            predis = dis
-                        write_permutation_values(data, idx, offset, vals, args.nperm)
-                    except ValueError as e:
-                        print(f"Error at {i} {j} {idx} {offset} {fpath}", file=sys.stderr)
-                        raise e
-                    idx += 1
+            for chrom, pos, obs, vals in iter_result_rows(fpath):
+                try:
+                    if offset == 0:
+                        obs_rates[idx,:] = obs
+                        bp_ids.append((chrom, pos))
+                        dis = genetic_distance(gmap, chrom, pos)
+                        ibdfrac[idx] = (float(dis) - float(predis)) / total
+                        predis = dis
+                    write_permutation_values(data, idx, offset, vals, args.nperm)
+                except ValueError as e:
+                    print(f"Error at {i} {j} {idx} {offset} {fpath}", file=sys.stderr)
+                    raise e
+                idx += 1
 
     # Calculate the average and subtract it from the data.
     if args.no_avg:
