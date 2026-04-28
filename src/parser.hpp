@@ -18,6 +18,7 @@
 #include "indexer.hpp"
 #include "math.hpp"
 #include "parameters.hpp"
+#include "parquet_reporter.hpp"
 #include "phenotypes.hpp"
 #include "reporter.hpp"
 #include "statistic.hpp"
@@ -38,9 +39,11 @@ class Parser {
                      const std::vector<std::string> &sample_names,
                      const Chunk &chunk,
                      std::shared_ptr<Reporter> chunk_reporter,
+                     std::shared_ptr<ParquetReporter> chunk_parquet_reporter,
                      ThreadPool<Statistic<T>> &threadpool);
 
     void concatenate_chunk_files(const std::vector<std::string> &chunk_paths);
+    void merge_parquet_chunk_files(const std::vector<std::string> &chunk_paths);
 
     bool check_range(int pos);
     bool check_exclude(int pos);

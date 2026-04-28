@@ -8,7 +8,9 @@
 #include "breakpoint.hpp"
 #include "indexer.hpp"
 #include "parameters.hpp"
+#include "parquet_reporter.hpp"
 #include "reporter.hpp"
+#include "resultrow.hpp"
 #include "transposed_phenotypes.hpp"
 #include "types.hpp"
 #include <armadillo>
@@ -24,6 +26,7 @@ class Statistic {
     arma::SpCol<int32_t> data;
     std::shared_ptr<Indexer<T>> indexer;
     std::shared_ptr<Reporter> reporter;
+    std::shared_ptr<ParquetReporter> parquet_reporter;
     std::shared_ptr<TransposedPhenotypes> transposed;
     std::shared_ptr<BitPackedPhenotypes> bitpacked;
     uint64_t seq;
@@ -46,6 +49,7 @@ class Statistic {
     void permute_bulk();
     void permute_bulk_bitpacked();
     void build_output(std::stringstream &ss);
+    ResultRow build_result_row();
 
 public:
     bool done = false;
@@ -63,6 +67,16 @@ public:
               Breakpoint bp_,
               std::shared_ptr<Indexer<T>> indexer_,
               std::shared_ptr<Reporter> reporter_,
+              uint64_t seq_,
+              Parameters params_,
+              std::shared_ptr<std::vector<T>> phenotypes_,
+              std::shared_ptr<TransposedPhenotypes> transposed_ = nullptr,
+              std::shared_ptr<BitPackedPhenotypes> bitpacked_ = nullptr);
+
+    Statistic(arma::SpCol<int32_t> data_,
+              Breakpoint bp_,
+              std::shared_ptr<Indexer<T>> indexer_,
+              std::shared_ptr<ParquetReporter> reporter_,
               uint64_t seq_,
               Parameters params_,
               std::shared_ptr<std::vector<T>> phenotypes_,

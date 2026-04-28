@@ -8,7 +8,9 @@
 #include "inputvalidator.hpp"
 #include "split.hpp"
 #include <boost/algorithm/string/predicate.hpp>
+#if defined(IBDMAP_WITH_BOOST_PYTHON)
 #include <boost/python.hpp>
+#endif
 #include <iostream>
 #include <map>
 #include <sstream>
@@ -17,7 +19,9 @@
 #include <zstr.hpp>
 
 using namespace RJBUtil;
+#if defined(IBDMAP_WITH_BOOST_PYTHON)
 namespace p = boost::python;
+#endif
 
 class GeneticMap {
     std::map<std::string, std::map<int, double>> gmap_;
@@ -71,6 +75,7 @@ public:
         parse(ifs);
     }
 
+#if defined(IBDMAP_WITH_BOOST_PYTHON)
     explicit GeneticMap(p::list paths) {
         if (p::len(paths) == 0) {
             throw std::runtime_error("ERROR: no filepath given to the genetic map object.");
@@ -81,6 +86,7 @@ public:
             parse(ifs);
         }
     }
+#endif
 
     /**
    * @brief Find the nearest bases for a given chromosome and position.

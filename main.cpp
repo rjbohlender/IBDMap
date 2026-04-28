@@ -6,6 +6,7 @@
 #include <fmt/include/fmt/ostream.h>
 #include <iostream>
 #include <optional>
+#include <stdexcept>
 #include <sys/stat.h>
 
 // 32bit xorshift PRNG
@@ -133,8 +134,17 @@ int main(int argc, char *argv[]) {
   app.add_flag("--cscs_only",
                params.cscs_only,
                "Use only the case/case rate when outputting test statistics.");
+  app.add_flag("--parquet-output",
+               params.parquet_output,
+               "Write result output as Parquet. Requires a build with Arrow/Parquet support.");
 
   CLI11_PARSE(app, argc, argv);
+
+#if !defined(IBDMAP_HAS_PARQUET)
+  if (params.parquet_output) {
+    throw std::runtime_error("--parquet-output requires rebuilding ibdmap with Arrow/Parquet support.");
+  }
+#endif
 
   // Normalize chromosome to "chr" prefix
   if (!params.chromosome.empty() &&
@@ -153,19 +163,25 @@ int main(int argc, char *argv[]) {
     std::time_t t = std::time(nullptr);
     std::strftime(cur_time, 99, "%F-%T", std::localtime(&t));
 	std::stringstream default_output;
-	default_output << out_dir << "/" << cur_time << "." << params.chromosome << ".results.zst";
+	default_output << out_dir << "/" << cur_time << "." << params.chromosome
+                   << (params.parquet_output ? ".results.parquet" : ".results.zst");
 	params.output_path = default_output.str();
   } else {
-    // Strip .zst suffix if present, we'll re-add it
+    const std::string suffix = params.parquet_output ? ".parquet" : ".zst";
+    // Strip known output suffixes if present, we'll re-add the selected format.
     if (params.output_path.size() >= 4 &&
         params.output_path.substr(params.output_path.size() - 4) == ".zst") {
-        params.output_path.resize(params.output_path.size() - 4);
+      params.output_path.resize(params.output_path.size() - 4);
+    }
+    if (params.output_path.size() >= 8 &&
+        params.output_path.substr(params.output_path.size() - 8) == ".parquet") {
+      params.output_path.resize(params.output_path.size() - 8);
     }
     // Add chromosome if not already in the name
     if (params.output_path.find(params.chromosome) == std::string::npos) {
         params.output_path += "." + params.chromosome;
     }
-    params.output_path += ".zst";
+    params.output_path += suffix;
   }
 
   // Have to handle this way because optional wrapped vector arguments don't seem to be supported.

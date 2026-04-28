@@ -89,6 +89,7 @@ void Parser<T>::parse_chunk(const IbdfReader &reader,
                             const std::vector<std::string> &sample_names,
                             const Chunk &chunk,
                             std::shared_ptr<Reporter> chunk_reporter,
+                            std::shared_ptr<ParquetReporter> chunk_parquet_reporter,
                             ThreadPool<Statistic<T>> &threadpool) {
     arma::uword n_pairs = pheno.samples->size() * (pheno.samples->size() - 1) / 2;
     arma::SpCol<int32_t> data(n_pairs);
@@ -155,15 +156,25 @@ void Parser<T>::parse_chunk(const IbdfReader &reader,
         Breakpoint bp{};
         bp.breakpoint = std::make_pair(chrom, std::to_string(pos));
 
-        Statistic stat(data,
-                       bp,
-                       pheno.indexer,
-                       chunk_reporter,
-                       seq++,
-                       params,
-                       pheno.phenotypes,
-                       pheno.transposed,
-                       pheno.bitpacked);
+        Statistic stat = chunk_parquet_reporter
+                ? Statistic(data,
+                            bp,
+                            pheno.indexer,
+                            chunk_parquet_reporter,
+                            seq++,
+                            params,
+                            pheno.phenotypes,
+                            pheno.transposed,
+                            pheno.bitpacked)
+                : Statistic(data,
+                            bp,
+                            pheno.indexer,
+                            chunk_reporter,
+                            seq++,
+                            params,
+                            pheno.phenotypes,
+                            pheno.transposed,
+                            pheno.bitpacked);
         threadpool.submit(std::move(stat));
     }
 }
@@ -191,6 +202,14 @@ void Parser<T>::concatenate_chunk_files(const std::vector<std::string> &chunk_pa
 }
 
 template <typename T>
+void Parser<T>::merge_parquet_chunk_files(const std::vector<std::string> &chunk_paths) {
+    ParquetReporter::merge_files(chunk_paths, params.output_path);
+    for (const auto &path : chunk_paths) {
+        std::remove(path.c_str());
+    }
+}
+
+template <typename T>
 void Parser<T>::parse_binary(IbdfReader &reader, const std::vector<std::string> &sample_names) {
     auto chunks = find_chunks(reader);
     if (chunks.empty()) return;
@@ -206,14 +225,26 @@ void Parser<T>::parse_binary(IbdfReader &reader, const std::vector<std::string> 
     uint32_t job_id = rd();
     std::vector<std::string> chunk_paths(chunks.size());
     for (size_t i = 0; i < chunks.size(); ++i) {
-        chunk_paths[i] = fmt::format("{}.chunk_{}_{:08x}.zst",
-                                     params.output_path, i, job_id);
+        if (params.parquet_output) {
+            chunk_paths[i] = fmt::format("{}.chunk_{}_{:08x}.parquet",
+                                         params.output_path, i, job_id);
+        } else {
+            chunk_paths[i] = fmt::format("{}.chunk_{}_{:08x}.zst",
+                                         params.output_path, i, job_id);
+        }
     }
 
     // Create reporters up front so they're alive for the duration of parsing
     std::vector<std::shared_ptr<Reporter>> chunk_reporters(chunks.size());
-    for (size_t i = 0; i < chunks.size(); ++i) {
-        chunk_reporters[i] = std::make_shared<Reporter>(chunk_paths[i], false);
+    std::vector<std::shared_ptr<ParquetReporter>> chunk_parquet_reporters(chunks.size());
+    if (params.parquet_output) {
+        for (size_t i = 0; i < chunks.size(); ++i) {
+            chunk_parquet_reporters[i] = std::make_shared<ParquetReporter>(chunk_paths[i]);
+        }
+    } else {
+        for (size_t i = 0; i < chunks.size(); ++i) {
+            chunk_reporters[i] = std::make_shared<Reporter>(chunk_paths[i], false);
+        }
     }
 
     std::atomic<size_t> next_chunk{0};
@@ -225,7 +256,7 @@ void Parser<T>::parse_binary(IbdfReader &reader, const std::vector<std::string> 
                 size_t ci = next_chunk.fetch_add(1);
                 if (ci >= chunks.size()) break;
                 parse_chunk(reader, sample_names, chunks[ci],
-                            chunk_reporters[ci], threadpool);
+                            chunk_reporters[ci], chunk_parquet_reporters[ci], threadpool);
             }
         });
     }
@@ -237,9 +268,14 @@ void Parser<T>::parse_binary(IbdfReader &reader, const std::vector<std::string> 
 
     // Flush and close all chunk reporters after all stats have completed
     chunk_reporters.clear();
+    chunk_parquet_reporters.clear();
 
     if (!params.output_path.empty()) {
-        concatenate_chunk_files(chunk_paths);
+        if (params.parquet_output) {
+            merge_parquet_chunk_files(chunk_paths);
+        } else {
+            concatenate_chunk_files(chunk_paths);
+        }
     }
 }
 

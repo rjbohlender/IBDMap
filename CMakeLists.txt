@@ -14,9 +14,14 @@ LIST(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/")
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 find_package(Armadillo REQUIRED)
 find_package(Threads REQUIRED)
-find_package(Boost 1.66.0 COMPONENTS iostreams python numpy REQUIRED)
+find_package(Boost 1.66.0 COMPONENTS iostreams REQUIRED)
+set(IBDMAP_BOOST_LIBRARIES ${Boost_LIBRARIES})
+find_package(Boost 1.66.0 COMPONENTS python numpy QUIET)
+set(IBDLIB_BOOST_LIBRARIES ${IBDMAP_BOOST_LIBRARIES} ${Boost_LIBRARIES})
 find_package(Gperftools)
 find_package(ZLIB REQUIRED)
+find_package(Arrow QUIET)
+find_package(Parquet QUIET)
 
 find_package(benchmark)
 
@@ -58,6 +63,9 @@ set(PROJECT_SUPPORT_FILES
     src/parameters.hpp
     src/threadsafequeue.hpp
     src/reporter.hpp
+    src/resultrow.hpp
+    src/parquet_reporter.hpp
+    src/parquet_reporter.cpp
     src/geneticmap.hpp
     src/indexsort.hpp
     src/breakpoint.hpp
@@ -104,8 +112,13 @@ include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party/sse2neon")
 include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party/zstr/src")
 include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party/pcg-cpp-0.98/include")
 
-add_library(ibdlib MODULE ${IBDLIB_SOURCE_FILES})
-target_link_libraries(ibdlib ${Python3_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} fmt::fmt-header-only ${ARMADILLO_LIBRARIES})
+if(Boost_PYTHON_FOUND AND Boost_NUMPY_FOUND)
+    add_library(ibdlib MODULE ${IBDLIB_SOURCE_FILES})
+    target_compile_definitions(ibdlib PRIVATE IBDMAP_WITH_BOOST_PYTHON=1)
+    target_link_libraries(ibdlib ${Python3_LIBRARIES} ${IBDLIB_BOOST_LIBRARIES} ${ZLIB_LIBRARIES} fmt::fmt-header-only ${ARMADILLO_LIBRARIES})
+else()
+    message(STATUS "Boost.Python/Boost.NumPy not found; skipping ibdlib Python module.")
+endif()
 
 add_executable(ibdmap main.cpp ${PROJECT_SUPPORT_FILES}
         binary_format/ibd_format.hpp
@@ -118,8 +131,14 @@ target_link_libraries(ibdmap fmt::fmt-header-only)
 target_link_libraries(ibdmap pthread)
 target_link_libraries(ibdmap ${LAPACK_LIBRARIES})
 target_link_libraries(ibdmap ${BLAS_LIBRARIES})
-target_link_libraries(ibdmap ${Python3_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(ibdmap ${Python3_LIBRARIES} ${IBDMAP_BOOST_LIBRARIES})
 target_link_libraries(ibdmap ${ZLIB_LIBRARIES})
+if(Arrow_FOUND AND Parquet_FOUND)
+  target_compile_definitions(ibdmap PRIVATE IBDMAP_HAS_PARQUET=1)
+  target_link_libraries(ibdmap Arrow::arrow_shared Parquet::parquet_shared)
+else()
+  message(STATUS "Arrow/Parquet not found; ibdmap will build without --parquet-output support.")
+endif()
 if(Gperftools_FOUND)
   target_link_libraries(ibdmap ${Gperftools_LIBRARIES})
 endif()

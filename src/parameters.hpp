@@ -38,6 +38,7 @@ public:
     bool compressed_memory = false;
     bool enable_testing = false;
     bool print_debug = false;
+    bool parquet_output = false;
     int pheno_col;
     std::optional<std::vector<int>> range;
     std::optional<std::vector<std::pair<int, int>>> exclude;
@@ -64,6 +65,7 @@ public:
             fmt::print(os, "R2: {}\n", *rsquared);
         }
         fmt::print(os, "Verbose: {}\n", verbose);
+        fmt::print(os, "Parquet Output: {}\n", parquet_output);
         fmt::print(os, "Enable Testing: {}\n", enable_testing);
         if (range) {
             fmt::print(os, "Range: {}\n", fmt::join(*range, "-"));

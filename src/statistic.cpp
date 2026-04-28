@@ -37,6 +37,27 @@ Statistic<T>::Statistic(arma::SpCol<int32_t> data_,
 }
 
 template<typename T>
+Statistic<T>::Statistic(arma::SpCol<int32_t> data_,
+                        Breakpoint bp_,
+                        std::shared_ptr<Indexer<T>> indexer_,
+                        std::shared_ptr<ParquetReporter> reporter_,
+                        uint64_t seq_,
+                        Parameters params_,
+                        std::shared_ptr<std::vector<T>> phenotypes_,
+                        std::shared_ptr<TransposedPhenotypes> transposed_,
+                        std::shared_ptr<BitPackedPhenotypes> bitpacked_) : data(std::move(data_)), indexer(std::move(indexer_)),
+                                                                       seq(seq_),
+                                                                       params(std::move(params_)),
+                                                                       bp(std::move(bp_)), parquet_reporter(std::move(reporter_)),
+                                                                       phenotypes(std::move(phenotypes_)),
+                                                                       transposed(std::move(transposed_)),
+                                                                       bitpacked(std::move(bitpacked_)) {
+    if (params.enable_testing) {
+        test_statistic();
+    }
+}
+
+template<typename T>
 double
 Statistic<T>::calculate(T &phenotypes_, bool original_) {
     double statistic = 0;
@@ -201,7 +222,7 @@ Statistic<T>::calculate(T &phenotypes_, bool original_) {
         orig_cncn = static_cast<double>(cncn);
     }
 
-    if (params.print_debug) {
+    if (params.print_debug && reporter) {
         reporter->submit(seq, fmt::format("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
                                      bp.breakpoint.first,
                                      bp.breakpoint.second,
@@ -238,14 +259,17 @@ void Statistic<T>::run() {
         permute();
     }
 
-    // Output
-    std::stringstream ss;
-    build_output(ss);
     if (params.verbose) {
         fmt::print(std::cerr, "Finished {}\t{}\n", bp.breakpoint.first, bp.breakpoint.second);
     }
 
-    reporter->submit(seq, ss.str(), false);
+    if (parquet_reporter) {
+        parquet_reporter->submit(build_result_row());
+    } else {
+        std::stringstream ss;
+        build_output(ss);
+        reporter->submit(seq, ss.str(), false);
+    }
     cleanup();
     done = true;
 }
@@ -261,6 +285,26 @@ void Statistic<T>::build_output(std::stringstream &ss) {
         fmt::print(ss, "\t{}", permuted[i]);
     }
     fmt::print(ss, "\n");
+}
+
+template<typename T>
+ResultRow Statistic<T>::build_result_row() {
+    double cscs = (*indexer).case_case;
+    double cscn = (*indexer).case_cont;
+    double cncn = (*indexer).cont_cont;
+    ResultRow row;
+    row.seq = seq;
+    row.chrom = bp.breakpoint.first;
+    row.pos = std::stoi(bp.breakpoint.second);
+    row.orig_cscs_rate = orig_cscs / cscs;
+    row.orig_cscn_rate = orig_cscn / cscn;
+    row.orig_cncn_rate = orig_cncn / cncn;
+    row.original = original;
+    row.permutations.reserve(permuted.size());
+    for (double value : permuted) {
+        row.permutations.push_back(static_cast<float>(value));
+    }
+    return row;
 }
 
 template<typename T>
@@ -402,7 +446,7 @@ void Statistic<T>::permute_bulk() {
         orig_cscn = static_cast<double>(cscn);
         orig_cncn = static_cast<double>(cncn);
 
-        if (params.print_debug) {
+        if (params.print_debug && reporter) {
             reporter->submit(seq, fmt::format("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
                                          bp.breakpoint.first,
                                          bp.breakpoint.second,
@@ -684,7 +728,7 @@ void Statistic<T>::permute_bulk_bitpacked() {
         orig_cscn = static_cast<double>(cscn);
         orig_cncn = static_cast<double>(cncn);
 
-        if (params.print_debug) {
+        if (params.print_debug && reporter) {
             reporter->submit(seq, fmt::format("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
                                          bp.breakpoint.first,
                                          bp.breakpoint.second,
