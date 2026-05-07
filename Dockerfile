@@ -37,6 +37,7 @@ RUN wget https://packages.apache.org/artifactory/arrow/$(lsb_release --id --shor
 RUN apt-get install -y \
     libarrow-dev=${ARROW_VERSION} \
     libparquet-dev=${PARQUET_VERSION}
+    
 
 WORKDIR /app
 COPY . .
