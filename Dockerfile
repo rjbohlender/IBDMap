@@ -1,6 +1,9 @@
 # This build container image ends up about 3GB
 FROM ubuntu:22.04 AS ibdmap-build-container
 
+ARG ARROW_VERSION=24.0.0-1
+ARG PARQUET_VERSION=24.0.0-1
+
 RUN rm /bin/sh && ln -s /bin/bash /bin/sh
 
 # libboost-python on Ubuntu 22.04 is python 3.10
@@ -10,13 +13,31 @@ RUN rm /bin/sh && ln -s /bin/bash /bin/sh
 RUN apt-get update &&  \
     apt-get dist-upgrade -y && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    ca-certificates \
+    lsb-release \
+    wget \
     build-essential \
     cmake \
     git \
     libarmadillo-dev \
     libboost-iostreams-dev \
     libboost-numpy-dev \
-    libboost-python-dev
+    libboost-python-dev \
+    libzstd-dev
+
+# Now install the parquet dependencies
+# 1. First link the debian repository
+# 2. install the repository
+# 3. Apt update
+# 4. install the packages
+RUN wget https://packages.apache.org/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    apt-get install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    apt update
+
+RUN apt-get install -y \
+    libarrow-dev=${ARROW_VERSION} \
+    libparquet-dev=${PARQUET_VERSION}
+    
 
 WORKDIR /app
 COPY . .
@@ -61,6 +82,9 @@ RUN rm /bin/sh && ln -s /bin/bash /bin/sh
 RUN apt-get update &&  \
     apt-get -y dist-upgrade && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    ca-certificates \
+    lsb-release \
+    wget \
     libboost-iostreams1.74.0 \
     libboost-numpy1.74.0 \
     libboost-python1.74.0 \
@@ -68,6 +92,14 @@ RUN apt-get update &&  \
     libpython3.10 \
     python3.11 \
     python3.11-venv
+
+# Repeat the debian install but this time we are goign to install the exact runtime libraries that we need
+RUN wget https://packages.apache.org/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    apt-get install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    apt update
+
+RUN apt-get install -y libarrow2400 libparquet2400 &&\
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY --from=ibdmap-build-container /app/build/ibdmap ibdmap
