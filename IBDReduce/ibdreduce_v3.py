@@ -369,8 +369,13 @@ def main():
 
     ttotal1 = datetime.now()
     t1 = datetime.now()
+    
     gmaps = glob.glob(args.gmap + "/*.gmap.gz")
+    # if there are no gmaps files found then weird errors can be raised later on in the program
+    assert len(gmaps) > 0, f"Failed to identify any genetic map files within the provided directory: {args.gmap}. Please make sure there are files with the suffix *.gmap.gz in this direcdtory"
+    
     gmap = GeneticMap(gmaps)
+
     t2 = datetime.now()
     print("GMAP time: {}".format(t2 - t1), file=sys.stderr)
 
