@@ -298,14 +298,15 @@ def parse_pheno(ifile: str, phenotype: Optional[str] = None) -> Tuple[int, int]:
     """
 
     :param ifile:
+    :param phenotype:
     :return:
     """
     data = {'0': 0, '1': 0, 'NA': 0}
     with open(ifile, 'r') as f:
-        for i, l in enumerate(f):
+        for i, line in enumerate(f):
             # we need to have specific logic for if the user passes a phenotype
             if phenotype and i == 0: # This line only occurs if there is a phenotype string and we are at the header
-                header_list = l.strip().split() # We want to pass the header line and the determine where in the list the phenotype column is
+                header_list = line.strip().split() # We want to pass the header line and the determine where in the list the phenotype column is
                 phenotype_indx = header_list.index(phenotype)
                 continue
             else: # If no phenotype string then we skip the header
@@ -313,17 +314,17 @@ def parse_pheno(ifile: str, phenotype: Optional[str] = None) -> Tuple[int, int]:
                     phenotype_indx = 1 # If no phenotype name is passed then we are going to treat this like a 2 column file where the first column are the ids and the second column is the phenotype status
                     continue
 
-            l = l.strip().split()
+            line = line.strip().split()
             try:
-                data[l[phenotype_indx]] += 1
+                data[line[phenotype_indx]] += 1
             except KeyError: 
-                if l[phenotype_indx] in ["N/A", "-1"]: # This case will be hit if the phenotype value is not 0, 1, or NA.
+                if line[phenotype_indx] in ["N/A", "-1"]: # This case will be hit if the phenotype value is not 0, 1, or NA.
                     data["NA"] += 1 # We can assume the user is meaning for these values to be excluded so just increase the count
                 else: # This case account for if the user has float values as the phenotype. Ex: 1.0 or 0.0. This could error if the user gave a different string than NA or -1
                     try:
-                        data[str(int(float(l[phenotype_indx])))] += 1
+                        data[str(int(float(line[phenotype_indx])))] += 1
                     except ValueError: # This except allows the propgram to close if it encounters anything else
-                        print(f"unrecognized value of {l[phenotype_indx]} at line {i+1}. Acceptable values are 1/0 for cases and controls and NA, N/A, or -1 for exclusions. Please format your data correctly and rerun the program.")
+                        print(f"unrecognized value of {line[phenotype_indx]} at line {i+1}. Acceptable values are 1/0 for cases and controls and NA, N/A, or -1 for exclusions. Please format your data correctly and rerun the program.")
                         sys.exit(1)
     print(f"Using the provided phenotype: {phenotype}, {data['1']} cases were identified, {data['0']} were controls were identified, and {data['NA']} exclusions were identified.")
     return data['1'], data['0']
@@ -358,14 +359,12 @@ def main():
     parser.add_argument("--phenotype-name", default=None, help="Name of the phenotype column in the phenotype file that the user wishes to use in ibdreduce. This option only needs to be used if the user wishes to use a phenotype matrix with multiple phenotypes, otherwise te program assumes that the phenotype is in the second columns and the ids are in the first column") 
 
     args = parser.parse_args()
-
+    # Validating parsed arguments
     if args.null and not args.single:
-        print("--null requires --single.", file=sys.stderr)
-        sys.exit(1)
+        parser.error("--null requires --single.")
 
     if args.no_avg and args.two_sided:
-        print("Cannot use --no_avg and --two_sided at the same time.", file=sys.stderr)
-        sys.exit(1)
+        parser.error("Cannot use --no_avg and --two_sided at the same time")
 
     ttotal1 = datetime.now()
     t1 = datetime.now()
@@ -373,7 +372,7 @@ def main():
     gmaps = glob.glob(args.gmap + "/*.gmap.gz")
     # if there are no gmaps files found then weird errors can be raised later on in the program
     assert len(gmaps) > 0, f"Failed to identify any genetic map files within the provided directory: {args.gmap}. Please make sure there are files with the suffix *.gmap.gz in this direcdtory"
-    
+
     gmap = GeneticMap(gmaps)
 
     t2 = datetime.now()
@@ -403,9 +402,9 @@ def main():
             null_breakpoints = result[0]
         total += result[1]
     t2 = datetime.now()
-    print("IBD Length Time: {}".format(t2 - t1), file=sys.stderr)
-    print("Total Breakpoints: {}".format(breakpoints), file=sys.stderr)
-    print("Total Length: {}".format(total), file=sys.stderr)
+    print("IBD Length Time: {}".format(t2 - t1))
+    print("Total Breakpoints: {}".format(breakpoints))
+    print("Total Length: {}".format(total))
 
     # Create numpy arrays to store the data.
     ibdfrac = np.zeros(breakpoints, dtype=np.float64)
@@ -434,8 +433,8 @@ def main():
                         predis = dis
                     write_permutation_values(data, idx, offset, vals, args.nperm)
                 except ValueError as e:
-                    print(f"Error at {i} {j} {idx} {offset} {fpath}", file=sys.stderr)
-                    raise e
+                    raise ValueError(f"Error at {i} {j} {idx} {offset} {fpath}")
+
                 idx += 1
 
     # Calculate the average and subtract it from the data.
