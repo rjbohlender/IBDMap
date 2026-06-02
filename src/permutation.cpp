@@ -5,7 +5,10 @@
 #include "permutation.hpp"
 #include "jointhreads.hpp"
 #include "types.hpp"
+#include <algorithm>
 #include <cassert>
+#include <limits>
+#include <numeric>
 
 template<typename T>
 Permute<T>::Permute() : sto(std::random_device{}()), bins_built(false) {}
@@ -28,24 +31,25 @@ void Permute<T>::generate_permutations(
 
     // Initialize permutations
     permutations->resize(nperm + 1);
-    for (int i = 1; i < nperm + 1; i++) {
+    for (arma::uword i = 1; i < nperm + 1; i++) {
         (*permutations)[i].resize(odds.n_rows);
     }
 
-    int step = nperm / nthreads;
-    int remaining = nperm;
+    if (nperm == 0) {
+        return;
+    }
+
+    arma::uword effective_threads = std::clamp<arma::uword>(nthreads, 1, nperm);
+    arma::uword step = nperm / effective_threads;
+    arma::uword remaining = nperm;
     {// Force scope so that threads automatically join and exit when done via
         // JoinThreads
         std::vector<std::thread> threads;
         JoinThreads thread_joiner(threads);
-        for (int i = 0; i < nthreads; i++) {
+        for (arma::uword i = 0; i < effective_threads; i++) {
             int seed = sto.IRandom(0, std::numeric_limits<int>::max());
-            int offset = i * step + 1;
-            if (remaining < 0) {
-                std::cerr << "Failed during permutation.\n";
-                std::exit(-1);
-            }
-            if (i == nthreads - 1) {
+            arma::uword offset = i * step + 1;
+            if (i == effective_threads - 1) {
                 threads.emplace_back(std::thread(&Permute::permute_thread, this,
                                                  permutations, ncases, offset,
                                                  remaining, seed));
@@ -149,7 +153,9 @@ Permute<T>::epsilon_permutation(int nperm, arma::vec &odds, arma::uword ncases,
     arma::uword msize = std::accumulate(m.begin(), m.end(), 0);
     assert(msize == odds.n_rows);
 #endif
+    ret.resize(nperm);
     for (int i = 0; i < nperm; i++) {
+        ret[i].resize(odds.n_rows);
         std::vector<int32_t> tmp(bin_odds.size(), 0);
         sto.MultiFishersNCHyp(&tmp[0], &(m[0]), &(bin_odds[0]), ncases,
                               bin_odds.size());

@@ -71,7 +71,7 @@ void Phenotypes<T>::parse(std::istream &is) {
     // Read in the permutations from a TSV file where each row of the file is a permutation
     if (params.read_permutations) {
         std::ifstream ifs(*params.read_permutations);
-        int i = 0;
+        size_t i = 0;
         while (std::getline(ifs, line)) {
             RJBUtil::Splitter<std::string> splitter(line, " \t");
             if(splitter.size() == 0) {
@@ -81,10 +81,25 @@ void Phenotypes<T>::parse(std::istream &is) {
             for (const auto &s : splitter) {
                 perm.push_back(static_cast<int8_t>(std::stoi(s)));
             }
+            if (perm.size() != (*phenotypes)[0].size()) {
+                throw(std::runtime_error(fmt::format(
+                        "Permutation row {} has {} samples; expected {}.",
+                        i + 1, perm.size(), (*phenotypes)[0].size())));
+            }
+            if (i >= params.nperms) {
+                throw(std::runtime_error(fmt::format(
+                        "Permutation file contains more rows than requested permutations ({}).",
+                        params.nperms)));
+            }
             (*phenotypes)[i + 1] = perm;
             i++;
         }
         ifs.close();
+        if (i != params.nperms) {
+            throw(std::runtime_error(fmt::format(
+                    "Permutation file contains {} rows; expected {}.",
+                    i, params.nperms)));
+        }
     } else {
         if (params.cov) {
             parse_cov();
@@ -208,10 +223,10 @@ void Phenotypes<T>::parse_cov() {
         }
     }
 
-    // Sort values
+    // Sort covariate rows into the same sample order as the phenotype vector.
     IndexSort indexsort(cov_samples);
     indexsort.sort_vector(cov_samples);
-    cov = (*cov)(arma::conv_to<arma::uvec>::from(indexsort.idx));
+    cov = cov->rows(arma::conv_to<arma::uvec>::from(indexsort.idx));
 
     // Verify that samples are present. If not, remove and count the number of cases and controls removed
     // Prune samples that lack covariates or phenotypes
