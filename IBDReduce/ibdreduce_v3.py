@@ -3,13 +3,17 @@ import argparse as ap
 import sys
 import multiprocessing as mp
 import gzip
-import zstandard as zstd
 from typing import Tuple, Optional
 from geneticmap import GeneticMap
 from pathlib import Path
 from datetime import datetime
 import numpy as np
 import scipy.stats as stats
+
+try:
+    import zstandard as zstd
+except ImportError:
+    zstd = None
 
 try:
     import pyarrow.parquet as pq
@@ -56,6 +60,7 @@ def check_and_open(fpath: str):
     if compressed == "gzip":
         f = gzip.open(str(file_), "rt")
     elif compressed == "zstd":
+        require_zstandard()
         f = zstd.open(str(file_), "rt")
     else:
         f = file_.open("r")
@@ -72,6 +77,14 @@ def require_pyarrow() -> None:
         raise RuntimeError(
             "Parquet input requires pyarrow. Install it with `pip install pyarrow` "
             "or use text/zstd IBDMap output."
+        )
+
+
+def require_zstandard() -> None:
+    if zstd is None:
+        raise RuntimeError(
+            "Zstandard-compressed input requires zstandard. Install it with "
+            "`pip install zstandard` or use uncompressed/gzip/Parquet IBDMap output."
         )
 
 
@@ -234,6 +247,37 @@ def compute_fdr_adjusted_pvalues(empp: np.ndarray, permutation_pvalues: np.ndarr
     return adjp
 
 
+def active_breakpoint_mask(data: np.ndarray) -> np.ndarray:
+    """Return rows with at least one non-zero observed/permutation statistic."""
+    return np.any(data != 0, axis=1)
+
+
+def remove_inactive_breakpoints(
+    data: np.ndarray,
+    obs_rates: np.ndarray,
+    ibdfrac: np.ndarray,
+    bp_ids: list[tuple[int, int]],
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, list[tuple[int, int]], int]:
+    """Drop breakpoints whose observed and permutation statistics are all zero."""
+    active_mask = active_breakpoint_mask(data)
+    removed = int(active_mask.size - np.count_nonzero(active_mask))
+
+    if removed == 0:
+        return data, obs_rates, ibdfrac, bp_ids, 0
+
+    filtered_bp_ids = [
+        bp_id for keep, bp_id in zip(active_mask.tolist(), bp_ids)
+        if keep
+    ]
+    return (
+        data[active_mask, :],
+        obs_rates[active_mask, :],
+        ibdfrac[active_mask],
+        filtered_bp_ids,
+        removed,
+    )
+
+
 def ibdlen(fpath: str, gmap: GeneticMap) -> Tuple[int, float]:
     """Calculate the IBD length for a single chromosome and permutation set.
     :param fpath: The file path to the IBDmap file.
@@ -385,11 +429,8 @@ def main():
     t1 = datetime.now()
     breakpoints = 0
     total = 0
-    null_idx = 0
     null_breakpoints = 0
     map_args = [(args.prefix + args.suffix.format(i=i, j=args.at), gmap) for i in chrom]
-    if args.null:
-        null_idx = chrom.index(args.null)
     with mp.Pool(processes=min(mp.cpu_count(), len(map_args))) as pool:
         results = pool.starmap(ibdlen, map_args)
     for i, result in enumerate(results):
@@ -412,8 +453,6 @@ def main():
     obs_rates = np.zeros((breakpoints, 3), dtype=np.float64)
     for i in chrom:
         start_idx = idx
-        if args.null and i == args.null:
-            null_idx = idx
         for j in range(args.at, args.at + args.nruns):
             idx = start_idx
             fpath = args.prefix + args.suffix.format(i=i, j=j)
@@ -433,6 +472,25 @@ def main():
                     raise e
                 idx += 1
 
+    data, obs_rates, ibdfrac, bp_ids, inactive_removed = remove_inactive_breakpoints(
+        data, obs_rates, ibdfrac, bp_ids
+    )
+    if inactive_removed:
+        print(
+            f"Inactive breakpoints removed: {inactive_removed}",
+            file=sys.stderr,
+        )
+    breakpoints = data.shape[0]
+    if breakpoints == 0:
+        raise RuntimeError("All breakpoints were inactive after filtering.")
+
+    null_mask = None
+    if args.null:
+        null_mask = np.array([bp[0] == args.null for bp in bp_ids], dtype=bool)
+        null_breakpoints = int(np.count_nonzero(null_mask))
+        if null_breakpoints == 0:
+            raise RuntimeError("No active null-chromosome breakpoints remain after filtering.")
+
     # Calculate the average and subtract it from the data.
     if args.no_avg:
         avgs = np.zeros(args.nperm * args.nruns + 1)
@@ -440,7 +498,7 @@ def main():
         avgs = np.mean(data, axis=0)
     else:
         if args.null:
-            avgs = np.mean(data[null_idx:(null_idx + null_breakpoints), :], axis=0)
+            avgs = np.mean(data[null_mask, :], axis=0)
         else:
             avgs = np.matmul(data.T, ibdfrac)
 
@@ -501,6 +559,7 @@ def main():
         output_file.write(f"#  {' '.join(sys.argv)}\n")
         output_file.write(f"# Genome-wide Average: {avgs[0]}\n")
         output_file.write(f"# Total breakpoints: {breakpoints}\n")
+        output_file.write(f"# Inactive breakpoints removed: {inactive_removed}\n")
         if args.lrt:
             output_file.write(
                 "CHROM\tPOS\tcM\tPVal\tPValCI\tPAdj\tPAdjCutoff\tSuccess\tPermutation\tDelta\tLLik\n"

@@ -6,7 +6,7 @@ import numpy as np
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT / "IBDReduce"))
 
-from ibdreduce_v3 import compute_fdr_adjusted_pvalues
+from ibdreduce_v3 import compute_fdr_adjusted_pvalues, remove_inactive_breakpoints
 
 
 def test_fdr_adjustment_matches_manual_example():
@@ -36,3 +36,28 @@ def test_fdr_adjustment_matches_manual_example():
     permutation_first_column_counts = [np.sum(permutation_pvalues[:, 0] <= p) for p in empp]
     assert observed_rp != permutation_first_column_counts
     assert observed_rp[1] == 2  # sanity-check the hand-calculated rejection counts
+
+
+def test_remove_inactive_breakpoints_drops_all_zero_rows():
+    data = np.array([
+        [0.0, 0.0, 0.0],
+        [0.1, 0.0, 0.0],
+        [0.0, 0.0, -0.2],
+    ])
+    obs_rates = np.array([
+        [0.0, 0.0, 0.0],
+        [0.1, 0.2, 0.3],
+        [0.0, 0.0, 0.1],
+    ])
+    ibdfrac = np.array([0.2, 0.3, 0.5])
+    bp_ids = [(2, 100), (2, 200), (2, 300)]
+
+    filtered_data, filtered_obs, filtered_ibdfrac, filtered_bp_ids, removed = (
+        remove_inactive_breakpoints(data, obs_rates, ibdfrac, bp_ids)
+    )
+
+    assert removed == 1
+    np.testing.assert_array_equal(filtered_data, data[1:])
+    np.testing.assert_array_equal(filtered_obs, obs_rates[1:])
+    np.testing.assert_array_equal(filtered_ibdfrac, ibdfrac[1:])
+    assert filtered_bp_ids == bp_ids[1:]
