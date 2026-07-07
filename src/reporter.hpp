@@ -74,7 +74,11 @@ class Reporter {
         os.push(boost::iostreams::zstd_compressor());
         os.push(sink);
 
-        while (!done || nstrings > 0) {
+        if (!os) {
+            fmt::print(std::cerr, "Error: Could not open {} for writing.\n", out_path); 
+        }
+
+        while ((!done || nstrings > 0) && os) {
             data_cond.wait_for(lk, std::chrono::seconds(1), [this] { return !string_queue.empty() || done; });
             if (!string_queue.empty()) {
                 s = std::move(string_queue.front());
@@ -90,6 +94,10 @@ class Reporter {
                 nwritten++;
                 lk.lock();
             }
+        }
+
+        if (!os) {
+            fmt::print(std::cerr, "Error: Failure writing to {}.\n", out_path); 
         }
     }
 
@@ -163,7 +171,7 @@ public:
             std::unique_lock<std::mutex> lk(deb);
             debug_queue.push(s);
             lk.unlock();
-            debug_cond.notify_all();
+            debug_cond.notify_one();
             return;
         } else {
             std::unique_lock<std::mutex> lk(mut);
@@ -171,7 +179,7 @@ public:
             nstrings++;
             nsubmitted++;
             lk.unlock();
-            data_cond.notify_all();
+            data_cond.notify_one();
         }
     }
 
