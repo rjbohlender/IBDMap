@@ -7,6 +7,7 @@
 
 #if defined(IBDMAP_HAS_PARQUET)
 #include <arrow/io/file.h>
+#include <arrow/util/compression.h>
 #include <parquet/arrow/reader.h>
 #include <parquet/properties.h>
 #endif
@@ -38,6 +39,23 @@ std::shared_ptr<arrow::Schema> result_schema() {
             arrow::field("permutations", arrow::list(arrow::float32()), false),
     });
 }
+
+parquet::Compression::type parquet_compression() {
+    static const auto compression = [] {
+        if (arrow::util::Codec::IsAvailable(arrow::Compression::ZSTD)) {
+            return parquet::Compression::ZSTD;
+        }
+        if (arrow::util::Codec::IsAvailable(arrow::Compression::GZIP)) {
+            fmt::print(std::cerr,
+                       "Arrow lacks ZSTD support; using GZIP compression for Parquet output.\n");
+            return parquet::Compression::GZIP;
+        }
+        fmt::print(std::cerr,
+                   "Arrow lacks ZSTD and GZIP support; writing uncompressed Parquet output.\n");
+        return parquet::Compression::UNCOMPRESSED;
+    }();
+    return compression;
+}
 }// namespace
 #endif
 
@@ -55,6 +73,9 @@ ParquetReporter::ParquetReporter(std::string output, size_t batch_size_) :
             arrow::default_memory_pool(),
             std::make_shared<arrow::FloatBuilder>());
     permutation_value_builder = static_cast<arrow::FloatBuilder *>(permutations_builder->value_builder());
+    // Open the output synchronously so path, permission, and writer
+    // initialization failures are reported before expensive computation begins.
+    open_writer();
     print_thread = std::thread(&ParquetReporter::print, std::ref(*this));
 #else
     throw std::runtime_error("Parquet output was requested, but this build does not include Arrow/Parquet support.");
@@ -62,22 +83,43 @@ ParquetReporter::ParquetReporter(std::string output, size_t batch_size_) :
 }
 
 ParquetReporter::~ParquetReporter() {
-    while (!failed && (!reorder_buf.empty() || nrows > 0)) {
-        fmt::print(std::cerr, "parquet queue size: {} nrows: {}\n", reorder_buf.size(), nrows);
-        std::this_thread::sleep_for(std::chrono::nanoseconds(100000000));
+    finish_impl(false);
+}
+
+void ParquetReporter::finish() {
+    finish_impl(true);
+}
+
+void ParquetReporter::finish_impl(bool rethrow_error) {
+    if (!finish_started.exchange(true)) {
+        done = true;
+        data_cond.notify_all();
+        if (print_thread.joinable()) {
+            print_thread.join();
+        }
     }
-    done = true;
-    data_cond.notify_all();
-    if (print_thread.joinable()) {
-        print_thread.join();
+
+    if (rethrow_error && write_error) {
+        try {
+            std::rethrow_exception(write_error);
+        } catch (const std::exception &e) {
+            throw std::runtime_error(
+                    "Parquet output failed for " + out_path + ": " + e.what());
+        } catch (...) {
+            throw std::runtime_error(
+                    "Parquet output failed for " + out_path + ": unknown writer error");
+        }
     }
 }
 
 void ParquetReporter::submit(ResultRow row) {
     if (failed) {
-        throw std::runtime_error("cannot submit to failed ParquetReporter");
+        return;
     }
     std::unique_lock<std::mutex> lk(mut);
+    if (failed) {
+        return;
+    }
     reorder_buf[row.seq] = std::move(row);
     nrows++;
     nsubmitted++;
@@ -88,7 +130,6 @@ void ParquetReporter::submit(ResultRow row) {
 void ParquetReporter::print() {
 #if defined(IBDMAP_HAS_PARQUET)
     try {
-        open_writer();
         std::unique_lock<std::mutex> lk(mut);
         while (!done || nrows > 0) {
             data_cond.wait_for(lk, std::chrono::seconds(1), [this] {
@@ -110,11 +151,16 @@ void ParquetReporter::print() {
         lk.unlock();
         flush_batch();
         check_status(writer->Close(), "closing parquet writer");
-    } catch (const std::exception &e) {
-        fmt::print(std::cerr, "ParquetReporter failed: {}\n", e.what());
-        failed = true;
+    } catch (...) {
+        {
+            std::lock_guard<std::mutex> lk(mut);
+            write_error = std::current_exception();
+            reorder_buf.clear();
+            failed = true;
+        }
         nrows = 0;
         done = true;
+        data_cond.notify_all();
     }
 #endif
 }
@@ -123,7 +169,7 @@ void ParquetReporter::print() {
 void ParquetReporter::open_writer() {
     auto outfile = value_or_throw(arrow::io::FileOutputStream::Open(out_path), "opening parquet output");
     auto props = parquet::WriterProperties::Builder()
-            .compression(parquet::Compression::ZSTD)
+            .compression(parquet_compression())
             ->build();
     writer = value_or_throw(
             parquet::arrow::FileWriter::Open(
@@ -194,7 +240,7 @@ void ParquetReporter::merge_files(const std::vector<std::string> &input_paths,
     auto schema = result_schema();
     auto outfile = value_or_throw(arrow::io::FileOutputStream::Open(output_path), "opening merged parquet output");
     auto props = parquet::WriterProperties::Builder()
-            .compression(parquet::Compression::ZSTD)
+            .compression(parquet_compression())
             ->build();
     auto writer = value_or_throw(
             parquet::arrow::FileWriter::Open(

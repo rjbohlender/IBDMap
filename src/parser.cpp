@@ -267,6 +267,11 @@ void Parser<T>::parse_binary(IbdfReader &reader, const std::vector<std::string> 
     threadpool.wait_for_completion();
 
     // Flush and close all chunk reporters after all stats have completed
+    if (params.parquet_output) {
+        for (const auto &reporter : chunk_parquet_reporters) {
+            reporter->finish();
+        }
+    }
     chunk_reporters.clear();
     chunk_parquet_reporters.clear();
 

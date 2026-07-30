@@ -5,6 +5,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstddef>
+#include <exception>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -30,6 +31,8 @@ class ParquetReporter {
     mutable std::mutex mut;
     std::condition_variable data_cond;
     size_t batch_size;
+    std::atomic_bool finish_started{false};
+    std::exception_ptr write_error;
 
 #if defined(IBDMAP_HAS_PARQUET)
     std::shared_ptr<arrow::Schema> schema;
@@ -51,12 +54,14 @@ class ParquetReporter {
 #endif
 
     void print();
+    void finish_impl(bool rethrow_error);
 
 public:
     explicit ParquetReporter(std::string output, size_t batch_size_ = 4096);
     ~ParquetReporter();
 
     void submit(ResultRow row);
+    void finish();
 
     static void merge_files(const std::vector<std::string> &input_paths,
                             const std::string &output_path);
