@@ -5,6 +5,7 @@
 #ifndef PERMUTE_ASSOCIATE_PERMUTATION_HPP
 #define PERMUTE_ASSOCIATE_PERMUTATION_HPP
 
+#include "transposed_phenotypes.hpp"
 #include <armadillo>
 #include <memory>
 #include <stocc/stocc.h>
@@ -21,8 +22,17 @@ struct Permute {
             arma::colvec &odds, arma::uword ncases, arma::uword nperm,
             arma::uword nthreads, double epsilon);
 
+    void generate_bitpacked(
+            BitPackedPhenotypes &permutations,
+            BitPackedPermutationWriter &writer,
+            arma::colvec &odds, arma::uword ncases, arma::uword nperm,
+            arma::uword nthreads, double epsilon);
+
     void permute_thread(std::shared_ptr<std::vector<T>> p,
                         int ncases, int offset, int nperm, int seed);
+    void permute_bitpacked_thread(BitPackedPhenotypes &p,
+                                  BitPackedPermutationWriter &writer,
+                                  int ncases, int offset, int nperm, int seed);
     [[maybe_unused]] std::vector<T>
     epsilon_permutation(int nperm, arma::vec &odds, arma::uword ncases,
                         const std::string &transcript, double epsilon = 0.01);

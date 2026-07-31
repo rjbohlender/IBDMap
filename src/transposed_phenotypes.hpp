@@ -2,9 +2,12 @@
 #define CARVAIBD_TRANSPOSED_PHENOTYPES_HPP
 
 #include "types.hpp"
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <mutex>
+#include <stdexcept>
 #include <vector>
 
 inline size_t align_up(size_t n, size_t alignment) {
@@ -53,11 +56,19 @@ struct BitPackedPhenotypes {
         return data.data() + sample * stride_words;
     }
 
-    BitPackedPhenotypes(const std::vector<pheno_vector>& perms, size_t n_samples_)
-        : n_samples(n_samples_), n_perms(perms.size() - 1), n_total(perms.size()) {
-        // Align stride to 8 words (512 bits) for AVX-512 friendly access
+    uint64_t* row(size_t sample) {
+        return data.data() + sample * stride_words;
+    }
+
+    BitPackedPhenotypes(size_t n_samples_, size_t n_perms_)
+        : n_samples(n_samples_), n_perms(n_perms_), n_total(n_perms_ + 1) {
+        // Align stride to 8 words (512 bits) for AVX-512 friendly access.
         stride_words = align_up((n_total + 63) / 64, 8);
         data.resize(n_samples * stride_words, 0);
+    }
+
+    BitPackedPhenotypes(const std::vector<pheno_vector>& perms, size_t n_samples_)
+        : BitPackedPhenotypes(n_samples_, perms.size() - 1) {
 
         for (size_t perm = 0; perm < n_total; ++perm) {
             size_t word = perm / 64;
@@ -70,6 +81,95 @@ struct BitPackedPhenotypes {
                 }
             }
         }
+    }
+};
+
+/**
+ * Thread-safe destination for word-sized blocks of bit-packed permutations.
+ * A lock is taken once per completed word, not once per phenotype value.
+ */
+class BitPackedPermutationWriter {
+    BitPackedPhenotypes& output;
+    std::vector<std::mutex> word_mutexes;
+
+public:
+    explicit BitPackedPermutationWriter(BitPackedPhenotypes& output_)
+        : output(output_), word_mutexes((output_.n_total + 63) / 64) {}
+
+    void commit(size_t word, const std::vector<uint64_t>& values) {
+        if (word >= word_mutexes.size() || values.size() != output.n_samples) {
+            throw std::out_of_range("Invalid bit-packed permutation word");
+        }
+        std::lock_guard<std::mutex> lock(word_mutexes[word]);
+        for (size_t sample = 0; sample < output.n_samples; ++sample) {
+            output.row(sample)[word] |= values[sample];
+        }
+    }
+};
+
+/**
+ * Accumulates a contiguous range of permutations into 64-bit sample words.
+ * Multiple buffers may safely commit disjoint bits of the same word.
+ */
+class BitPackedPermutationBuffer {
+    BitPackedPermutationWriter& writer;
+    size_t n_samples;
+    size_t n_total;
+    size_t current_word = 0;
+    size_t current_permutation = 0;
+    bool active = false;
+    std::vector<uint64_t> values;
+
+    void flush() {
+        if (active) {
+            writer.commit(current_word, values);
+            std::fill(values.begin(), values.end(), uint64_t{0});
+        }
+    }
+
+public:
+    BitPackedPermutationBuffer(BitPackedPermutationWriter& writer_,
+                               const BitPackedPhenotypes& output)
+        : writer(writer_), n_samples(output.n_samples), n_total(output.n_total),
+          values(n_samples, 0) {}
+
+    void begin_permutation(size_t permutation) {
+        if (permutation >= n_total) {
+            throw std::out_of_range("Permutation index exceeds bit-packed storage");
+        }
+        const size_t word = permutation / 64;
+        if (active && word != current_word) {
+            flush();
+            active = false;
+        }
+        current_word = word;
+        current_permutation = permutation;
+        active = true;
+    }
+
+    void set_case(size_t sample) {
+        if (!active || sample >= n_samples) {
+            throw std::out_of_range("Invalid bit-packed phenotype sample");
+        }
+        values[sample] |= uint64_t{1} << (current_permutation % 64);
+    }
+
+    template<typename T>
+    void append(size_t permutation, const T& phenotype) {
+        if (phenotype.size() != n_samples) {
+            throw std::runtime_error("Permutation has the wrong sample count");
+        }
+        begin_permutation(permutation);
+        for (size_t sample = 0; sample < n_samples; ++sample) {
+            if (phenotype[sample]) {
+                set_case(sample);
+            }
+        }
+    }
+
+    void finish() {
+        flush();
+        active = false;
     }
 };
 

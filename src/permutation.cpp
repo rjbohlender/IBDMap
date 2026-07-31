@@ -7,8 +7,10 @@
 #include "types.hpp"
 #include <algorithm>
 #include <cassert>
+#include <functional>
 #include <limits>
 #include <numeric>
+#include <stdexcept>
 
 template<typename T>
 Permute<T>::Permute() : sto(std::random_device{}()), bins_built(false) {}
@@ -64,6 +66,44 @@ void Permute<T>::generate_permutations(
 }
 
 template<typename T>
+void Permute<T>::generate_bitpacked(
+        BitPackedPhenotypes &permutations,
+        BitPackedPermutationWriter &writer,
+        arma::colvec &odds, arma::uword ncases, arma::uword nperm,
+        arma::uword nthreads, double epsilon) {
+    if (!bins_built) {
+        build_bins(odds, epsilon);
+    }
+#ifndef NDEBUG
+    arma::uword msize = std::accumulate(m.begin(), m.end(), 0);
+    assert(msize == odds.n_rows);
+#endif
+    if (permutations.n_samples != odds.n_rows || permutations.n_perms != nperm) {
+        throw std::runtime_error("Bit-packed permutation dimensions do not match generation parameters");
+    }
+    if (nperm == 0) {
+        return;
+    }
+
+    arma::uword effective_threads = std::clamp<arma::uword>(nthreads, 1, nperm);
+    arma::uword step = nperm / effective_threads;
+    arma::uword remaining = nperm;
+    {
+        std::vector<std::thread> threads;
+        JoinThreads thread_joiner(threads);
+        for (arma::uword i = 0; i < effective_threads; i++) {
+            int seed = sto.IRandom(0, std::numeric_limits<int>::max());
+            arma::uword offset = i * step + 1;
+            arma::uword count = (i == effective_threads - 1) ? remaining : step;
+            threads.emplace_back(std::thread(&Permute::permute_bitpacked_thread, this,
+                                             std::ref(permutations), std::ref(writer),
+                                             ncases, offset, count, seed));
+            remaining -= step;
+        }
+    }
+}
+
+template<typename T>
 void Permute<T>::build_bins(arma::colvec &odds, double epsilon) {
     std::cerr << "Building bins." << std::endl;
     arma::wall_clock timer;
@@ -112,6 +152,33 @@ void Permute<T>::permute_thread(
             filled += m[j];
         }
     }
+}
+
+template<typename T>
+void Permute<T>::permute_bitpacked_thread(
+        BitPackedPhenotypes &p, BitPackedPermutationWriter &writer,
+        int ncases, int offset, int nperm, int seed) {
+    StochasticLib3 rng(seed);
+    std::vector<int32_t> tmp(bin_odds.size(), 0);
+    BitPackedPermutationBuffer buffer(writer, p);
+
+    for (int i = 0; i < nperm; i++) {
+        const size_t permutation = static_cast<size_t>(offset + i);
+        buffer.begin_permutation(permutation);
+        rng.MultiFishersNCHyp(&tmp[0], &(m[0]), &(bin_odds[0]), ncases,
+                              bin_odds.size());
+        arma::uword filled = 0;
+        for (size_t j = 0; j < m.size(); j++) {
+            T r = unpack(tmp[j], m[j], true, rng);
+            for (size_t k = 0; k < r.size(); k++) {
+                if (r[k]) {
+                    buffer.set_case(sort_idx[k + filled]);
+                }
+            }
+            filled += m[j];
+        }
+    }
+    buffer.finish();
 }
 
 /**

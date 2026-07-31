@@ -3,6 +3,7 @@
 //
 
 #include "statistic.hpp"
+#include "permutation.hpp"
 #include "split.hpp"
 #include <algorithm>
 #include <cmath>
@@ -889,6 +890,60 @@ void test_permutation_equivalence() {
         pheno_vector perm = original_pheno;
         std::shuffle(perm.begin(), perm.end(), rng);
         all_perms.push_back(perm);
+    }
+
+    // Verify direct word-buffer packing across 64-bit and 512-bit boundaries.
+    for (size_t boundary_perms : {size_t{0}, size_t{1}, size_t{63}, size_t{64},
+                                  size_t{65}, size_t{511}, size_t{512}}) {
+        std::vector<pheno_vector> boundary_values;
+        boundary_values.reserve(boundary_perms + 1);
+        for (size_t p = 0; p <= boundary_perms; ++p) {
+            pheno_vector values(n_samples, 0);
+            for (size_t sample = 0; sample < n_samples; ++sample) {
+                values[sample] = static_cast<int8_t>(((p + sample * 3) % 5) < 2);
+            }
+            boundary_values.push_back(std::move(values));
+        }
+
+        BitPackedPhenotypes converted(boundary_values, n_samples);
+        BitPackedPhenotypes direct(n_samples, boundary_perms);
+        BitPackedPermutationWriter writer(direct);
+        BitPackedPermutationBuffer buffer(writer, direct);
+        for (size_t p = 0; p < boundary_values.size(); ++p) {
+            buffer.append(p, boundary_values[p]);
+        }
+        buffer.finish();
+        if (direct.data != converted.data) {
+            fmt::print(std::cerr, "Direct packing failed at {} permutations\n", boundary_perms);
+            std::exit(1);
+        }
+    }
+
+    // Preserve covariate-adjusted output exactly, including thread ranges that
+    // share a packed word at their boundaries.
+    {
+        constexpr size_t cov_perms = 130;
+        constexpr size_t cov_threads = 3;
+        arma::vec odds(n_samples, arma::fill::ones);
+        auto canonical = std::make_shared<std::vector<pheno_vector>>();
+        canonical->push_back(original_pheno);
+        Permute<pheno_vector> canonical_generator(9173);
+        canonical_generator.generate_permutations(canonical, odds, n_cases,
+                                                  cov_perms, cov_threads, 0.0);
+
+        BitPackedPhenotypes converted(*canonical, n_samples);
+        BitPackedPhenotypes direct(n_samples, cov_perms);
+        BitPackedPermutationWriter writer(direct);
+        BitPackedPermutationBuffer original_buffer(writer, direct);
+        original_buffer.append(0, original_pheno);
+        original_buffer.finish();
+        Permute<pheno_vector> direct_generator(9173);
+        direct_generator.generate_bitpacked(direct, writer, odds, n_cases,
+                                            cov_perms, cov_threads, 0.0);
+        if (direct.data != converted.data) {
+            fmt::print(std::cerr, "Direct covariate-adjusted packing changed permutation output\n");
+            std::exit(1);
+        }
     }
 
     // Create indexer

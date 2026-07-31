@@ -20,8 +20,9 @@ void Phenotypes<T>::parse(std::istream &is) {
     arma::uword lineno = 0;
     std::set<std::string> sample_set;
 
-    // column 0 is the original (*phenotypes)
-    (*phenotypes).resize(params.nperms + 1);
+    // Column 0 is the original phenotype. Normal mode writes subsequent
+    // permutations directly into bit-packed storage.
+    (*phenotypes).resize(1);
 
     while (std::getline(is, line)) {
         if (boost::starts_with(line, "#") || lineno == 0) {// Skip the header
@@ -70,6 +71,17 @@ void Phenotypes<T>::parse(std::istream &is) {
     timer.tic();
     // Read in the permutations from a TSV file where each row of the file is a permutation
     if (params.read_permutations) {
+        std::unique_ptr<BitPackedPermutationWriter> packed_writer;
+        std::unique_ptr<BitPackedPermutationBuffer> packed_buffer;
+        if constexpr (std::is_same_v<T, pheno_vector>) {
+            bitpacked = std::make_shared<BitPackedPhenotypes>(samples->size(), params.nperms);
+            packed_writer = std::make_unique<BitPackedPermutationWriter>(*bitpacked);
+            packed_buffer = std::make_unique<BitPackedPermutationBuffer>(*packed_writer, *bitpacked);
+            packed_buffer->append(0, (*phenotypes)[0]);
+        } else {
+            phenotypes->resize(params.nperms + 1);
+        }
+
         std::ifstream ifs(*params.read_permutations);
         size_t i = 0;
         while (std::getline(ifs, line)) {
@@ -91,7 +103,11 @@ void Phenotypes<T>::parse(std::istream &is) {
                         "Permutation file contains more rows than requested permutations ({}).",
                         params.nperms)));
             }
-            (*phenotypes)[i + 1] = perm;
+            if constexpr (std::is_same_v<T, pheno_vector>) {
+                packed_buffer->append(i + 1, perm);
+            } else {
+                (*phenotypes)[i + 1] = std::move(perm);
+            }
             i++;
         }
         ifs.close();
@@ -99,6 +115,9 @@ void Phenotypes<T>::parse(std::istream &is) {
             throw(std::runtime_error(fmt::format(
                     "Permutation file contains {} rows; expected {}.",
                     i, params.nperms)));
+        }
+        if constexpr (std::is_same_v<T, pheno_vector>) {
+            packed_buffer->finish();
         }
     } else {
         if (params.cov) {
@@ -121,13 +140,11 @@ void Phenotypes<T>::parse(std::istream &is) {
     }
     ofs.close();
 #endif
-    pad_phenotypes();
     if constexpr (std::is_same_v<T, pheno_vector>) {
-        bitpacked = std::make_shared<BitPackedPhenotypes>(*phenotypes, samples->size());
-        // Normal mode executes the bit-packed permutation path. Once that
-        // representation has been built, the canonical byte permutations are
-        // no longer needed; Indexer owns its own copy of the original phenotype.
+        // Indexer owns its own copy of the original phenotype.
         phenotypes.reset();
+    } else {
+        pad_phenotypes();
     }
     fmt::print(std::cerr, "Time spent generating permutations: {}\n", timer.toc());
 }
@@ -316,6 +333,12 @@ void Phenotypes<T>::create_indexers() {
 
 template<typename T>
 void Phenotypes<T>::shuffle() {
+    if constexpr (!std::is_same_v<T, pheno_vector>) {
+        phenotypes->resize(params.nperms + 1);
+    } else {
+        bitpacked = std::make_shared<BitPackedPhenotypes>(samples->size(), params.nperms);
+    }
+
     if (params.cov) {
         // Fit glm to covariates
         arma::mat design = arma::join_horiz(arma::ones<arma::mat>(cov->n_rows, 1), *cov);
@@ -328,15 +351,42 @@ void Phenotypes<T>::shuffle() {
         Permute<T> permute(params.seed);
         arma::vec odds = arma::exp(glm.eta_);
 
-        permute.generate_permutations(phenotypes, odds, indexer->case_count, params.nperms, params.nthreads, params.epsilon);
+        if constexpr (std::is_same_v<T, pheno_vector>) {
+            BitPackedPermutationWriter writer(*bitpacked);
+            BitPackedPermutationBuffer original_buffer(writer, *bitpacked);
+            original_buffer.append(0, (*phenotypes)[0]);
+            original_buffer.finish();
+            permute.generate_bitpacked(*bitpacked, writer, odds, indexer->case_count,
+                                       params.nperms, params.nthreads, params.epsilon);
+        } else {
+            permute.generate_permutations(phenotypes, odds, indexer->case_count,
+                                          params.nperms, params.nthreads, params.epsilon);
+        }
     } else {
-        for (int i = 1; i < params.nperms + 1; i++) {
-            (*phenotypes)[i] = (*phenotypes)[i - 1];
-            for (int j = (*phenotypes)[0].size() - 1; j > 0; j--) {
-                std::uniform_int_distribution<> dis(0, j);
-                int k = dis(gen);
-                using std::swap;
-                swap((*phenotypes)[i][j], (*phenotypes)[i][k]);
+        if constexpr (std::is_same_v<T, pheno_vector>) {
+            BitPackedPermutationWriter writer(*bitpacked);
+            BitPackedPermutationBuffer buffer(writer, *bitpacked);
+            pheno_vector working = (*phenotypes)[0];
+            buffer.append(0, working);
+            for (size_t i = 1; i < params.nperms + 1; i++) {
+                for (int j = static_cast<int>(working.size()) - 1; j > 0; j--) {
+                    std::uniform_int_distribution<> dis(0, j);
+                    int k = dis(gen);
+                    using std::swap;
+                    swap(working[j], working[k]);
+                }
+                buffer.append(i, working);
+            }
+            buffer.finish();
+        } else {
+            for (size_t i = 1; i < params.nperms + 1; i++) {
+                (*phenotypes)[i] = (*phenotypes)[i - 1];
+                for (int j = static_cast<int>((*phenotypes)[0].size()) - 1; j > 0; j--) {
+                    std::uniform_int_distribution<> dis(0, j);
+                    int k = dis(gen);
+                    using std::swap;
+                    swap((*phenotypes)[i][j], (*phenotypes)[i][k]);
+                }
             }
         }
     }
