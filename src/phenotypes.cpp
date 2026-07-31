@@ -123,8 +123,11 @@ void Phenotypes<T>::parse(std::istream &is) {
 #endif
     pad_phenotypes();
     if constexpr (std::is_same_v<T, pheno_vector>) {
-        transposed = std::make_shared<TransposedPhenotypes>(*phenotypes, samples->size());
         bitpacked = std::make_shared<BitPackedPhenotypes>(*phenotypes, samples->size());
+        // Normal mode executes the bit-packed permutation path. Once that
+        // representation has been built, the canonical byte permutations are
+        // no longer needed; Indexer owns its own copy of the original phenotype.
+        phenotypes.reset();
     }
     fmt::print(std::cerr, "Time spent generating permutations: {}\n", timer.toc());
 }

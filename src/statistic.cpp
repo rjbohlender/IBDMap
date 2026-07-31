@@ -956,7 +956,8 @@ void test_permutation_equivalence() {
         stat2.permute_bulk();
 
         // Path 3: bit-packed bulk permutation
-        Statistic<pheno_vector> stat3(arma::SpCol<int32_t>(ibd_data), bp, indexer, reporter, 2, params, phenotypes_ptr, nullptr, bp_packed);
+        // The bit-packed path must not depend on retaining canonical permutations.
+        Statistic<pheno_vector> stat3(arma::SpCol<int32_t>(ibd_data), bp, indexer, reporter, 2, params, nullptr, nullptr, bp_packed);
         stat3.setup_lcm();
         stat3.permute_bulk_bitpacked();
 
