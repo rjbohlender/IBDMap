@@ -8,6 +8,7 @@
 #include "breakpoint.hpp"
 #include "indexer.hpp"
 #include "parameters.hpp"
+#include "pairdata.hpp"
 #include "parquet_reporter.hpp"
 #include "reporter.hpp"
 #include "resultrow.hpp"
@@ -23,7 +24,7 @@
  */
 template <typename T>
 class Statistic {
-    arma::SpCol<int32_t> data;
+    pair_data_t data;
     std::shared_ptr<Indexer<T>> indexer;
     std::shared_ptr<Reporter> reporter;
     std::shared_ptr<ParquetReporter> parquet_reporter;
@@ -50,6 +51,8 @@ class Statistic {
     void permute_bulk_bitpacked();
     void build_output(std::stringstream &ss);
     ResultRow build_result_row();
+    size_t approx_sparse_data_bytes() const;
+    size_t approx_memory_bytes() const;
 
 public:
     bool done = false;
@@ -63,7 +66,7 @@ public:
 
     std::vector<double> permuted;
 
-    Statistic(arma::SpCol<int32_t> data_,
+    Statistic(pair_data_t data_,
               Breakpoint bp_,
               std::shared_ptr<Indexer<T>> indexer_,
               std::shared_ptr<Reporter> reporter_,
@@ -73,7 +76,7 @@ public:
               std::shared_ptr<TransposedPhenotypes> transposed_ = nullptr,
               std::shared_ptr<BitPackedPhenotypes> bitpacked_ = nullptr);
 
-    Statistic(arma::SpCol<int32_t> data_,
+    Statistic(pair_data_t data_,
               Breakpoint bp_,
               std::shared_ptr<Indexer<T>> indexer_,
               std::shared_ptr<ParquetReporter> reporter_,

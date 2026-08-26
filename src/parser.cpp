@@ -5,13 +5,41 @@
 #include "parser.hpp"
 #include <atomic>
 #include <cstdio>
+#include <exception>
 #include <fstream>
+#include <mutex>
 #include <random>
+#include <stdexcept>
 #include <thread>
 #include <boost/iostreams/device/file.hpp>
 #include <boost/iostreams/filter/zstd.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
 #include <fmt/include/fmt/ostream.h>
+
+namespace {
+constexpr int kMaxActiveSegmentsPerPair = 4;
+
+pair_count_t checked_pair_count(int current,
+                                int delta,
+                                uint64_t breakpoint_pos,
+                                const std::string &name1,
+                                const std::string &name2) {
+    const int updated = current + delta;
+    if (updated < 0 || updated > kMaxActiveSegmentsPerPair) {
+        throw std::runtime_error(fmt::format(
+                "Active segment count out of bounds at breakpoint {} for pair {}-{}: "
+                "current={}, delta={}, updated={}, expected range=0-{}",
+                breakpoint_pos,
+                name1,
+                name2,
+                current,
+                delta,
+                updated,
+                kMaxActiveSegmentsPerPair));
+    }
+    return static_cast<pair_count_t>(updated);
+}
+}// namespace
 
 template <typename T>
 std::vector<std::string> Parser<T>::load_sample_names(const std::string &samples_path) {
@@ -30,9 +58,10 @@ std::vector<std::string> Parser<T>::load_sample_names(const std::string &samples
 }
 
 template <typename T>
-void Parser<T>::apply_checkpoint_to_sparse(arma::SpCol<int32_t> &data,
+void Parser<T>::apply_checkpoint_to_sparse(pair_data_t &data,
                                            const std::vector<ibdf::Segment> &active,
-                                           const std::vector<std::string> &sample_names) {
+                                           const std::vector<std::string> &sample_names,
+                                           uint64_t breakpoint_pos) {
     data.zeros();
     for (const auto &seg : active) {
         if (params.cM > 0 && seg.cm < params.cM) {
@@ -42,16 +71,19 @@ void Parser<T>::apply_checkpoint_to_sparse(arma::SpCol<int32_t> &data,
         const auto &name2 = sample_names[seg.p2];
         arma::sword row_idx = (*pheno.indexer).translate(name1, name2);
         if (row_idx >= 0) {
-            data(row_idx) += 1;
+            const int current = static_cast<int>(data(row_idx));
+            data(row_idx) = checked_pair_count(
+                    current, 1, breakpoint_pos, name1, name2);
         }
     }
 }
 
 template <typename T>
-void Parser<T>::apply_delta_to_sparse(arma::SpCol<int32_t> &data,
+void Parser<T>::apply_delta_to_sparse(pair_data_t &data,
                                       const ibdf::DeltaView &dv,
                                       const std::vector<std::string> &sample_names,
-                                      int value) {
+                                      int value,
+                                      uint64_t breakpoint_pos) {
     uint32_t n = (value > 0) ? dv.n_adds() : dv.n_dels();
     const auto cm_arr  = (value > 0) ? dv.add_cm : dv.del_cm;
     const auto p1_arr  = (value > 0) ? dv.add_p1 : dv.del_p1;
@@ -65,7 +97,9 @@ void Parser<T>::apply_delta_to_sparse(arma::SpCol<int32_t> &data,
         const auto &name2 = sample_names[p2_arr[i]];
         arma::sword row_idx = (*pheno.indexer).translate(name1, name2);
         if (row_idx >= 0) {
-            data(row_idx) += value;
+            const int current = static_cast<int>(data(row_idx));
+            data(row_idx) = checked_pair_count(
+                    current, value, breakpoint_pos, name1, name2);
         }
     }
 }
@@ -92,8 +126,8 @@ void Parser<T>::parse_chunk(const IbdfReader &reader,
                             std::shared_ptr<ParquetReporter> chunk_parquet_reporter,
                             ThreadPool<Statistic<T>> &threadpool) {
     arma::uword n_pairs = pheno.samples->size() * (pheno.samples->size() - 1) / 2;
-    arma::SpCol<int32_t> data(n_pairs);
-    arma::SpCol<int32_t> last(n_pairs);
+    pair_data_t data(n_pairs);
+    pair_data_t last(n_pairs);
 
     double cur_dist = 0;
     double last_dist = 0;
@@ -110,11 +144,11 @@ void Parser<T>::parse_chunk(const IbdfReader &reader,
         if (hdr->block_type == ibdf::BLOCK_CHECKPOINT) {
             auto cp = ibdf::decode_checkpoint(reader.block_ptr(i));
             ibdf::load_checkpoint(active, cp);
-            apply_checkpoint_to_sparse(data, active, sample_names);
+            apply_checkpoint_to_sparse(data, active, sample_names, bp_pos);
         } else {
             auto dv = ibdf::decode_delta(reader.block_ptr(i));
-            apply_delta_to_sparse(data, dv, sample_names, -1);
-            apply_delta_to_sparse(data, dv, sample_names, 1);
+            apply_delta_to_sparse(data, dv, sample_names, -1, bp_pos);
+            apply_delta_to_sparse(data, dv, sample_names, 1, bp_pos);
         }
 
         std::string chrom = params.chromosome;
@@ -146,8 +180,16 @@ void Parser<T>::parse_chunk(const IbdfReader &reader,
                 continue;
             }
         }
-        if (arma::accu(data) < params.threshold) {
-            continue;
+        if (params.threshold > 0) {
+            uint64_t active_segment_count = 0;
+            for (auto it = data.begin();
+                 it != data.end() && active_segment_count < params.threshold;
+                 ++it) {
+                active_segment_count += static_cast<uint64_t>(*it);
+            }
+            if (active_segment_count < params.threshold) {
+                continue;
+            }
         }
 
         last_dist = cur_dist;
@@ -235,28 +277,44 @@ void Parser<T>::parse_binary(IbdfReader &reader, const std::vector<std::string> 
     }
 
     // Create reporters up front so they're alive for the duration of parsing
+    auto pending_breakpoints = std::make_shared<std::atomic<size_t>>(0);
     std::vector<std::shared_ptr<Reporter>> chunk_reporters(chunks.size());
     std::vector<std::shared_ptr<ParquetReporter>> chunk_parquet_reporters(chunks.size());
     if (params.parquet_output) {
         for (size_t i = 0; i < chunks.size(); ++i) {
-            chunk_parquet_reporters[i] = std::make_shared<ParquetReporter>(chunk_paths[i]);
+            chunk_parquet_reporters[i] = std::make_shared<ParquetReporter>(
+                    chunk_paths[i], 4096, pending_breakpoints);
         }
     } else {
         for (size_t i = 0; i < chunks.size(); ++i) {
-            chunk_reporters[i] = std::make_shared<Reporter>(chunk_paths[i], false);
+            chunk_reporters[i] = std::make_shared<Reporter>(
+                    chunk_paths[i], false, pending_breakpoints);
         }
     }
 
     std::atomic<size_t> next_chunk{0};
+    std::atomic<bool> parse_failed{false};
+    std::exception_ptr parse_error;
+    std::mutex parse_error_mutex;
     std::vector<std::thread> parse_threads;
 
     for (unsigned t = 0; t < n_parse_threads; ++t) {
         parse_threads.emplace_back([&]() {
-            while (true) {
-                size_t ci = next_chunk.fetch_add(1);
-                if (ci >= chunks.size()) break;
-                parse_chunk(reader, sample_names, chunks[ci],
-                            chunk_reporters[ci], chunk_parquet_reporters[ci], threadpool);
+            try {
+                while (!parse_failed.load()) {
+                    size_t ci = next_chunk.fetch_add(1);
+                    if (ci >= chunks.size()) break;
+                    parse_chunk(reader, sample_names, chunks[ci],
+                                chunk_reporters[ci], chunk_parquet_reporters[ci], threadpool);
+                }
+            } catch (...) {
+                {
+                    std::lock_guard<std::mutex> lock(parse_error_mutex);
+                    if (!parse_error) {
+                        parse_error = std::current_exception();
+                    }
+                }
+                parse_failed = true;
             }
         });
     }
@@ -265,6 +323,10 @@ void Parser<T>::parse_binary(IbdfReader &reader, const std::vector<std::string> 
         t.join();
     }
     threadpool.wait_for_completion();
+
+    if (parse_error) {
+        std::rethrow_exception(parse_error);
+    }
 
     // Flush and close all chunk reporters after all stats have completed
     if (params.parquet_output) {
@@ -299,7 +361,7 @@ bool Parser<T>::check_exclude(int pos) {
 }
 
 template <typename T>
-bool Parser<T>::check_r2(const arma::SpCol<int32_t> &data, const arma::SpCol<int32_t> &last) {
+bool Parser<T>::check_r2(const pair_data_t &data, const pair_data_t &last) {
     double r2 = cor(data, last);
     if (params.verbose) {
         std::cerr << "r2: " << r2 << std::endl;

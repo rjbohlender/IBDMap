@@ -17,8 +17,11 @@
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/filtering_streambuf.hpp>
 #include <fmt/include/fmt/ostream.h>
+#include <atomic>
+#include <cstddef>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <queue>
 #include <thread>
@@ -55,6 +58,7 @@ class Reporter {
     std::atomic<int> nstrings;
     std::atomic<int> nsubmitted;
     std::atomic<int> nwritten;
+    std::shared_ptr<std::atomic<size_t>> pending_breakpoints;
     std::string out_path;
     std::thread print_thread;
     std::thread debug_thread;
@@ -90,6 +94,7 @@ class Reporter {
                 }
                 nstrings--;
                 nwritten++;
+                pending_breakpoints->fetch_sub(1);
                 lk.lock();
                 next_seq++;
             }
@@ -129,7 +134,18 @@ public:
      *
      * Should always be instantiated inside a std::make_shared call.
      */
-    explicit Reporter(std::string output, bool debug) : done(false), nstrings(0), nsubmitted(0), nwritten(0), out_path(std::move(output)), debug(debug) {
+    explicit Reporter(
+            std::string output,
+            bool debug,
+            std::shared_ptr<std::atomic<size_t>> pending_breakpoints_ =
+                    std::make_shared<std::atomic<size_t>>(0)) :
+            done(false),
+            nstrings(0),
+            nsubmitted(0),
+            nwritten(0),
+            pending_breakpoints(std::move(pending_breakpoints_)),
+            out_path(std::move(output)),
+            debug(debug) {
         print_thread = std::thread(&Reporter::print, std::ref(*this));
         if (debug)
             debug_thread = std::thread(&Reporter::print_debug, std::ref(*this));
@@ -173,9 +189,14 @@ public:
             reorder_buf[seq] = s;
             nstrings++;
             nsubmitted++;
+            pending_breakpoints->fetch_add(1);
             lk.unlock();
             data_cond.notify_all();
         }
+    }
+
+    size_t pending() const {
+        return pending_breakpoints->load();
     }
 
     /**

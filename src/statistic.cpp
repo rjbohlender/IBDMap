@@ -17,7 +17,7 @@
 #endif
 
 template<typename T>
-Statistic<T>::Statistic(arma::SpCol<int32_t> data_,
+Statistic<T>::Statistic(pair_data_t data_,
                         Breakpoint bp_,
                         std::shared_ptr<Indexer<T>> indexer_,
                         std::shared_ptr<Reporter> reporter_,
@@ -38,7 +38,7 @@ Statistic<T>::Statistic(arma::SpCol<int32_t> data_,
 }
 
 template<typename T>
-Statistic<T>::Statistic(arma::SpCol<int32_t> data_,
+Statistic<T>::Statistic(pair_data_t data_,
                         Breakpoint bp_,
                         std::shared_ptr<Indexer<T>> indexer_,
                         std::shared_ptr<ParquetReporter> reporter_,
@@ -260,19 +260,81 @@ void Statistic<T>::run() {
         permute();
     }
 
-    if (params.verbose) {
-        fmt::print(std::cerr, "Finished {}\t{}\n", bp.breakpoint.first, bp.breakpoint.second);
-    }
-
+    const size_t breakpoint_bytes = approx_memory_bytes();
+    const size_t sparse_data_bytes = approx_sparse_data_bytes();
+    size_t pending = 0;
     if (parquet_reporter) {
         parquet_reporter->submit(build_result_row());
+        pending = parquet_reporter->pending();
     } else {
         std::stringstream ss;
         build_output(ss);
         reporter->submit(seq, ss.str(), false);
+        pending = reporter->pending();
+    }
+
+    if (params.verbose) {
+        fmt::print(std::cerr,
+                   "Finished {}\t{}; breakpoints waiting to be written: {}; "
+                   "approx breakpoint memory: {:.2f} MiB (sparse pair data: {:.2f} MiB)\n",
+                   bp.breakpoint.first,
+                   bp.breakpoint.second,
+                   pending,
+                   static_cast<double>(breakpoint_bytes) / (1024.0 * 1024.0),
+                   static_cast<double>(sparse_data_bytes) / (1024.0 * 1024.0));
     }
     cleanup();
     done = true;
+}
+
+template<typename T>
+size_t Statistic<T>::approx_sparse_data_bytes() const {
+    // Armadillo sparse matrices retain a sentinel entry in the values and row
+    // index arrays, plus n_cols + 2 column pointers. SpCol has one column.
+    return (static_cast<size_t>(data.n_nonzero) + 1) *
+                   (sizeof(pair_count_t) + sizeof(arma::uword)) +
+           (static_cast<size_t>(data.n_cols) + 2) * sizeof(arma::uword);
+}
+
+template<typename T>
+size_t Statistic<T>::approx_memory_bytes() const {
+    // sizeof(*this) includes the vector/string/shared_ptr objects themselves.
+    // Add allocations owned uniquely by this breakpoint, but exclude shared
+    // phenotype and index data so it is not counted once per breakpoint.
+    size_t bytes = sizeof(*this) + approx_sparse_data_bytes();
+
+    bytes += pairs.first.capacity() * sizeof(int32_t);
+    bytes += pairs.second.capacity() * sizeof(int32_t);
+    bytes += left_phenos.capacity() * sizeof(uint8_t);
+    bytes += right_phenos.capacity() * sizeof(uint8_t);
+    bytes += permuted.capacity() * sizeof(double);
+
+    auto add_string_allocation = [&bytes](const std::string &value) {
+        bytes += value.capacity() + 1;
+    };
+    add_string_allocation(bp.breakpoint.first);
+    add_string_allocation(bp.breakpoint.second);
+    add_string_allocation(params.input);
+    add_string_allocation(params.samples);
+    add_string_allocation(params.chromosome);
+    add_string_allocation(params.pheno);
+    add_string_allocation(params.gmap);
+    add_string_allocation(params.output_path);
+    add_string_allocation(params.algorithm);
+    if (params.cov) {
+        add_string_allocation(*params.cov);
+    }
+    if (params.read_permutations) {
+        add_string_allocation(*params.read_permutations);
+    }
+    if (params.range) {
+        bytes += params.range->capacity() * sizeof(int);
+    }
+    if (params.exclude) {
+        bytes += params.exclude->capacity() * sizeof(std::pair<int, int>);
+    }
+
+    return bytes;
 }
 
 template<typename T>
@@ -950,7 +1012,7 @@ void test_permutation_equivalence() {
     auto indexer = std::make_shared<Indexer<pheno_vector>>(n_cases, n_controls, samples, original_pheno);
 
     // Create IBD data with a mix of pair types
-    arma::SpCol<int32_t> ibd_data(n_samples * (n_samples - 1) / 2);
+    pair_data_t ibd_data(n_samples * (n_samples - 1) / 2);
     // Case-case pairs (s00-s09 are cases)
     ibd_data(indexer->translate("s00", "s01")) = 1;
     ibd_data(indexer->translate("s00", "s02")) = 1;
@@ -1000,19 +1062,19 @@ void test_permutation_equivalence() {
         params.verbose = false;
 
         // Path 1: standard permute (one-at-a-time via calculate())
-        Statistic<pheno_vector> stat1(arma::SpCol<int32_t>(ibd_data), bp, indexer, reporter, 0, params, phenotypes_ptr);
+        Statistic<pheno_vector> stat1(pair_data_t(ibd_data), bp, indexer, reporter, 0, params, phenotypes_ptr);
         stat1.setup_lcm();
         stat1.initialize();
         stat1.permute();
 
         // Path 2: transposed bulk permutation
-        Statistic<pheno_vector> stat2(arma::SpCol<int32_t>(ibd_data), bp, indexer, reporter, 1, params, phenotypes_ptr, tp);
+        Statistic<pheno_vector> stat2(pair_data_t(ibd_data), bp, indexer, reporter, 1, params, phenotypes_ptr, tp);
         stat2.setup_lcm();
         stat2.permute_bulk();
 
         // Path 3: bit-packed bulk permutation
         // The bit-packed path must not depend on retaining canonical permutations.
-        Statistic<pheno_vector> stat3(arma::SpCol<int32_t>(ibd_data), bp, indexer, reporter, 2, params, nullptr, nullptr, bp_packed);
+        Statistic<pheno_vector> stat3(pair_data_t(ibd_data), bp, indexer, reporter, 2, params, nullptr, nullptr, bp_packed);
         stat3.setup_lcm();
         stat3.permute_bulk_bitpacked();
 

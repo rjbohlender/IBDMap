@@ -5,8 +5,8 @@
 #ifndef CARVAIBD_MATH_HPP
 #define CARVAIBD_MATH_HPP
 
-#include <armadillo>
+#include "pairdata.hpp"
 
-double cor(const arma::SpCol<int32_t> &X, const arma::SpCol<int32_t> &Y);
+double cor(const pair_data_t &X, const pair_data_t &Y);
 
 #endif//CARVAIBD_MATH_HPP

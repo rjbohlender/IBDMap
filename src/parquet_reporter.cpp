@@ -59,12 +59,16 @@ parquet::Compression::type parquet_compression() {
 }// namespace
 #endif
 
-ParquetReporter::ParquetReporter(std::string output, size_t batch_size_) :
+ParquetReporter::ParquetReporter(
+        std::string output,
+        size_t batch_size_,
+        std::shared_ptr<std::atomic<size_t>> pending_breakpoints_) :
         done(false),
         failed(false),
         nrows(0),
         nsubmitted(0),
         nwritten(0),
+        pending_breakpoints(std::move(pending_breakpoints_)),
         out_path(std::move(output)),
         batch_size(batch_size_) {
 #if defined(IBDMAP_HAS_PARQUET)
@@ -123,6 +127,7 @@ void ParquetReporter::submit(ResultRow row) {
     reorder_buf[row.seq] = std::move(row);
     nrows++;
     nsubmitted++;
+    pending_breakpoints->fetch_add(1);
     lk.unlock();
     data_cond.notify_all();
 }
@@ -144,6 +149,7 @@ void ParquetReporter::print() {
                 }
                 nrows--;
                 nwritten++;
+                pending_breakpoints->fetch_sub(1);
                 lk.lock();
                 next_seq++;
             }
@@ -158,11 +164,15 @@ void ParquetReporter::print() {
             reorder_buf.clear();
             failed = true;
         }
-        nrows = 0;
+        pending_breakpoints->fetch_sub(static_cast<size_t>(nrows.exchange(0)));
         done = true;
         data_cond.notify_all();
     }
 #endif
+}
+
+size_t ParquetReporter::pending() const {
+    return pending_breakpoints->load();
 }
 
 #if defined(IBDMAP_HAS_PARQUET)

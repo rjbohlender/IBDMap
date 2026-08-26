@@ -18,6 +18,7 @@
 #include "indexer.hpp"
 #include "math.hpp"
 #include "parameters.hpp"
+#include "pairdata.hpp"
 #include "parquet_reporter.hpp"
 #include "phenotypes.hpp"
 #include "reporter.hpp"
@@ -47,16 +48,18 @@ class Parser {
 
     bool check_range(int pos);
     bool check_exclude(int pos);
-    bool check_r2(const arma::SpCol<int32_t> &data, const arma::SpCol<int32_t> &last);
+    bool check_r2(const pair_data_t &data, const pair_data_t &last);
 
-    void apply_checkpoint_to_sparse(arma::SpCol<int32_t> &data,
+    void apply_checkpoint_to_sparse(pair_data_t &data,
                                     const std::vector<ibdf::Segment> &active,
-                                    const std::vector<std::string> &sample_names);
+                                    const std::vector<std::string> &sample_names,
+                                    uint64_t breakpoint_pos);
 
-    void apply_delta_to_sparse(arma::SpCol<int32_t> &data,
+    void apply_delta_to_sparse(pair_data_t &data,
                                const ibdf::DeltaView &dv,
                                const std::vector<std::string> &sample_names,
-                               int value);
+                               int value,
+                               uint64_t breakpoint_pos);
 
     std::vector<std::string> load_sample_names(const std::string &samples_path);
 

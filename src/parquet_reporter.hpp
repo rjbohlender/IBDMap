@@ -24,6 +24,7 @@ class ParquetReporter {
     std::atomic<int> nrows;
     std::atomic<int> nsubmitted;
     std::atomic<int> nwritten;
+    std::shared_ptr<std::atomic<size_t>> pending_breakpoints;
     std::string out_path;
     std::thread print_thread;
     std::map<uint64_t, ResultRow> reorder_buf;
@@ -57,11 +58,16 @@ class ParquetReporter {
     void finish_impl(bool rethrow_error);
 
 public:
-    explicit ParquetReporter(std::string output, size_t batch_size_ = 4096);
+    explicit ParquetReporter(
+            std::string output,
+            size_t batch_size_ = 4096,
+            std::shared_ptr<std::atomic<size_t>> pending_breakpoints_ =
+                    std::make_shared<std::atomic<size_t>>(0));
     ~ParquetReporter();
 
     void submit(ResultRow row);
     void finish();
+    size_t pending() const;
 
     static void merge_files(const std::vector<std::string> &input_paths,
                             const std::string &output_path);

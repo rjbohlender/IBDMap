@@ -63,6 +63,7 @@ set(PROJECT_SUPPORT_FILES
     src/threadpool.hpp
     src/parameters.hpp
     src/threadsafequeue.hpp
+    src/pairdata.hpp
     src/reporter.hpp
     src/resultrow.hpp
     src/parquet_reporter.hpp
