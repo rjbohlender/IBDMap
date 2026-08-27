@@ -309,6 +309,11 @@ void Parser<T>::parse_binary(IbdfReader &reader, const std::vector<std::string> 
                     if (ci >= chunks.size()) break;
                     parse_chunk(reader, sample_names, chunks[ci],
                                 chunk_reporters[ci], chunk_parquet_reporters[ci], threadpool);
+                    if (!reader.discard_blocks(chunks[ci].start, chunks[ci].end) && params.verbose) {
+                        fmt::print(std::cerr,
+                                   "Warning: unable to discard mapped pages for chunk {}.\n",
+                                   ci);
+                    }
                 }
             } catch (...) {
                 {

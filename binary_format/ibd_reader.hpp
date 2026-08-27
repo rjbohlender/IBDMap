@@ -33,6 +33,18 @@ public:
         return file_.data() + index_[pos_idx].offset();
     }
 
+    [[nodiscard]] bool discard_blocks(uint64_t begin, uint64_t end) const {
+        if (begin >= end || end > header_->n_positions) return false;
+        const uint64_t begin_offset = index_[begin].offset();
+        const uint64_t end_offset = end < header_->n_positions
+                ? index_[end].offset()
+                : header_->index_offset;
+        if (end_offset < begin_offset) return false;
+        return file_.discard(
+                static_cast<size_t>(begin_offset),
+                static_cast<size_t>(end_offset - begin_offset));
+    }
+
     [[nodiscard]] uint64_t find_checkpoint_before(uint64_t pos_idx) const {
         int64_t i = static_cast<int64_t>(pos_idx);
         while (i >= 0 && !index_[i].is_checkpoint()) --i;

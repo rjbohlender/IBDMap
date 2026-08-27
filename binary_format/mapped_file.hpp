@@ -32,6 +32,27 @@ public:
     [[nodiscard]] const uint8_t* data() const { return base_; }
     [[nodiscard]] size_t size() const { return size_; }
 
+    [[nodiscard]] bool discard(size_t offset, size_t length) const {
+        if (offset > size_ || length > size_ - offset) return false;
+
+        const long raw_page_size = ::sysconf(_SC_PAGESIZE);
+        if (raw_page_size <= 0) return false;
+        const size_t page_size = static_cast<size_t>(raw_page_size);
+
+        const size_t offset_remainder = offset % page_size;
+        const size_t aligned_start = offset_remainder == 0
+                ? offset
+                : offset + (page_size - offset_remainder);
+        const size_t end = offset + length;
+        const size_t aligned_end = end - (end % page_size);
+        if (aligned_start >= aligned_end) return true;
+
+        return ::madvise(
+                       const_cast<uint8_t*>(base_) + aligned_start,
+                       aligned_end - aligned_start,
+                       MADV_DONTNEED) == 0;
+    }
+
 private:
     const uint8_t* base_ = nullptr;
     size_t size_ = 0;
