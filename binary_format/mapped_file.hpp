@@ -22,7 +22,6 @@ public:
             ::mmap(nullptr, size_, PROT_READ, MAP_PRIVATE, fd, 0));
         ::close(fd);
         if (base_ == MAP_FAILED) throw std::runtime_error("mmap failed");
-        ::madvise(const_cast<uint8_t*>(base_), size_, MADV_WILLNEED);
     }
     ~MappedFile() {
         if (base_ && base_ != MAP_FAILED) ::munmap(const_cast<uint8_t*>(base_), size_);

@@ -18,6 +18,7 @@
 
 namespace {
 constexpr int kMaxActiveSegmentsPerPair = 4;
+constexpr size_t kParquetBatchSize = 64;
 
 pair_count_t checked_pair_count(int current,
                                 int delta,
@@ -193,7 +194,9 @@ void Parser<T>::parse_chunk(const IbdfReader &reader,
         }
 
         last_dist = cur_dist;
-        last = data;
+        if (params.rsquared) {
+            last = data;
+        }
 
         Breakpoint bp{};
         bp.breakpoint = std::make_pair(chrom, std::to_string(pos));
@@ -245,7 +248,7 @@ void Parser<T>::concatenate_chunk_files(const std::vector<std::string> &chunk_pa
 
 template <typename T>
 void Parser<T>::merge_parquet_chunk_files(const std::vector<std::string> &chunk_paths) {
-    ParquetReporter::merge_files(chunk_paths, params.output_path);
+    ParquetReporter::merge_files(chunk_paths, params.output_path, kParquetBatchSize);
     for (const auto &path : chunk_paths) {
         std::remove(path.c_str());
     }
@@ -258,7 +261,7 @@ void Parser<T>::parse_binary(IbdfReader &reader, const std::vector<std::string> 
 
     unsigned n_parse_threads = std::min(
         static_cast<unsigned>(chunks.size()),
-        std::max(1u, static_cast<unsigned>(params.nthreads) / 4));
+        std::max(1u, static_cast<unsigned>(params.nthreads)));
 
     ThreadPool<Statistic<T>> threadpool(params);
 
@@ -283,7 +286,7 @@ void Parser<T>::parse_binary(IbdfReader &reader, const std::vector<std::string> 
     if (params.parquet_output) {
         for (size_t i = 0; i < chunks.size(); ++i) {
             chunk_parquet_reporters[i] = std::make_shared<ParquetReporter>(
-                    chunk_paths[i], 4096, pending_breakpoints);
+                    chunk_paths[i], kParquetBatchSize, pending_breakpoints);
         }
     } else {
         for (size_t i = 0; i < chunks.size(); ++i) {

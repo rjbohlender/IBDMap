@@ -70,7 +70,8 @@ public:
     size_t pending() const;
 
     static void merge_files(const std::vector<std::string> &input_paths,
-                            const std::string &output_path);
+                            const std::string &output_path,
+                            size_t batch_size = 4096);
 };
 
 #endif//CARVAIBD_PARQUET_REPORTER_HPP

@@ -180,6 +180,7 @@ void ParquetReporter::open_writer() {
     auto outfile = value_or_throw(arrow::io::FileOutputStream::Open(out_path), "opening parquet output");
     auto props = parquet::WriterProperties::Builder()
             .compression(parquet_compression())
+            ->max_row_group_length(static_cast<int64_t>(batch_size))
             ->build();
     writer = value_or_throw(
             parquet::arrow::FileWriter::Open(
@@ -245,12 +246,14 @@ void ParquetReporter::flush_batch() {
 #endif
 
 void ParquetReporter::merge_files(const std::vector<std::string> &input_paths,
-                                  const std::string &output_path) {
+                                  const std::string &output_path,
+                                  size_t batch_size) {
 #if defined(IBDMAP_HAS_PARQUET)
     auto schema = result_schema();
     auto outfile = value_or_throw(arrow::io::FileOutputStream::Open(output_path), "opening merged parquet output");
     auto props = parquet::WriterProperties::Builder()
             .compression(parquet_compression())
+            ->max_row_group_length(static_cast<int64_t>(batch_size))
             ->build();
     auto writer = value_or_throw(
             parquet::arrow::FileWriter::Open(
@@ -288,6 +291,7 @@ void ParquetReporter::merge_files(const std::vector<std::string> &input_paths,
 #else
     (void) input_paths;
     (void) output_path;
+    (void) batch_size;
     throw std::runtime_error("Parquet merge requested, but this build does not include Arrow/Parquet support.");
 #endif
 }
