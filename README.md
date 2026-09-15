@@ -166,6 +166,51 @@ IBDReduce requires several inputs:
 5. Optional:
     1. Likelihood ratio test: use the same phenotype file provided to IBDMap. Flag: `--lrt <FILE>` 
 
+#### Selecting breakpoints in IBDReduce
+
+Use `--breakpoints <FILE>` with `IBDReduce/ibdreduce_v3.py` to analyze a subset
+of breakpoints from a full IBDMap run. The file contains whitespace-separated
+chromosome and base-pair position columns, using the same genome build as the
+input results:
+
+```text
+CHROM POS
+chr1 1000000
+1 2500000
+2 1800000
+```
+
+The `CHROM POS` header is optional. Blank lines and lines beginning with `#`
+are ignored, extra columns are ignored, and duplicate locations are used once.
+Locations can be listed in any order. Chromosomes must be autosomes 1–22, with
+an optional `chr` prefix. Plain text, gzip, and Zstandard location files are
+supported. The first two columns of a previous IBDReduce output can also be used
+directly, including its metadata and header.
+
+```bash
+python3 IBDReduce/ibdreduce_v3.py \
+  --prefix results/ --suffix 'chr{i}.run{j}.txt.zst' \
+  --nperm 10000 --nruns 5 --gmap maps/ \
+  --breakpoints selected_breakpoints.txt --output selected_results.tsv
+```
+
+Only chromosomes represented in the list are read. If `--single` is supplied,
+the list must stay within that chromosome scope (including `--null`, if supplied).
+Every requested location must exist in the input, and the selected rows must
+have matching locations and ordering across permutation runs; mismatches fail
+with an error.
+
+Selection applies while reading all supported result formats, before allocating
+the statistic matrix. Genetic-distance weights, the genome-wide baseline, and
+multiple-testing adjustments are calculated using the selected data. Weights
+are recomputed between consecutive selected locations, so results match running
+IBDReduce on input files containing only those rows. Selected all-zero rows
+still undergo the usual inactive-breakpoint removal.
+
+Reproducing another run requires matching observed statistics and permutations
+at the selected locations, including consistent permutation identities across
+chromosomes. Without `--breakpoints`, IBDReduce continues to use all input rows.
+
 ### Docker Implementation
 
 ---

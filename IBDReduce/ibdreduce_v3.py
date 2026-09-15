@@ -132,10 +132,39 @@ def parse_line(raw_line: str) -> Tuple[int, int, np.ndarray, np.ndarray]:
     return chrom, pos, obs_parts, vals
 
 
-def iter_text_rows(fpath: str):
+def read_breakpoints(fpath: str) -> set[tuple[int, int]]:
+    """Read exact CHROM POS locations, allowing comments and an optional header."""
+    breakpoints = set()
+    first_row = True
+    with check_and_open(fpath) as handle:
+        for lineno, line in enumerate(handle, 1):
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            fields = line.split()
+            if first_row and [v.upper() for v in fields[:2]] == ["CHROM", "POS"]:
+                first_row = False
+                continue
+            first_row = False
+            try:
+                chrom, pos = normalize_chrom(fields[0]), int(fields[1])
+                if chrom < 1 or chrom > 22 or pos < 0:
+                    raise ValueError("expected an autosome and a nonnegative position")
+            except (ValueError, IndexError) as exc:
+                raise ValueError(f"{fpath}:{lineno}: expected CHROM POS") from exc
+            breakpoints.add((chrom, pos))
+    if not breakpoints:
+        raise ValueError(f"No breakpoint locations found in {fpath}")
+    return breakpoints
+
+
+def iter_text_rows(fpath: str, breakpoints=None):
     """Yield normalized IBDMap rows from legacy text/zstd output."""
     with check_and_open(fpath) as f:
         for line in f:
+            if breakpoints is not None:
+                fields = line.split(maxsplit=2)
+                if (normalize_chrom(fields[0]), int(fields[1])) not in breakpoints:
+                    continue
             yield parse_line(line)
 
 
@@ -149,7 +178,7 @@ def iter_parquet_position_batches(fpath: str, batch_size: int = 65536):
         yield chroms, positions
 
 
-def iter_parquet_rows(fpath: str, batch_size: int = 8192):
+def iter_parquet_rows(fpath: str, batch_size: int = 8192, breakpoints=None):
     """Yield normalized IBDMap rows from Parquet output."""
     require_pyarrow()
     columns = [
@@ -165,6 +194,16 @@ def iter_parquet_rows(fpath: str, batch_size: int = 8192):
     for batch in parquet_file.iter_batches(columns=columns, batch_size=batch_size):
         chroms = [normalize_chrom(v) for v in batch.column("chrom").to_pylist()]
         positions = batch.column("pos").to_numpy(zero_copy_only=False)
+        if breakpoints is not None:
+            keep = [
+                idx for idx, bp in enumerate(zip(chroms, positions))
+                if bp in breakpoints
+            ]
+            if not keep:
+                continue
+            batch = batch.take(keep)
+            chroms = [chroms[idx] for idx in keep]
+            positions = positions[keep]
         orig_cscs = batch.column("orig_cscs_rate").to_numpy(zero_copy_only=False)
         orig_cscn = batch.column("orig_cscn_rate").to_numpy(zero_copy_only=False)
         orig_cncn = batch.column("orig_cncn_rate").to_numpy(zero_copy_only=False)
@@ -181,12 +220,12 @@ def iter_parquet_rows(fpath: str, batch_size: int = 8192):
             yield chrom, int(pos), obs, vals
 
 
-def iter_result_rows(fpath: str):
+def iter_result_rows(fpath: str, breakpoints=None):
     """Yield normalized rows from either legacy text output or Parquet output."""
     if is_parquet_path(fpath):
-        yield from iter_parquet_rows(fpath)
+        yield from iter_parquet_rows(fpath, breakpoints=breakpoints)
     else:
-        yield from iter_text_rows(fpath)
+        yield from iter_text_rows(fpath, breakpoints=breakpoints)
 
 
 def write_permutation_values(
@@ -278,7 +317,7 @@ def remove_inactive_breakpoints(
     )
 
 
-def ibdlen(fpath: str, gmap: GeneticMap) -> Tuple[int, float]:
+def ibdlen(fpath: str, gmap: GeneticMap, selected_breakpoints=None) -> Tuple[int, float]:
     """Calculate the IBD length for a single chromosome and permutation set.
     :param fpath: The file path to the IBDmap file.
     :param gmap: The genetic map object.
@@ -290,12 +329,14 @@ def ibdlen(fpath: str, gmap: GeneticMap) -> Tuple[int, float]:
     if is_parquet_path(fpath):
         for chroms, positions in iter_parquet_position_batches(fpath):
             for chrom, pos in zip(chroms, positions):
+                if selected_breakpoints is not None and (chrom, int(pos)) not in selected_breakpoints:
+                    continue
                 breakpoints += 1
                 dis = genetic_distance(gmap, chrom, int(pos))
                 total += float(dis) - float(predis)
                 predis = dis
     else:
-        for chrom, pos, _obs, _vals in iter_text_rows(fpath):
+        for chrom, pos, _obs, _vals in iter_text_rows(fpath, selected_breakpoints):
             breakpoints += 1
             dis = genetic_distance(gmap, chrom, pos)
             total += float(dis) - float(predis)
@@ -388,6 +429,8 @@ def main():
     parser.add_argument('--at', type=int, default=0, help="The permutation set to start at.")
     parser.add_argument('--unweighted', action='store_true', help='Use unweighted average.')
     parser.add_argument('--output', required=True, help="Output path.")
+    parser.add_argument('--breakpoints', type=str,
+                        help="Use only exact CHROM POS locations from this whitespace-delimited file.")
     parser.add_argument('--print_evd', default=False, action='store_true', help="Print the EVD to stdout.")
     parser.add_argument('--single', default=None, type=int, help="Run only a single chromosome.")
     parser.add_argument('--no_avg', default=False, action='store_true',
@@ -425,19 +468,31 @@ def main():
     else:
         chrom = list(range(1, 23))
 
+    selected_breakpoints = read_breakpoints(args.breakpoints) if args.breakpoints else None
+    if selected_breakpoints is not None:
+        selected_chroms = {bp[0] for bp in selected_breakpoints}
+        if not selected_chroms.issubset(chrom):
+            parser.error("--breakpoints contains chromosomes outside the requested chromosome scope")
+        chrom = [c for c in chrom if c in selected_chroms]
+
     # Loop over chromosomes to determine the number of IBD segments and the total length of IBD segments.
     t1 = datetime.now()
     breakpoints = 0
     total = 0
     null_breakpoints = 0
-    map_args = [(args.prefix + args.suffix.format(i=i, j=args.at), gmap) for i in chrom]
+    map_args = [
+        (args.prefix + args.suffix.format(i=i, j=args.at), gmap, selected_breakpoints)
+        for i in chrom
+    ]
     with mp.Pool(processes=min(mp.cpu_count(), len(map_args))) as pool:
         results = pool.starmap(ibdlen, map_args)
     for i, result in enumerate(results):
         breakpoints += result[0]
-        if args.null and i == null_idx:
-            null_breakpoints = result[0]
         total += result[1]
+    if breakpoints == 0:
+        raise ValueError("No matching breakpoints found in the input files")
+    if total <= 0:
+        raise ValueError("Selected breakpoints must span a positive genetic distance")
     t2 = datetime.now()
     print("IBD Length Time: {}".format(t2 - t1), file=sys.stderr)
     print("Total Breakpoints: {}".format(breakpoints), file=sys.stderr)
@@ -451,19 +506,32 @@ def main():
     # Loop over chromosomes again to fill the arrays.
     idx = 0
     obs_rates = np.zeros((breakpoints, 3), dtype=np.float64)
-    for i in chrom:
+    for i, (chrom_breakpoints, _length) in zip(chrom, results):
         start_idx = idx
+        end_idx = start_idx + chrom_breakpoints
+        seen = set()
         for j in range(args.at, args.at + args.nruns):
             idx = start_idx
             fpath = args.prefix + args.suffix.format(i=i, j=j)
             offset = j - args.at
             predis = 0
-            for chrom, pos, obs, vals in iter_result_rows(fpath):
+            for row_chrom, pos, obs, vals in iter_result_rows(fpath, selected_breakpoints):
+                bp = (row_chrom, pos)
+                if idx >= end_idx:
+                    raise ValueError(f"Too many breakpoints in {fpath}")
+                if row_chrom != i:
+                    raise ValueError(f"Unexpected chromosome {row_chrom} in {fpath}")
+                if offset == 0:
+                    if bp in seen:
+                        raise ValueError(f"Duplicate breakpoint {bp} in {fpath}")
+                    seen.add(bp)
+                elif bp != bp_ids[idx]:
+                    raise ValueError(f"Breakpoint {bp} does not match {bp_ids[idx]} in {fpath}")
                 try:
                     if offset == 0:
                         obs_rates[idx,:] = obs
-                        bp_ids.append((chrom, pos))
-                        dis = genetic_distance(gmap, chrom, pos)
+                        bp_ids.append(bp)
+                        dis = genetic_distance(gmap, row_chrom, pos)
                         ibdfrac[idx] = (float(dis) - float(predis)) / total
                         predis = dis
                     write_permutation_values(data, idx, offset, vals, args.nperm)
@@ -471,6 +539,12 @@ def main():
                     print(f"Error at {i} {j} {idx} {offset} {fpath}", file=sys.stderr)
                     raise e
                 idx += 1
+            if idx != end_idx:
+                raise ValueError(f"Missing breakpoints in {fpath}: expected {chrom_breakpoints}, found {idx - start_idx}")
+            if offset == 0 and selected_breakpoints is not None:
+                missing = {bp for bp in selected_breakpoints if bp[0] == i} - seen
+                if missing:
+                    raise ValueError(f"Requested breakpoints missing from {fpath}: {sorted(missing)[:10]}")
 
     data, obs_rates, ibdfrac, bp_ids, inactive_removed = remove_inactive_breakpoints(
         data, obs_rates, ibdfrac, bp_ids
