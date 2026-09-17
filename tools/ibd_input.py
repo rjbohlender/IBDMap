@@ -1,6 +1,5 @@
 #!/usr/bin/python
 
-import os
 import sys
 import gzip
 import argparse as ap
@@ -65,36 +64,13 @@ def is_gzipped(ipf):
         return magic == b'\x1f\x8b'
 
 
-def get_phenotypes(ipf):
-    """Read phenotype and build possibele ID pairs"""
-    uniqID = {}
-    dupID = []
-    pheno_file = open(ipf, 'r')
-    IDnum = 0
-    for line in pheno_file:
-        line = line.strip()
-        line = line.split()
-        if len(line) < 2:
-            continue
-        if line[1] == 'NA':
-            continue
-        elif str(line[0]) in uniqID:
-            dupID.append(line[0])
-        else:
-            uniqID[str(line[0])] = IDnum
-            IDnum += 1
-
-    print('identified '+str(len(uniqID))+' unique IDs')
-    pheno_file.close()
-    return uniqID, dupID
-
-
-def IBDsumm(args, idx, uniqID, dupID):
+def IBDsumm(args, idx):
     """Read and format IBD data."""
     IBDdata = {}
     IBDindex = {}
     allpos = []
     events = {}
+    uniqID = {}
 
     ipf = args.input
     if is_gzipped(ipf):
@@ -110,7 +86,10 @@ def IBDsumm(args, idx, uniqID, dupID):
         start = min(int(line[idx.str_indx]), int(line[idx.end_indx]))
         end = max(int(line[idx.str_indx]), int(line[idx.end_indx]))
         cM = str(line[idx.cM_indx])
-        if id1 not in uniqID or id2 not in uniqID or float(cM) < args.min or (hasattr(idx, 'unit') and str(line[idx.unit]) != 'cM'):
+        for name in (id1, id2):
+            if name not in uniqID:
+                uniqID[name] = len(uniqID)
+        if float(cM) < args.min or (hasattr(idx, 'unit') and str(line[idx.unit]) != 'cM'):
             continue
         else:
             if uniqID[id1] < uniqID[id2]:
@@ -134,8 +113,10 @@ def IBDsumm(args, idx, uniqID, dupID):
             events.setdefault(start, {"add": [], "rm": []})["add"].append(pair)
             events.setdefault(end, {"add": [], "rm": []})["rm"].append(pair)
 
+    data.close()
+    print('Identified {} samples'.format(len(uniqID)))
     print('Identified {} breakpoints on chr{}'.format(len(allpos), args.chrom))
-    out = open('{}.chr{}.small.txt'.format(args.output, args.chrom), 'w')
+    out = gzip.open('{}.chr{}.small.txt.gz'.format(args.output, args.chrom), 'wt')
     # Header
     out.write('chr\tpos\tadd\tdel\n')
     for pos in allpos:
@@ -144,30 +125,28 @@ def IBDsumm(args, idx, uniqID, dupID):
         rm = ' '.join(data['rm']) if data['rm'] else 'NA'
         out.write('{}\t{}\t{}\t{}\n'.format(args.chrom, str(pos), add, rm))
     out.close()
-    os.system('gzip '+ args.output + '.chr' + str(args.chrom) + '.small.txt')
 
 
 def main():
     """Entrypoint."""
     parser = ap.ArgumentParser()
     parser.add_argument('-i', '--input', type=str, required=True, help='Input IBD segment file.')
-    parser.add_argument('-p', '--pheno', type=str, required=True, help='Input pheotype file.')
+    parser.add_argument('-p', '--pheno', type=str, help='Deprecated and ignored; all input samples are retained.')
     parser.add_argument('-o', '--output', type=str, required=True, help='Prefix to the output file.')
     parser.add_argument('-f', '--format', type=str, required=True, help='Which program is the input derived from? May be GERMLINE, iLASH, RaPID, hap-ibd, or other.')
-    parser.add_argument('-m', '--min', type=float, required=True, help='Minimum centimorgan length of segments to be considered.')
+    parser.add_argument('-m', '--min', type=float, default=0.0, help='Minimum centimorgan length (default: 0, retain all lengths).')
     parser.add_argument('-c', '--chrom', type=str, required=True, help='The current chromosome.')
     args = parser.parse_args()
+    if args.pheno is not None:
+        print('--pheno is ignored; all input samples are retained.', file=sys.stderr)
 
     idx = Indices(args.format)
     print('Input: {}'.format(args.input))
-    print('Phenotype file: {}'.format(args.pheno))
     print('Output: {}'.format(args.output))
     print('Input file format: {}'.format(args.format))
     print('Min output IBD length: {}'.format(args.min))
 
-    uniqID, dupID = get_phenotypes(args.pheno)
-
-    IBDsumm(args, idx, uniqID, dupID)
+    IBDsumm(args, idx)
 
 if __name__ == "__main__":
     main()

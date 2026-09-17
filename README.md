@@ -249,13 +249,108 @@ singularity exec ibdmap.sif python3 /app/ibdreduce_v3.py -h
 
 ---
 
-We support several different file formats for IBD data. IBDMap is compatible with output from GERMLINE, hap-IBD, and iLASH. After shared segments have been detected using one of these programs, the data must be reformatted using the provided Python script `tools/convert_ilash.py`. Once the data are reformatted it should have the following columns:
+We support segment files from GERMLINE, hap-IBD, iLASH, RaPID, and custom column
+layouts. Use `tools/ibd_to_binary.py` to generate IBDF v3 input for the
+`binary_format` branch, or `tools/ibd_input.py` to generate legacy text input
+with the following columns:
 
 ```
 chr pos add del
 ```
 
 The `add` column represents a list of sample pairs with segments starting at the breakpoint. The `del` column is a list of sample pairs with segments terminating at the breakpoint.
+
+#### Converting raw segments into reusable inputs
+
+Both `ibd_to_binary.py` and `ibd_input.py` discover sample IDs directly from
+the raw segment file. They do not read phenotype files or exclude samples
+based on phenotype status. IBDMap applies the phenotype exclusions separately
+for each analysis. The default minimum segment length is zero; use `--min`
+only when you explicitly want a length cutoff.
+
+```bash
+# Binary input for the binary_format branch
+python3 tools/ibd_to_binary.py \
+  --input chr1.ilash.gz --format ilash --output reusable --chrom 1
+
+# Legacy text input
+python3 tools/ibd_input.py \
+  --input chr1.ilash.gz --format ilash --output reusable --chrom 1
+```
+
+These commands create `reusable.chr1.ibdf` with `reusable.chr1.samples`, and
+`reusable.chr1.small.txt.gz`, respectively. Each chromosome's binary mapping
+uses sample IDs in first-appearance order. Always supply that chromosome's
+companion `.samples` file to IBDMap. The raw converters no longer write a shared
+`<prefix>.samples` file.
+
+For compatibility with older commands, `--pheno` / `-p` is still accepted by
+these two raw-segment converters, but is explicitly ignored—even if the file
+contains `NA` values or omits samples. No phenotype file is needed. Existing
+binary or text files that already lost segments through phenotype filtering
+must be regenerated from the original segment data to recover those segments.
+
+#### Converting existing IBDMap text input to binary
+
+The `binary_format` branch's IBDMap executable requires IBDF v3 binary input.
+If you already have a `chr`, `pos`, `add`, `del` text file from the older
+converters, use `tools/ibd_text_to_binary.py`:
+
+```bash
+python3 tools/ibd_text_to_binary.py \
+  --input old_results.chr1.small.txt.gz \
+  --output converted \
+  --chrom 1
+```
+
+This creates `converted.chr1.ibdf` and `converted.chr1.samples`. Use them with IBDMap:
+
+```bash
+./ibdmap --input converted.chr1.ibdf --samples converted.chr1.samples \
+  --chromosome 1 --pheno phenotypes.txt --gmap chr1.gmap.gz \
+  --seed 123 --output results
+```
+
+The text input must have a `chr pos add del` header and four tab-separated
+columns. Each event column contains space-separated `cM:sample1-sample2`
+entries or `NA`. Plain, gzip, and Zstandard input are supported; Zstandard
+requires the Python `zstandard` package. DASH cluster input and IBDMap
+statistic/permutation output are not supported by this converter.
+
+By default, sample names are inferred from the text and assigned numeric IDs
+in first-appearance order. Each chromosome has its own `.chrN.samples` mapping
+because sample presence and ordering can differ across chromosomes. Always
+pass the companion mapping for the chromosome being analyzed to `--samples`;
+converting another chromosome with the same output prefix preserves existing
+chromosomes' mappings. IBDMap resolves these IDs to names before matching the
+phenotype file, so numeric IDs do not need to agree across chromosomes.
+
+A pair must have exactly one possible split into
+two nonempty sample names. Ambiguous pairs such as `a-b-c` cause an error with
+the input line number and a suggestion to provide `--pheno`.
+
+Optionally supply `--pheno phenotypes.txt` to resolve pairs containing
+hyphenated sample IDs. This file must have a header and sample IDs in its first
+column. When supplied, every sample referenced in the text must appear in that
+file, and each pair must resolve uniquely. The converter retains all phenotype
+statuses and leaves phenotype exclusions to IBDMap.
+
+Conversion preserves every input breakpoint, including empty breakpoints, and
+segment multiplicities. Same-position additions and deletions cancel. Input
+must contain one chromosome with strictly increasing, unique positions and
+enough preceding additions for each deletion. Conversion reads the file in
+order, keeping active segment counts and the output index in memory.
+
+Optional settings:
+
+- `--min 3.0`: retain only segments at least 3 cM long. The default is `0.0`,
+  retaining all lengths. Breakpoint locations remain present after filtering.
+- `--checkpoint-interval 1000` (or `-N 1000`): write a full active-set checkpoint
+  every 1,000 breakpoints; this is the default.
+
+IBDF v3 stores lengths as float32, so decimal lengths may round slightly and
+can cross a later IBDMap length cutoff. Set `--min` to the intended cutoff
+during conversion to filter using the original text lengths.
 
 If the data have been processed with DASH then there are two additional expected files. 
 

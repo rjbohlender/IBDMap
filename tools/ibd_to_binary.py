@@ -10,8 +10,8 @@ a small number of deltas, breaking the sequential dependency.
 Supported input: GERMLINE, iLASH, RaPID, hap-ibd, or custom columns.
 
 Usage:
-    python3 ibd_to_binary.py -i segments.gz -p pheno.txt -o output \\
-        -f hap-ibd -m 2.0 -c 22 [-N 1000]
+    python3 ibd_to_binary.py -i segments.gz -o output \\
+        -f hap-ibd -c 22 [-m 2.0] [-N 1000]
 """
 
 import os
@@ -80,31 +80,6 @@ class Indices:
                      'other:id1;id2;chr;start;end;cM')
 
 
-# ── Phenotype / sample reading ───────────────────────────────────────
-
-def read_phenotypes(pheno_path: str) -> tuple[dict[str, int], list[str]]:
-    uniq_ids: dict[str, int] = {}
-    id_list: list[str] = []
-    duplicates = 0
-
-    with open(pheno_path) as f:
-        for line in f:
-            parts = line.split()
-            if len(parts) < 2 or parts[1] == 'NA':
-                continue
-            name = parts[0]
-            if name in uniq_ids:
-                duplicates += 1
-            else:
-                uniq_ids[name] = len(id_list)
-                id_list.append(name)
-
-    print(f'  Samples:       {len(id_list):,}')
-    if duplicates:
-        print(f'  Duplicates:    {duplicates:,} (skipped)')
-    return uniq_ids, id_list
-
-
 # ── Segment reading ──────────────────────────────────────────────────
 
 def _is_gzipped(path: str) -> bool:
@@ -115,18 +90,18 @@ def _is_gzipped(path: str) -> bool:
 # A segment is stored as (cm, p1_idx, p2_idx) identified by its index
 # in the segments list. Events map positions to lists of segment indices.
 
-def read_segments(input_path: str, idx: Indices, uniq_ids: dict[str, int],
-                  min_cm: float):
+def read_segments(input_path: str, idx: Indices, min_cm: float = 0.0):
     """
     Returns:
         segments:  list of (cM, p1_idx, p2_idx)
         events:    {position: (add_seg_ids, remove_seg_ids)}
+        id_list:   all sample IDs from valid input rows, in first-appearance order
     """
     segments: list[tuple[float, int, int]] = []
     events: dict[int, tuple[list[int], list[int]]] = defaultdict(lambda: ([], []))
+    uniq_ids: dict[str, int] = {}
 
     skip_malformed  = 0
-    skip_sample     = 0
     skip_min_cm     = 0
     skip_unit       = 0
 
@@ -144,9 +119,9 @@ def read_segments(input_path: str, idx: Indices, uniq_ids: dict[str, int],
                 skip_malformed += 1
                 continue
 
-            if id1 not in uniq_ids or id2 not in uniq_ids:
-                skip_sample += 1
-                continue
+            for name in (id1, id2):
+                if name not in uniq_ids:
+                    uniq_ids[name] = len(uniq_ids)
             if cm < min_cm:
                 skip_min_cm += 1
                 continue
@@ -167,21 +142,20 @@ def read_segments(input_path: str, idx: Indices, uniq_ids: dict[str, int],
             events[start][0].append(seg_id)
             events[end][1].append(seg_id)
 
-    total_skipped = skip_malformed + skip_sample + skip_min_cm + skip_unit
+    total_skipped = skip_malformed + skip_min_cm + skip_unit
+    print(f'  Samples:       {len(uniq_ids):,}')
     print(f'  Segments:      {len(segments):,}')
     if total_skipped:
         print(f'  Skipped:       {total_skipped:,}')
         if skip_malformed:
             print(f'    malformed:   {skip_malformed:,}')
-        if skip_sample:
-            print(f'    sample:      {skip_sample:,} (ID not in phenotype file)')
         if skip_min_cm:
             print(f'    min cM:      {skip_min_cm:,} (< {min_cm})')
         if skip_unit:
             print(f'    unit:        {skip_unit:,} (not cM)')
     print(f'  Breakpoints:   {len(events):,}')
 
-    return segments, events
+    return segments, events, list(uniq_ids)
 
 
 # ── Binary writer ────────────────────────────────────────────────────
@@ -300,6 +274,14 @@ def sweep_and_write(segments, events, writer: BinaryWriter,
     for pos in sorted_positions:
         adds_ids, removes_ids = events[pos]
 
+        # A zero-length segment starts and ends at this position. Keep the
+        # breakpoint, but omit the segment from both checkpoints and deltas.
+        # Emitting its deletion could underflow a reader's active pair count.
+        cancelled_ids = set(adds_ids).intersection(removes_ids)
+        if cancelled_ids:
+            adds_ids = [seg_id for seg_id in adds_ids if seg_id not in cancelled_ids]
+            removes_ids = [seg_id for seg_id in removes_ids if seg_id not in cancelled_ids]
+
         # apply removals
         for seg_id in removes_ids:
             active.discard(seg_id)
@@ -342,15 +324,15 @@ def main():
         description='Convert IBD segment files to IBDF v3 checkpointed binary.')
     parser.add_argument('-i', '--input', required=True,
                         help='Input IBD segment file (plain or gzipped).')
-    parser.add_argument('-p', '--pheno', required=True,
-                        help='Phenotype file (sample filtering + ID assignment).')
+    parser.add_argument('-p', '--pheno',
+                        help='Deprecated and ignored; samples are inferred from the segment input.')
     parser.add_argument('-o', '--output', required=True,
-                        help='Output prefix → <prefix>.chr<c>.ibdf + <prefix>.samples')
+                        help='Output prefix → <prefix>.chr<c>.ibdf + <prefix>.chr<c>.samples')
     parser.add_argument('-f', '--format', required=True,
                         help='Input format: GERMLINE / iLASH / RaPID / hap-ibd / '
                              'other:id1;id2;chr;start;end;cM')
-    parser.add_argument('-m', '--min', type=float, required=True,
-                        help='Minimum cM length to include.')
+    parser.add_argument('-m', '--min', type=float, default=0.0,
+                        help='Minimum cM length to include (default: 0, retain all lengths).')
     parser.add_argument('-c', '--chrom', required=True,
                         help='Chromosome label.')
     parser.add_argument('-N', '--checkpoint-interval', type=int, default=1000,
@@ -358,12 +340,15 @@ def main():
                              '(default: 1000). Lower = faster thread startup, '
                              'larger file. Higher = smaller file, more replay.')
     args = parser.parse_args()
+    if args.pheno is not None:
+        print('--pheno is ignored; all input samples are retained.', file=sys.stderr)
+    if args.checkpoint_interval < 1:
+        parser.error('--checkpoint-interval must be at least 1')
 
     ckpt_n = args.checkpoint_interval
 
     print(f'IBD to Binary Converter (IBDF v{IBDF3_VERSION}, checkpointed)')
     print(f'  Input:         {args.input}')
-    print(f'  Phenotype:     {args.pheno}')
     print(f'  Output:        {args.output}.chr{args.chrom}.ibdf')
     print(f'  Format:        {args.format}')
     print(f'  Min cM:        {args.min}')
@@ -373,11 +358,8 @@ def main():
 
     idx = Indices(args.format)
 
-    print('Reading phenotypes...')
-    uniq_ids, id_list = read_phenotypes(args.pheno)
-
     print('Reading IBD segments...')
-    segments, events = read_segments(args.input, idx, uniq_ids, args.min)
+    segments, events, id_list = read_segments(args.input, idx, args.min)
 
     if not segments:
         print('No segments passed filters. Exiting.')
@@ -393,7 +375,8 @@ def main():
         n_samples=len(id_list), checkpoint_interval=ckpt_n)
 
     # sample mapping file
-    samples_path = f'{args.output}.samples'
+    # Input-derived sample IDs can differ across chromosomes.
+    samples_path = f'{args.output}.chr{args.chrom}.samples'
     with open(samples_path, 'w') as f:
         for name in id_list:
             f.write(f'{name}\n')
